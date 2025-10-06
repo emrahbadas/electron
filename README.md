@@ -1,62 +1,148 @@
-# Gezgin
+# KayraDeniz - Professional AI-Powered Code Editor
 
-Terminal paneli ekle. Node.js sürümünü göster. package.json'a build script'i ekle.
+**KayraDeniz** is a modern, professional Electron-based code editor with integrated AI capabilities, built-in terminal, and advanced IDE features.
 
-## Vizyon
+## ✨ Key Features
 
-- Denizlerin rehberi Bilinmeyen Kaptan tarafından tutulan canlı bir seyahat günlüğü
-- lacivert denizler, köpük beyazı dalgalar ve bakır pusula tonları paletinde, Playfair Display ve Inter fontlarıyla hazırlanmış modern arayüz
-- Sayfalar arası perde animasyonları, kaydırma bazlı mikro etkileşimler
+### 🎨 Professional IDE Features
+- **Code Folding** - Collapse/expand code blocks with ▼/▶ icons
+- **Minimap** - VS Code-style code overview on the right sidebar
+- **Bracket Matching** - Automatic highlighting of matching brackets
+- **Auto-Closing Brackets** - Smart bracket pair insertion and wrapping
+- **Indent Guides** - Visual code structure indicators
+- **Go to Line** - Quick navigation with Ctrl+G
+- **Syntax Highlighting** - Code highlighting support
 
-## Sayfa Bölümleri
+### 🤖 AI Integration
+- **AI Chat Assistant** - Ask questions and get instant code help
+- **Code Agent Mode** - AI-powered code generation and modification
+- **MCP Integration** - Model Context Protocol support
+- **GitHub Copilot Ready** - Compatible with Copilot integration
 
-1. **Kahraman (Hero)** – Kaptanın selamlaması, son rota çağrısı
-2. **Rotalar** – Öne çıkan üç ülke kartı, özet bilgiler
-3. **Kültür & Ritüeller** – Tarih, kültür ve gelenek vurguları
-4. **Lezzet Haritası** – Bölgesel tatlar ve hikâyeleri
-5. **Seyir Defteri** – Günlük kayıtları ve hatırlatıcılar
+### 💻 Advanced Terminal
+- **Streaming Terminal** - Real-time process output
+- **ANSI Color Support** - Colored terminal output rendering
+- **Multiple Terminals** - Manage multiple terminal sessions
+- **Process Management** - Start, stop, and monitor background processes
 
-## Öne Çıkan Özellikler
+### 📁 File Management
+- **Multi-Tab Editor** - Work with multiple files simultaneously
+- **File Tree** - Easy project navigation
+- **Recent Files** - Quick access to recently opened files
+- **Auto-Save** - Never lose your work
 
-- Deniz temalı kahraman bölüm
-- İnteraktif rota kartları
-- Perde efektiyle sayfa geçişleri
-- Günlük kayıtları ve gastronomi köşesi
+## 🚀 Getting Started
 
-## Teknolojiler
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
 
-- Frontend: HTML5, CSS3, JavaScript
-- Backend: Static
-- Veri: JSON files
-- Dağıtım: Vercel
+### Installation
 
-## Proje Dosya Yapısı
+```bash
+# Clone the repository
+git clone https://github.com/emrahbadas/electron.git
+cd electron
 
-```
-gezgin/
-├── index.html
-├── styles.css
-└── script.js
-```
+# Install dependencies
+npm install
 
-## Geliştirme Adımları
-
-- [x] README hazırla ve yapılacakları listele
-- [x] Deniz temalı ana sayfayı oluştur
-- [x] Responsive stil katmanını ekle
-- [x] JavaScript ile geçiş animasyonlarını bağla
-- [ ] İçeriği zenginleştir ve yeni destinasyonlar ekle
-
-## Çalıştırma
-
-Statik yapı olduğu için doğrudan dosyayı tarayıcıda açabilir veya aşağıdaki gibi hafif bir sunucu kullanabilirsin:
-
-```
-npx serve .
+# Start the application
+npm start
 ```
 
-## Sonraki Adımlar
+## 📂 Project Structure
 
-- Rota kartlarını JSON dosyasından dinamik yükleme
-- Fotoğraf galerisi ve kaptanın sesli notlarını ekleme
-- Işık ve karanlık tema geçişi ekleme
+```
+KayraDeniz-Kod-Canavari/
+├── src/
+│   ├── main/          # Electron main process
+│   │   ├── main.js
+│   │   └── mcp-client.js
+│   ├── renderer/      # Electron renderer process
+│   │   ├── app.js     # Main application logic
+│   │   ├── index.html
+│   │   └── styles.css
+│   ├── ai/            # AI integration modules
+│   └── github/        # GitHub integration
+├── assets/            # Icons and images
+├── package.json
+└── README.md
+```
+
+## 🎯 Usage
+
+### Basic Editing
+1. Open files via File menu or drag & drop
+2. Edit code with full IDE features
+3. Use Ctrl+S to save changes
+
+### AI Assistant
+1. Click "Ask Mode" button
+2. Type your question or code request
+3. Get instant AI-powered responses
+
+### Code Folding
+1. Click ▼ icon next to code blocks
+2. Fold/unfold functions, classes, loops
+3. Navigate large files easily
+
+### Terminal
+1. Click terminal icon at bottom
+2. Run commands with live output
+3. Multiple terminal support
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+S` | Save File |
+| `Ctrl+N` | New File |
+| `Ctrl+O` | Open File |
+| `Ctrl+G` | Go to Line |
+| `Ctrl+W` | Close Tab |
+| `Tab` | Insert 2 spaces |
+
+## 🛠️ Technologies
+
+- **Electron** - Cross-platform desktop app framework
+- **Node.js** - Backend runtime
+- **HTML5/CSS3** - Modern web technologies
+- **JavaScript** - Application logic
+- **MCP (Model Context Protocol)** - AI integration
+- **GitHub API** - Repository integration
+
+## 📝 Development
+
+### Build for Production
+```bash
+npm run build
+```
+
+### Package Application
+```bash
+npm run package
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🔗 Links
+
+- GitHub Repository: https://github.com/emrahbadas/electron
+- Issues: https://github.com/emrahbadas/electron/issues
+
+## 🙏 Acknowledgments
+
+- VS Code for IDE inspiration
+- Electron community for excellent documentation
+- GitHub Copilot for AI integration patterns
+
+---
+
+**Note:** The "gezgin" folder and related files were part of an early test project for the AI agent functionality and are not part of the main application.
