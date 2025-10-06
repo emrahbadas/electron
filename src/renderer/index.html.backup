@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-widt      <!-- Center Area -->
+      <div class="center-area">
+        
+        <!-- Editor Section -->
+        <div class="editor-section">
+          <!-- Tab Bar -->
+          <div class="tab-bar">
+            <div class="tabs-container" id="tabsContainer">
+              <div class="tab active" data-file="welcome">
+                <span class="tab-icon"><i class="fas fa-home"></i></span>
+                <span class="tab-title">Hoş Geldin</span>
+                <button class="tab-close" title="Kapat">×</button>
+              </div>
+            </div>
+            <button class="new-tab-btn" id="newTabBtn" title="Yeni Dosya">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+
+          <!-- Content Area -->0">
+  <title>KayraDeniz Badaş Kod Canavarı</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body>
+  <!-- App Container -->
+  <div id="app" class="app-container">
+    
+    <!-- Header Bar -->
+    <header class="header-bar">
+      <div class="header-left">
+        <div class="app-logo">
+          <i class="fas fa-dragon"></i>
+          <h1>KayraDeniz Badaş <span class="gradient-text">Kod Canavarı</span></h1>
+        </div>
+      </div>
+      <div class="header-center">
+        <div class="window-title" id="currentFile">Yeni Dosya</div>
+      </div>
+      <div class="header-right">
+        <button class="header-btn agent-mode-btn" id="agentModeBtn" title="AI Agent Modu">
+          <i class="fas fa-robot"></i>
+          <span class="agent-status">OFF</span>
+        </button>
+        <button class="header-btn" id="settingsBtn" title="Ayarlar">
+          <i class="fas fa-cog"></i>
+        </button>
+        <button class="header-btn" id="aboutBtn" title="Hakkında">
+          <i class="fas fa-info-circle"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="main-layout">
+      
+      <!-- Left Sidebar -->
+      <div class="sidebar left-sidebar">
+        <div class="sidebar-header">
+          <h3><i class="fas fa-magic"></i> AI Asistan</h3>
+        </div>
+        
+        <!-- AI Configuration Panel -->
+        <div class="ai-config-panel">
+          <div class="config-section">
+            <label for="apiKey">OpenAI API Key:</label>
+            <div class="input-group">
+              <input type="password" id="apiKey" placeholder="sk-..." class="config-input">
+              <button class="save-btn" id="saveApiKey" title="Kaydet">
+                <i class="fas fa-save"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="config-section">
+            <label for="modelSelect">Model:</label>
+            <select id="modelSelect" class="config-select">
+              <option value="gpt-4">GPT-4</option>
+              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+              <option value="gpt-4-1106-preview">GPT-4 Turbo</option>
+            </select>
+          </div>
+          
+          <div class="config-section">
+            <label for="temperature">Yaratıcılık:</label>
+            <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7" class="slider">
+            <span class="slider-value">0.7</span>
+          </div>
+        </div>
+
+        <!-- Agent Mode Panel -->
+        <div class="agent-mode-panel hidden" id="agentModePanel">
+          <h4>🤖 AI Agent Modu</h4>
+          <div class="agent-task-input">
+            <textarea id="agentTaskInput" placeholder="AI'ya ne yapmak istediğinizi detaylı olarak anlatın...&#10;&#10;Örnek:&#10;- 'Bir React Todo uygulaması oluştur'&#10;- 'Python ile web scraper yaz'&#10;- 'Bu projede eksik test dosyalarını oluştur'" rows="4"></textarea>
+            <button class="agent-execute-btn" id="executeAgentTask">
+              <i class="fas fa-rocket"></i> Görevi Başlat
+            </button>
+          </div>
+          
+          <div class="agent-progress hidden" id="agentProgress">
+            <div class="progress-header">
+              <h5>🔄 AI Agent Çalışıyor...</h5>
+              <button class="stop-agent-btn" id="stopAgentBtn" title="Agent'ı Durdur">
+                <i class="fas fa-stop"></i>
+              </button>
+            </div>
+            <div class="progress-steps" id="agentSteps"></div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions" id="quickActionsPanel">
+          <h4>Hızlı İşlemler</h4>
+          <button class="action-btn" id="generateCode">
+            <i class="fas fa-code"></i> Kod Üret
+          </button>
+          <button class="action-btn" id="explainCode">
+            <i class="fas fa-lightbulb"></i> Kodu Açıkla
+          </button>
+          <button class="action-btn" id="optimizeCode">
+            <i class="fas fa-rocket"></i> Optimize Et
+          </button>
+          <button class="action-btn" id="findBugs">
+            <i class="fas fa-bug"></i> Bug Bul
+          </button>
+        </div>
+
+      </div>
+      
+      <!-- Horizontal Resizer -->
+      <div class="resizer horizontal-resizer" data-direction="horizontal"></div>
+
+      <!-- Center Content Area -->
+      <main class="center-content">
+        
+        <!-- Tab Bar -->
+        <div class="tab-bar">
+          <div class="tabs-container" id="tabsContainer">
+            <div class="tab active" data-file="welcome">
+              <span class="tab-icon"><i class="fas fa-home"></i></span>
+              <span class="tab-title">Hoş Geldin</span>
+              <button class="tab-close" title="Kapat">×</button>
+            </div>
+          </div>
+          <button class="new-tab-btn" id="newTabBtn" title="Yeni Dosya">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area">
+          
+          <!-- Welcome Screen -->
+          <div class="welcome-screen" id="welcomeScreen">
+            <div class="welcome-content">
+              <div class="dragon-animation">
+                <i class="fas fa-dragon"></i>
+              </div>
+              <h2>KayraDeniz Badaş <span class="gradient-text">Kod Canavarı</span></h2>
+              <p>AI destekli kod üretimi ve dosya yönetimi için modern desktop uygulaması</p>
+              
+              <div class="welcome-actions">
+                <button class="welcome-btn primary" id="openFileBtn">
+                  <i class="fas fa-folder-open"></i>
+                  Dosya Aç
+                </button>
+                <button class="welcome-btn" id="newFileBtn">
+                  <i class="fas fa-file-plus"></i>
+                  Yeni Dosya
+                </button>
+                <button class="welcome-btn" id="openFolderBtn">
+                  <i class="fas fa-folder"></i>
+                  Klasör Aç
+                </button>
+              </div>
+
+              <div class="recent-files">
+                <h3>Son Kullanılan Dosyalar</h3>
+                <div class="recent-list" id="recentList">
+                  <div class="empty-state">
+                    <i class="fas fa-clock"></i>
+                    <p>Henüz dosya açılmamış</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Code Editor Area -->
+          <div class="editor-area hidden" id="editorArea">
+            <div class="editor-toolbar">
+              <div class="editor-info">
+                <span class="file-name" id="fileName">untitled.txt</span>
+                <span class="file-path" id="filePath"></span>
+              </div>
+              <div class="editor-actions">
+                <button class="editor-btn" id="saveBtn" title="Kaydet (Ctrl+S)">
+                  <i class="fas fa-save"></i>
+                </button>
+                <button class="editor-btn" id="saveAsBtn" title="Farklı Kaydet">
+                  <i class="fas fa-file-export"></i>
+                </button>
+                <button class="editor-btn" id="copyBtn" title="Kopyala">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </div>
+            </div>
+            <div class="editor-container">
+              <textarea id="codeEditor" class="code-editor" placeholder="Kodunuzu buraya yazın veya AI'dan yardım isteyin..."></textarea>
+              <pre id="codeHighlight" class="code-highlight"><code></code></pre>
+            </div>
+          </div>
+
+        </div>
+      </main>
+
+      <!-- Right Sidebar -->
+      <aside class="sidebar right-sidebar">
+        
+        <!-- File Explorer -->
+        <div class="file-explorer">
+          <div class="sidebar-header">
+            <h3><i class="fas fa-folder-tree"></i> Dosya Gezgini</h3>
+            <button class="refresh-btn" id="refreshExplorer" title="Yenile">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
+          
+          <div class="explorer-content">
+            <div class="folder-tree" id="folderTree">
+              <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <p>Klasör seçili değil</p>
+                <button class="select-folder-btn" id="selectFolderBtn">
+                  <i class="fas fa-folder"></i> Klasör Seç
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Chat Panel -->
+        <div class="ai-chat-panel">
+          <div class="sidebar-header">
+            <h3><i class="fas fa-comments"></i> AI Chat</h3>
+            <button class="clear-chat-btn" id="clearChatBtn" title="Sohbeti Temizle">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+          
+          <div class="chat-content">
+            <div class="chat-messages" id="chatMessages">
+              <div class="chat-message system">
+                <div class="message-content">
+                  <i class="fas fa-dragon"></i>
+                  <p>Merhaba! Ben KayraDeniz Kod Canavarı. Size nasıl yardımcı olabilirim?</p>
+                </div>
+                <div class="message-time">Az önce</div>
+              </div>
+            </div>
+            
+            <div class="chat-input-container">
+              <div class="chat-input-wrapper">
+                <textarea id="chatInput" placeholder="AI'ya bir soru sorun..." rows="2"></textarea>
+                <button class="send-btn" id="sendChatBtn" title="Gönder">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+
+    <!-- Status Bar -->
+    <footer class="status-bar">
+      <div class="status-left">
+        <span class="status-item" id="fileStatus">Hazır</span>
+        <span class="status-separator">|</span>
+        <span class="status-item" id="aiStatus">AI: Bağlantı Bekleniyor</span>
+      </div>
+      <div class="status-right">
+        <span class="status-item" id="cursorPosition">Satır 1, Sütun 1</span>
+        <span class="status-separator">|</span>
+        <span class="status-item" id="fileEncoding">UTF-8</span>
+        <span class="status-separator">|</span>
+        <span class="status-item" id="fileType">Metin</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="loading-spinner">
+        <i class="fas fa-dragon"></i>
+      </div>
+      <p>Yükleniyor...</p>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  
+  <!-- Settings Modal -->
+  <div class="modal hidden" id="settingsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-cog"></i> Ayarlar</h3>
+        <button class="modal-close" id="closeSettingsModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="general">Genel</button>
+          <button class="settings-tab" data-tab="ai">AI Ayarları</button>
+          <button class="settings-tab" data-tab="editor">Editör</button>
+        </div>
+        <div class="settings-content">
+          <!-- Settings content will be populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About Modal -->
+  <div class="modal hidden" id="aboutModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-info-circle"></i> Hakkında</h3>
+        <button class="modal-close" id="closeAboutModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="about-content">
+          <div class="app-icon">
+            <i class="fas fa-dragon"></i>
+          </div>
+          <h2>KayraDeniz Badaş Kod Canavarı</h2>
+          <p class="version">Sürüm 1.0.0</p>
+          <p class="description">Modern AI destekli kod üretimi ve dosya yönetimi desktop uygulaması</p>
+          <div class="credits">
+            <p><strong>Geliştirici:</strong> KayraDeniz Badaş</p>
+            <p><strong>Framework:</strong> Electron</p>
+            <p><strong>AI Provider:</strong> OpenAI</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

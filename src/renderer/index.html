@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; 
+                 img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://api.github.com http://localhost:7777 http://127.0.0.1:7777;
+                 font-src 'self' https://cdnjs.cloudflare.com; frame-src 'none'; object-src 'none'; base-uri 'self';">
+    <title>KayraDeniz Badaş - Kod Canavarı</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Use stable Prism.js version with dark theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism-dark.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="notificationContainer" class="notification-container" aria-live="polite" aria-atomic="true"></div>
+    <div class="app-container">
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <i class="fas fa-dragon"></i>
+                    <span>KayraDeniz Kod Canavarı</span>
+                </div>
+            </div>
+
+            <div class="header-center">
+                <div class="window-controls">
+                    <!-- Window controls will be handled by Electron -->
+                </div>
+
+                <!-- Top AI Controls (API Key, Model, Temperature) -->
+                <div class="top-ai-controls" id="topAiControls">
+                    <div class="top-ai-item">
+                        <input type="password" id="topApiKey" placeholder="OpenAI Key sk-..." class="top-api-input"
+                            title="OpenAI API Key" aria-label="OpenAI API Key">
+                        <button class="save-btn" id="topSaveApiKey" title="Kaydet">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+
+                    <div class="top-ai-item">
+                        <select id="topModelSelect" class="config-select" aria-label="OpenAI modeli seç"
+                            title="OpenAI modeli seç">
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                            <option value="gpt-4-1106-preview">GPT-4 Turbo</option>
+                        </select>
+                    </div>
+
+                    <div class="top-ai-item">
+                        <input type="range" id="topTemperature" min="0" max="1" step="0.1" value="0.7"
+                            class="slider top-slider" aria-label="Yaratıcılık" title="Yaratıcılık">
+                        <span class="slider-value" id="topTempValue">0.7</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <button class="header-btn theme-toggle-btn" id="themeToggleBtn" title="Tema Değiştir">
+                    <i class="fas fa-palette"></i>
+                    <span class="theme-name">Dragon</span>
+                </button>
+                <button class="header-btn agent-mode-btn" id="agentModeBtn" title="AI Agent Modu">
+                    <i class="fas fa-robot"></i>
+                    <span class="agent-status">PASİF</span>
+                </button>
+                <button class="header-btn" id="settingsBtn" title="Ayarlar">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button class="header-btn" id="aboutBtn" title="Hakkında">
+                    <i class="fas fa-info-circle"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+
+            <!-- Left Sidebar -->
+            <div class="sidebar left-sidebar">
+
+                <!-- File Explorer (moved to left) -->
+                <div class="file-explorer">
+                    <div class="sidebar-header">
+                        <h3><i class="fas fa-folder-tree"></i> Dosya Gezgini</h3>
+                        <div class="explorer-actions">
+                            <button class="back-btn" id="explorerBackBtn" title="Geri" disabled>
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="up-btn" id="explorerUpBtn" title="Üst Klasör" disabled>
+                                <i class="fas fa-level-up-alt"></i>
+                            </button>
+                            <button class="refresh-btn" id="refreshExplorer" title="Yenile">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Breadcrumb Navigation -->
+                    <div class="breadcrumb-nav" id="breadcrumbNav">
+                        <div class="breadcrumb-item" data-path="">
+                            <i class="fas fa-home"></i>
+                        </div>
+                    </div>
+
+                    <div class="explorer-content">
+                        <div class="folder-tree" id="folderTree">
+                            <div class="empty-state">
+                                <i class="fas fa-folder-open"></i>
+                                <p>Klasör seçili değil</p>
+                                <button class="select-folder-btn" id="selectFolderBtn">
+                                    <i class="fas fa-folder"></i> Klasör Seç
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent Mode Panel -->
+                <div class="agent-mode-panel" id="agentModePanel">
+                    <div class="sidebar-header">
+                        <h3><i class="fas fa-robot"></i> AI Asistan</h3>
+                        <div class="agent-mode-controls">
+                            <button class="agent-mode-toggle" id="agentModeToggle" title="Agent Mode">
+                                <i class="fas fa-power-off"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Start Templates - Always Visible -->
+                    <div class="quick-start-templates">
+                        <h5>⚡ Hızlı Proje Başlangıç Sihirbazı</h5>
+                        <p class="template-description">Projenizi hızla başlatın. Sağ taraftaki chat'ten de özel görevler tanımlayabilirsiniz.</p>
+                        <div class="template-grid" id="quickTemplateGrid"></div>
+                        <button class="template-manage-btn" id="addTemplateBtn">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Yeni Şablon Ekle</span>
+                        </button>
+                    </div>
+
+                    <!-- Agent Progress -->
+                    <div class="agent-progress hidden" id="agentProgress">
+                        <div class="progress-header">
+                            <h5>🔄 AI Agent Çalışıyor...</h5>
+                            <button class="stop-agent-btn" id="stopAgentBtn" title="Agent'ı Durdur">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                        </div>
+                        <div class="progress-steps" id="agentSteps"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Left Resizer -->
+            <div class="resizer left-resizer" data-direction="horizontal"></div>
+
+            <!-- Center Area -->
+            <div class="center-area">
+
+                <!-- Editor Section -->
+                <div class="editor-section">
+                    <!-- Tab Bar -->
+                    <div class="tab-bar">
+                        <div class="tabs-container" id="tabsContainer">
+                            <div class="tab active" data-file="welcome">
+                                <span class="tab-icon"><i class="fas fa-home"></i></span>
+                                <span class="tab-title">Hoş Geldin</span>
+                                <button class="tab-close" title="Kapat">×</button>
+                            </div>
+                        </div>
+                        <button class="new-tab-btn" id="newTabBtn" title="Yeni Dosya">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+
+                    <!-- Content Area -->
+                    <div class="content-area">
+
+                        <!-- Welcome Screen -->
+                        <div class="welcome-screen" id="welcomeScreen">
+                            <div class="welcome-content">
+                                <div class="dragon-animation">
+                                    <i class="fas fa-dragon"></i>
+                                </div>
+                                <h2>KayraDeniz Badaş <span class="gradient-text">Kod Canavarı</span></h2>
+                                <p>AI destekli kod üretimi ve dosya yönetimi için modern desktop uygulaması</p>
+
+                                <div class="welcome-actions">
+                                    <button class="welcome-btn primary" id="openFileBtn">
+                                        <i class="fas fa-folder-open"></i>
+                                        Dosya Aç
+                                    </button>
+                                    <button class="welcome-btn" id="newFileBtn">
+                                        <i class="fas fa-file-plus"></i>
+                                        Yeni Dosya
+                                    </button>
+                                    <button class="welcome-btn" id="openFolderBtn">
+                                        <i class="fas fa-folder"></i>
+                                        Klasör Aç
+                                    </button>
+                                </div>
+
+                                <div class="recent-files">
+                                    <h3>Son Kullanılan Dosyalar</h3>
+                                    <div class="recent-list" id="recentList">
+                                        <div class="empty-state">
+                                            <i class="fas fa-clock"></i>
+                                            <p>Henüz dosya açılmamış</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Code Editor Area -->
+                        <div class="editor-area hidden" id="editorArea">
+                            <div class="editor-toolbar">
+                                <div class="editor-info">
+                                    <span class="file-name" id="fileName">untitled.txt</span>
+                                    <span class="file-path" id="filePath"></span>
+                                </div>
+                                <div class="editor-actions">
+                                    <button class="editor-btn" id="saveBtn" title="Kaydet (Ctrl+S)">
+                                        <i class="fas fa-save"></i>
+                                    </button>
+                                    <button class="editor-btn" id="saveAsBtn" title="Farklı Kaydet">
+                                        <i class="fas fa-file-export"></i>
+                                    </button>
+                                    <button class="editor-btn" id="copyBtn" title="Kopyala">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="editor-container">
+                                <!-- Line Numbers -->
+                                <div id="lineNumbers" class="line-numbers"></div>
+                                
+                                <!-- Code Folding Icons -->
+                                <div id="foldIcons" class="fold-icons"></div>
+                                
+                                <!-- Editor Wrapper (for indent guides + editor) -->
+                                <div class="editor-wrapper">
+                                    <!-- Indent Guides (VS Code style) -->
+                                    <div id="indentGuides" class="indent-guides"></div>
+                                    
+                                    <!-- Code Editor -->
+                                    <textarea id="codeEditor" class="code-editor"
+                                        placeholder="Kodunuzu buraya yazın veya AI'dan yardım isteyin..."></textarea>
+                                    <pre id="codeHighlight" class="code-highlight"><code></code></pre>
+                                </div>
+                                
+                                <!-- Minimap -->
+                                <div id="minimap" class="minimap-container">
+                                    <canvas id="minimapCanvas" class="minimap-canvas"></canvas>
+                                    <div id="minimapViewport" class="minimap-viewport"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Resizer -->
+                <div class="resizer bottom-resizer" data-direction="vertical"></div>
+
+                <!-- Terminal Section -->
+                <div class="terminal-section">
+                    <div class="terminal-header">
+                        <div class="terminal-tabs">
+                            <div class="terminal-tab active">
+                                <i class="fas fa-terminal"></i>
+                                <span>Terminal</span>
+                            </div>
+                        </div>
+                        <div class="terminal-controls">
+                            <button class="terminal-btn" id="clearTerminalBtn" title="Temizle">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button class="terminal-btn" id="newTerminalBtn" title="Yeni Terminal">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button class="terminal-btn" id="toggleTerminalBtn" title="Terminal'i Gizle/Göster">
+                                <i class="fas fa-window-minimize"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="terminal-content">
+                        <div class="terminal-output" id="terminalOutput"></div>
+                        <div class="terminal-input-container">
+                            <div class="terminal-prompt">
+                                <span class="prompt-path" id="terminalPath">~</span>
+                                <span class="prompt-symbol">></span>
+                            </div>
+                            <input type="text" id="terminalInput" class="terminal-input" placeholder="Komut girin...">
+                            <button class="run-btn" id="runCommandBtn" title="Çalıştır">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Resizer -->
+            <div class="resizer right-resizer" data-direction="horizontal"></div>
+
+            <!-- Right Sidebar -->
+            <div class="sidebar right-sidebar">
+
+                <!-- AI Chat Panel -->
+                <div class="ai-chat-panel">
+                    <div class="sidebar-header">
+                        <h3><i class="fas fa-comments"></i> AI Chat</h3>
+                        <div class="chat-header-controls">
+                            <button class="summary-btn" id="summaryBtn" title="Konuşma Özeti">
+                                <i class="fas fa-chart-bar"></i>
+                            </button>
+                            <button class="clear-chat-btn" id="clearChatBtn" title="Sohbeti Temizle">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="chat-content">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="chat-message system">
+                                <div class="message-content">
+                                    <i class="fas fa-dragon"></i>
+                                    <p>Merhaba! Ben KayraDeniz Kod Canavarı. Size nasıl yardımcı olabilirim?</p>
+                                </div>
+                                <div class="message-time">Az önce</div>
+                            </div>
+                        </div>
+
+                        <div class="chat-input-container">
+                            <div class="chat-input-left">
+                                <!-- AI Mode Dropdown (moved into chat area) -->
+                                <div class="ai-mode-dropdown">
+                                    <select id="chatAiModeSelect" title="AI Modu">
+                                        <option value="ask">Ask Mode</option>
+                                        <option value="agent">Agent Mode</option>
+                                    </select>
+                                </div>
+
+                                <!-- AG2-Inspired Agent Role Selector -->
+                                <div class="agent-role-dropdown hidden" id="agentRoleDropdown">
+                                    <select id="agentRoleSelect" title="Agent Rolü">
+                                        <option value="coordinator">🎯 Koordinatör</option>
+                                        <option value="analyzer">🔍 Kod Analiz</option>
+                                        <option value="generator">⚡ Kod Üretim</option>
+                                        <option value="documentation">📚 Dokümantasyon</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="chat-input-wrapper">
+                                <textarea id="chatInput" placeholder="AI'ya bir soru sorun..." rows="2"></textarea>
+                                <div class="prompt-actions">
+                                    <div class="router-status" id="routerStatus"
+                                        title="Router Agent - Otomatik Rol Seçimi">
+                                        <i class="fas fa-robot"></i>
+                                        <span id="currentRole">Auto</span>
+                                    </div>
+                                    <button class="send-btn" id="sendChatBtn" title="Gönder">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Context Menu -->
+        <div class="context-menu hidden" id="contextMenu">
+            <div class="context-menu-item" data-action="open">
+                <i class="fas fa-external-link-alt"></i> Aç
+            </div>
+            <div class="context-menu-item" data-action="preview">
+                <i class="fas fa-eye"></i> Önizle
+            </div>
+            <div class="context-menu-separator"></div>
+            <div class="context-menu-item" data-action="rename">
+                <i class="fas fa-edit"></i> Yeniden Adlandır
+            </div>
+            <div class="context-menu-item" data-action="duplicate">
+                <i class="fas fa-copy"></i> Kopyala
+            </div>
+            <div class="context-menu-separator"></div>
+            <div class="context-menu-item" data-action="new-file">
+                <i class="fas fa-file-plus"></i> Yeni Dosya
+            </div>
+            <div class="context-menu-item" data-action="new-folder">
+                <i class="fas fa-folder-plus"></i> Yeni Klasör
+            </div>
+            <div class="context-menu-separator"></div>
+            <div class="context-menu-item danger" data-action="delete">
+                <i class="fas fa-trash"></i> Sil
+            </div>
+        </div>
+
+        <!-- File Drag Overlay -->
+        <div class="drag-overlay hidden" id="dragOverlay">
+            <div class="drag-content">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h3>Dosyaları buraya sürükleyin</h3>
+                <p>Dosyalar otomatik olarak içe aktarılacak</p>
+            </div>
+        </div>
+
+        <!-- Custom Template Modal -->
+        <div class="modal custom-template-modal hidden" id="customTemplateModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-plus-circle"></i> Özel Şablon Oluştur</h3>
+                    <button class="modal-close" id="closeCustomTemplateModal">&times;</button>
+                </div>
+                <form id="customTemplateForm">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="customTemplateLabel">Buton Etiketi</label>
+                            <input type="text" id="customTemplateLabel" placeholder="Örn: Backend Audit" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="customTemplateTitle">Başlık</label>
+                            <input type="text" id="customTemplateTitle" placeholder="Şablon başlığı" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="customTemplateDescription">Açıklama / Prompt</label>
+                            <textarea id="customTemplateDescription" rows="4" placeholder="AI'ya gönderilecek detaylı talimat" required></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="customTemplateRole">Rol</label>
+                                <select id="customTemplateRole">
+                                    <option value="generator">⚡ Kod Üretim</option>
+                                    <option value="analyzer">🔍 Kod Analiz</option>
+                                    <option value="documentation">📚 Dokümantasyon</option>
+                                    <option value="coordinator">🎯 Koordinatör</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="customTemplateIcon">İkon (Font Awesome)</label>
+                                <input type="text" id="customTemplateIcon" placeholder="fas fa-star">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="customTemplateProjectType">Proje Türü</label>
+                                <input type="text" id="customTemplateProjectType" placeholder="Örn: react, nodejs, custom">
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="customTemplateSetup">
+                                    <span>Proje kurulumu başlat</span>
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="customTemplateWizard">
+                                    <span>Gelişmiş sihirbaz kullan</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="custom-template-list" id="customTemplateList"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn secondary" id="cancelCustomTemplate">İptal</button>
+                        <button type="submit" class="btn primary" id="saveCustomTemplate">Kaydet</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div class="modal settings-modal hidden" id="settingsModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-sliders-h"></i> Genel Ayarlar</h3>
+                    <button class="modal-close" id="closeSettingsModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h4>⚙️ Yapılandırma</h4>
+                        <p>Uygulama davranışını üst araç çubuğundaki API anahtarı, model ve sıcaklık kontrolleri ile anında değiştirebilirsiniz. Bu panel, hangi ayarların aktif olduğunu özetlemek için tasarlandı.</p>
+                        <ul class="settings-list">
+                            <li><strong>API Anahtarı:</strong> OpenAI erişimini yönetmek için üstteki kilit simgesine tıklayın.</li>
+                            <li><strong>Model Seçimi:</strong> GPT-4 ve GPT-3.5 arasında hızlıca geçiş yapabilirsiniz.</li>
+                            <li><strong>Yaratıcılık:</strong> Sıcaklık slider'ı ile cevapların ne kadar özgün olacağını ayarlayın.</li>
+                        </ul>
+                    </div>
+                    <div class="settings-section">
+                        <h4>🧠 Agent Davranışı</h4>
+                        <p>Sağ panelden Agent Modu'nu açıp kapatabilir, Router Agent'ın otomatik rol seçiminden yararlanabilirsiniz.</p>
+                        <ul class="settings-list">
+                            <li><strong>Agent Modu:</strong> Üst menüdeki robot simgesi, tam yetkili çalışma için Agent Modu'nu başlatır.</li>
+                            <li><strong>Hızlı Şablonlar:</strong> Sol paneldeki "Yeni Şablon Ekle" adımıyla özel görevler tanımlayın.</li>
+                        </ul>
+                    </div>
+                    <div class="settings-section">
+                        <h4>🎨 Tema</h4>
+                        <p>"Tema Değiştir" butonu ile farklı görünüm profilleri arasında geçiş yapabilirsiniz.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn secondary" id="settingsCloseBtn">Kapat</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- About Modal -->
+        <div class="modal about-modal hidden" id="aboutModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-info-circle"></i> Hakkında</h3>
+                    <button class="modal-close" id="closeAboutModal">&times;</button>
+                </div>
+                <div class="modal-body about-content">
+                    <div class="app-icon">
+                        <i class="fas fa-dragon"></i>
+                    </div>
+                    <h2>KayraDeniz Badaş Kod Canavarı</h2>
+                    <p class="version">v1.0.0 · Electron + AI İş Akışı</p>
+                    <p>Bu uygulama, yerel projelerinizle yapay zekâ destekli çalışmayı kolaylaştırmak için geliştirildi. MCP, Continue ve kendi Router Agent'ın birleşimiyle artist mode rozetinin sunduğu hazır olma bilgileri tek yerde.</p>
+                    <div class="about-links">
+                        <a href="https://kayradeniz.com" target="_blank" rel="noreferrer noopener">Resmi site</a>
+                        <span>·</span>
+                        <a href="mailto:info@kayradeniz.com">İletişim</a>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn primary" id="aboutCloseBtn">Harika!</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rename Modal -->
+        <div class="modal rename-modal hidden" id="renameModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-edit"></i> Dosya/Klasör Adını Değiştir</h3>
+                    <button class="modal-close" id="closeRenameModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="newFileName">Yeni isim:</label>
+                        <input type="text" id="newFileName" placeholder="dosya-adi.txt">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn secondary" id="cancelRename">İptal</button>
+                    <button class="btn primary" id="confirmRename">Değiştir</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Operations Panel -->
+        <div class="bulk-operations-panel hidden" id="bulkOperationsPanel">
+            <div class="bulk-header">
+                <span id="selectedCount">0 öğe seçili</span>
+                <button class="bulk-close" id="closeBulkOperations">&times;</button>
+            </div>
+            <div class="bulk-actions">
+                <button class="bulk-action-btn" data-action="delete">
+                    <i class="fas fa-trash"></i> Sil
+                </button>
+                <button class="bulk-action-btn" data-action="move">
+                    <i class="fas fa-cut"></i> Taşı
+                </button>
+                <button class="bulk-action-btn" data-action="copy">
+                    <i class="fas fa-copy"></i> Kopyala
+                </button>
+                <button class="bulk-action-btn" data-action="zip">
+                    <i class="fas fa-file-archive"></i> Sıkıştır
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span class="status-item" id="fileStatus">Hazır</span>
+                <span class="status-separator">|</span>
+                <span class="status-item status-warning" id="artistStatus">Artist Mode: Kontrol Ediliyor</span>
+            </div>
+            <div class="status-right">
+                <span class="status-item" id="cursorPosition">Satır 1, Sütun 1</span>
+                <span class="status-separator">|</span>
+                <span class="status-item" id="fileEncoding">UTF-8</span>
+                <span class="status-separator">|</span>
+                <span class="status-item" id="lastSaved">Kaydedilmedi</span>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="dragon-loader">
+                <i class="fas fa-dragon"></i>
+            </div>
+            <h3>KayraDeniz Kod Canavarı</h3>
+            <p>AI sistemi hazırlanıyor...</p>
+            <div class="loading-bar">
+                <div class="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Go to Line Modal -->
+    <div class="modal-overlay hidden" id="gotoLineModal">
+        <div class="modal goto-line-modal">
+            <div class="modal-header">
+                <h3>Satıra Git</h3>
+                <button class="modal-close" id="closeGotoLineModal">&times;</button>
+            </div>
+            <div class="modal-content">
+                <input type="number" id="gotoLineInput" class="goto-line-input" 
+                       placeholder="Satır numarası girin..." min="1" />
+                <div class="modal-actions">
+                    <button class="btn btn-primary" id="gotoLineBtn">Git</button>
+                    <button class="btn btn-secondary" id="cancelGotoLineBtn">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts - Using stable Prism.js version without problematic components -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-markup.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/components/prism-json.min.js"></script>
+    <!-- GitHub REST API Manager -->
+    <script src="../github/github-api-manager.js"></script>
+    <script src="../github/git-manager.js"></script>
+    <!-- GitHub Code Manager (REST API Based) -->
+    <script src="github-code-manager.js"></script>
+    <!-- Continue Agent UI -->
+    <script src="continue-agent-ui.js"></script>
+    <!-- MCP Tools Manager -->
+    <script src="mcp-tools-manager.js"></script>
+    <!-- Main Application -->
+    <script src="app.js"></script>
+</body>
+
+</html>

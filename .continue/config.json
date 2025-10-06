@@ -1,0 +1,63 @@
+{
+  "models": [
+    {
+      "title": "GitHub Models - GPT-4o",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "apiBase": "https://models.inference.ai.azure.com",
+      "apiKey": "YOUR_GITHUB_TOKEN_HERE",
+      "apiType": "openai"
+    },
+    {
+      "title": "GitHub Models - GPT-4o-mini", 
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "apiBase": "https://models.inference.ai.azure.com",
+      "apiKey": "YOUR_GITHUB_TOKEN_HERE",
+      "apiType": "openai"
+    }
+  ],
+  "customCommands": [
+    {
+      "name": "test",
+      "prompt": "Write a comprehensive test for the following code: {{{ input }}}"
+    },
+    {
+      "name": "comment",
+      "prompt": "Add detailed comments to this code: {{{ input }}}"
+    },
+    {
+      "name": "optimize",
+      "prompt": "Optimize this code for performance and readability: {{{ input }}}"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "GitHub Models - GPT-4o-mini",
+    "provider": "openai", 
+    "model": "gpt-4o-mini",
+    "apiBase": "https://models.inference.ai.azure.com",
+    "apiKey": "YOUR_GITHUB_TOKEN_HERE"
+  },
+  "allowAnonymousTelemetry": false,
+  "embeddingsProvider": {
+    "provider": "transformers.js"
+  },
+  "tools": [
+    {
+      "type": "filesystem",
+      "enabled": true,
+      "policy": "ask"
+    },
+    {
+      "type": "terminal", 
+      "enabled": true,
+      "policy": "ask"
+    },
+    {
+      "type": "git",
+      "enabled": true,
+      "policy": "ask"
+    }
+  ],
+  "systemMessage": "You are an expert software engineer. You provide precise, helpful code suggestions and explanations. When making file changes, always explain what you're doing and why."
+}

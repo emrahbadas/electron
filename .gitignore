@@ -1,0 +1,8 @@
+﻿node_modules/
+dist/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
+.env
+proxy/.env
