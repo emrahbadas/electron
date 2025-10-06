@@ -2518,21 +2518,17 @@ class KodCanavari {
     async sendChatMessage() {
         // Double submit guard with debouncing
         const now = Date.now();
-        console.log('🔍 sendChatMessage called, isProcessingMessage:', this.isProcessingMessage);
 
         if (this.isProcessingMessage) {
-            console.log('🛡️ Double submit blocked - already processing');
             return;
         }
 
         if (now - this.lastMessageTime < this.debounceDelay) {
-            console.log('🛡️ Debounce blocked - too soon after last message');
             return;
         }
 
         this.isProcessingMessage = true;
         this.lastMessageTime = now;
-        console.log('✅ Processing started, isProcessingMessage set to true');
 
         // Get UI elements and variables at method scope
         const chatInput = document.getElementById('chatInput');
@@ -2574,20 +2570,9 @@ class KodCanavari {
                 this.switchToAskMode();
             }
 
-            // Display message with context awareness indicator
-            displayMessage = message;
+            // Add user message to chat (without extra labels - clean UI)
             conversationContext = this.getConversationContext(3);
-            if (chatMode === 'agent') {
-                displayMessage += '\n\n🤖 Mod: Agent (Bağlam-Farkında)';
-                if (conversationContext) {
-                    displayMessage += ' 📚';
-                }
-            } else if (conversationContext && chatMode === 'ask') {
-                displayMessage += '\n\n💭 Mod: Ask (Konuşma Geçmişi Dahil)';
-            }
-
-            // Add user message to chat with enhanced context
-            this.addContextualChatMessage('user', displayMessage, {
+            this.addContextualChatMessage('user', message, {
                 originalMessage: message,
                 mode: chatMode,
                 hasContext: !!conversationContext
@@ -4602,9 +4587,7 @@ Not:
             throw new Error('OpenAI API anahtarı ayarlanmamış');
         }
 
-        const defaultSystemPrompt = `Sen KayraDeniz Badaş Kod Canavarı AI asistanısın. Türkçe konuşuyorsun. Kod yazma, açıklama, optimize etme ve hata bulma konularında uzmanısın. Kullanıcıya profesyonel ve yardımsever bir şekilde destek ol.
-
-🚨 CRITICAL: Response must be PURE JSON. NO explanations, NO markdown, NO text before/after JSON. Start with { and end with }.`;
+        const defaultSystemPrompt = `Sen KayraDeniz Badaş Kod Canavarı AI asistanısın. Türkçe konuşuyorsun. Kod yazma, açıklama, optimize etme ve hata bulma konularında uzmanısın. Kullanıcıya profesyonel ve yardımsever bir şekilde destek ol.`;
 
         let messages = [];
 
@@ -4674,10 +4657,10 @@ Not:
             model: this.settings.model,
             messages: messages,
             temperature: this.settings.temperature,
-            top_p: 0.9, // Production Agent: Focus on high-probability tokens
-            max_tokens: this.settings.maxTokens || 4000, // Increased for full content
-            presence_penalty: 0.1, // Slight penalty to reduce verbosity
-            frequency_penalty: 0.1 // Slight penalty to avoid repetition
+            top_p: 0.9,
+            max_tokens: this.settings.maxTokens || 4000,
+            presence_penalty: 0.1,
+            frequency_penalty: 0.1
         };
 
         // Tool support ekle
@@ -4686,14 +4669,11 @@ Not:
             requestBody.tool_choice = options.tool_choice || "auto";
         }
 
-        // VALIDATION: Log messages before API call for debugging
-        console.log('OpenAI API Call Messages:', JSON.stringify(requestBody.messages, null, 2));
-
         // Final validation before API call
         for (let i = 0; i < requestBody.messages.length; i++) {
             const msg = requestBody.messages[i];
             if (msg.content == null) {
-                console.error(`Message ${i} has null content:`, msg);
+                console.error(`❌ Message ${i} has null content:`, msg);
                 requestBody.messages[i].content = "";
             }
         }
@@ -7346,14 +7326,12 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
             
             // Handle tool_calls sequence specially
             if (msg.role === 'assistant' && msg.tool_calls) {
-                // Always keep assistant messages with tool_calls
                 deduplicated.push(msg);
                 
                 // Find and include corresponding tool responses
                 for (let j = i + 1; j < messages.length; j++) {
                     const nextMsg = messages[j];
                     if (nextMsg.role === 'tool' && nextMsg.tool_call_id) {
-                        // Check if this tool response belongs to current tool_calls
                         const belongsToThisCall = msg.tool_calls.some(call => call.id === nextMsg.tool_call_id);
                         if (belongsToThisCall && !deduplicated.some(m => m.role === 'tool' && m.tool_call_id === nextMsg.tool_call_id)) {
                             deduplicated.push(nextMsg);
@@ -7374,14 +7352,12 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
             // Regular deduplication for other messages
             const key = `${msg.role}::${msg.content?.trim()}`;
             if (seen.has(key)) {
-                console.log('🔄 Skipping duplicate message:', key);
                 continue;
             }
             seen.add(key);
             deduplicated.push(msg);
         }
 
-        console.log(`📨 Messages: ${messages.length} → ${deduplicated.length} (removed ${messages.length - deduplicated.length} duplicates)`);
         return deduplicated;
     }
 
