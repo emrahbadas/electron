@@ -41,14 +41,14 @@ function runCommand(cmd, args = [], cwd = ROOT, timeoutMs = 60000) {
 
         let killed = false;
         
-        // Windows fix: npm/npx are .cmd files, need shell: true or .cmd extension
+        // Windows fix: npm/npx are .cmd files, echo/dir are built-ins, need shell: true
         // For security, we only enable shell for whitelisted commands
         const isWindows = process.platform === 'win32';
-        const needsShell = isWindows && ['npm', 'npx', 'yarn', 'pnpm'].includes(cmd);
+        const needsShell = isWindows && ['npm', 'npx', 'yarn', 'pnpm', 'echo', 'dir'].includes(cmd);
         
         const ps = spawn(cmd, args, { 
             cwd: safe(cwd), 
-            shell: needsShell, // Enable shell for Windows batch files
+            shell: needsShell, // Enable shell for Windows batch files and built-ins
             env: { ...process.env, FORCE_COLOR: '0' } // Renk kodlarını devre dışı bırak
         });
 
