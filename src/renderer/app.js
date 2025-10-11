@@ -8108,6 +8108,15 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         let sanitized = jsonText;
 
+        // FIRST: Fix control characters in strings (common LLM error)
+        // Replace literal \n, \t, \r in JSON strings with escaped versions
+        sanitized = sanitized
+            .replace(/\n/g, '\\n')   // Newline → \\n
+            .replace(/\r/g, '\\r')   // Carriage return → \\r
+            .replace(/\t/g, '\\t');  // Tab → \\t
+        
+        console.log('🔧 Control characters escaped');
+
         // Try to parse first - if it works, return as-is
         try {
             JSON.parse(sanitized);
