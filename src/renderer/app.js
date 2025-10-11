@@ -8108,7 +8108,20 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         let sanitized = jsonText;
 
-        // FIRST: Fix control characters in strings (common LLM error)
+        // STEP 1: Remove markdown code fences (```json ... ``` or ```...```)
+        sanitized = sanitized.trim();  // Remove leading/trailing whitespace
+        
+        // Check for markdown code fence at start
+        if (sanitized.startsWith('```')) {
+            console.log('🔍 Detected markdown code fence, removing...');
+            // Remove opening fence (```json or just ```)
+            sanitized = sanitized.replace(/^```(?:json)?\s*\n/, '');
+            // Remove closing fence
+            sanitized = sanitized.replace(/\n```\s*$/, '');
+            console.log('✂️ Markdown fence removed');
+        }
+
+        // STEP 2: Fix control characters in strings (common LLM error)
         // Replace literal \n, \t, \r in JSON strings with escaped versions
         sanitized = sanitized
             .replace(/\n/g, '\\n')   // Newline → \\n
