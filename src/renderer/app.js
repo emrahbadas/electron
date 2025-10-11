@@ -7765,7 +7765,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
 
         let response;
         let retryCount = 0;
-        const maxRetries = 2;
+        const maxRetries = 3; // ✅ INCREASED: Was 2, now 3 for better error recovery
 
         while (retryCount <= maxRetries) {
             try {
