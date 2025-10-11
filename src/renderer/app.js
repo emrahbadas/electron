@@ -48,13 +48,13 @@ const detectOS = () => {
     if (typeof process !== 'undefined' && process.platform) {
         return process.platform === 'win32' ? 'windows' : 'unix';
     }
-    
+
     // Fallback to userAgent (more reliable than navigator.platform)
     const userAgent = navigator.userAgent.toLowerCase();
     if (userAgent.includes('win')) return 'windows';
     if (userAgent.includes('mac')) return 'unix';
     if (userAgent.includes('linux')) return 'unix';
-    
+
     // Last resort: navigator.platform (deprecated but still works)
     return navigator.platform?.toLowerCase().includes('win') ? 'windows' : 'unix';
 };
@@ -139,134 +139,134 @@ function isOpenAIUnavailableError(error) {
 }
 
 function shouldUseOfflineProjectPlan(userRequest, route) {
-        const text = (userRequest || '').toLowerCase();
-        const hasProjectKeywords = ['proje', 'site', 'uygulama', 'oluştur', 'tasarla', 'build', 'landing', 'web sitesi']
-            .some(keyword => text.includes(keyword));
+    const text = (userRequest || '').toLowerCase();
+    const hasProjectKeywords = ['proje', 'site', 'uygulama', 'oluştur', 'tasarla', 'build', 'landing', 'web sitesi']
+        .some(keyword => text.includes(keyword));
 
-        return (this.currentProjectData || hasProjectKeywords) &&
-            (!route || route.role === 'generator' || route.role === 'documentation' || hasProjectKeywords);
-    }
+    return (this.currentProjectData || hasProjectKeywords) &&
+        (!route || route.role === 'generator' || route.role === 'documentation' || hasProjectKeywords);
+}
 
 function buildOfflineAnalysis(userRequest, route) {
-        const project = this.getOfflineProjectContext(userRequest, route);
-        const files = this.generateOfflineProjectFiles(project);
-        const summaryMessage = this.buildOfflineCompletionMessage(project);
+    const project = this.getOfflineProjectContext(userRequest, route);
+    const files = this.generateOfflineProjectFiles(project);
+    const summaryMessage = this.buildOfflineCompletionMessage(project);
 
-        const plannedActions = [
-            {
-                action: 'create_file',
-                description: 'Projeye kapsamlı bir README dosyası ekle',
-                fileName: 'README.md',
-                content: files.readme,
-                critical: true,
-                tool: 'write_file'
-            },
-            {
-                action: 'read_file',
-                description: 'README planını gözden geçir',
-                fileName: 'README.md',
-                critical: false,
-                tool: 'read_file'
-            },
-            {
-                action: 'create_file',
-                description: 'Deniz temalı ana sayfayı oluştur',
-                fileName: 'index.html',
-                content: files.index,
-                critical: true,
-                tool: 'write_file'
-            },
-            {
-                action: 'create_file',
-                description: 'Temaya uygun stilleri ekle',
-                fileName: 'styles.css',
-                content: files.styles,
-                critical: true,
-                tool: 'write_file'
-            },
-            {
-                action: 'create_file',
-                description: 'Etkileşim ve sayfa geçiş animasyonlarını ekle',
-                fileName: 'script.js',
-                content: files.script,
-                critical: false,
-                tool: 'write_file'
-            },
-            {
-                action: 'respond',
-                description: 'Projeyi nasıl test edeceğini açıkla',
-                content: summaryMessage,
-                critical: false,
-                tool: 'none'
-            }
-        ];
+    const plannedActions = [
+        {
+            action: 'create_file',
+            description: 'Projeye kapsamlı bir README dosyası ekle',
+            fileName: 'README.md',
+            content: files.readme,
+            critical: true,
+            tool: 'write_file'
+        },
+        {
+            action: 'read_file',
+            description: 'README planını gözden geçir',
+            fileName: 'README.md',
+            critical: false,
+            tool: 'read_file'
+        },
+        {
+            action: 'create_file',
+            description: 'Deniz temalı ana sayfayı oluştur',
+            fileName: 'index.html',
+            content: files.index,
+            critical: true,
+            tool: 'write_file'
+        },
+        {
+            action: 'create_file',
+            description: 'Temaya uygun stilleri ekle',
+            fileName: 'styles.css',
+            content: files.styles,
+            critical: true,
+            tool: 'write_file'
+        },
+        {
+            action: 'create_file',
+            description: 'Etkileşim ve sayfa geçiş animasyonlarını ekle',
+            fileName: 'script.js',
+            content: files.script,
+            critical: false,
+            tool: 'write_file'
+        },
+        {
+            action: 'respond',
+            description: 'Projeyi nasıl test edeceğini açıkla',
+            content: summaryMessage,
+            critical: false,
+            tool: 'none'
+        }
+    ];
 
-        return {
-            requestType: 'project-creation',
-            complexity: 'medium',
-            projectType: 'html',
-            needsFiles: true,
-            estimatedSteps: plannedActions.length,
-            selectedRole: route ? route.role : 'generator',
-            plannedActions,
-            userFriendlyPlan: 'OpenAI bağlantısı kapalı olduğu için deniz temalı "Gezgin" projesini yerel şablonlarla sıfırdan oluşturacağım.',
-            route: route
-        };
-    }
+    return {
+        requestType: 'project-creation',
+        complexity: 'medium',
+        projectType: 'html',
+        needsFiles: true,
+        estimatedSteps: plannedActions.length,
+        selectedRole: route ? route.role : 'generator',
+        plannedActions,
+        userFriendlyPlan: 'OpenAI bağlantısı kapalı olduğu için deniz temalı "Gezgin" projesini yerel şablonlarla sıfırdan oluşturacağım.',
+        route: route
+    };
+}
 
 function getOfflineProjectContext(userRequest, route) {
-        const base = this.currentProjectData ? { ...this.currentProjectData } : {};
-        const text = userRequest || '';
+    const base = this.currentProjectData ? { ...this.currentProjectData } : {};
+    const text = userRequest || '';
 
-        if (!base.title) {
-            const titleMatch = text.match(/başlık[:\-\s]*([^\n]+)/i);
-            base.title = titleMatch ? titleMatch[1].trim() : 'Gezgin';
-        }
-
-        if (!base.author) {
-            const authorMatch = text.match(/yazar[:\-\s]*([^\n]+)/i);
-            base.author = authorMatch ? authorMatch[1].trim() : (this.settings?.displayName || 'Bilinmeyen Kaptan');
-        }
-
-        if (!base.prompt) {
-            base.prompt = text.trim();
-        }
-
-        const description = base.prompt || 'Denizleri keşfeden kaptanın rotalarını ve kültürel notlarını paylaşan statik gezi sitesi.';
-        const analysis = base.analysis || {};
-
-        const recommendedStack = analysis.recommendedStack || {
-            frontend: ['HTML5', 'CSS3', 'JavaScript'],
-            backend: ['Static'],
-            database: ['JSON files'],
-            deployment: ['Vercel']
-        };
-
-        const features = analysis.features || [
-            'Deniz temalı kahraman bölüm',
-            'İnteraktif rota kartları',
-            'Perde efektiyle sayfa geçişleri',
-            'Günlük kayıtları ve gastronomi köşesi'
-        ];
-
-        const mission = base.prompt?.split('\n')[0] || 'Kaptanın keşiflerini dünyayla paylaşmak';
-
-        return {
-            title: base.title,
-            author: base.author,
-            description,
-            mission,
-            features,
-            stack: recommendedStack,
-            mood: 'lacivert denizler, köpük beyazı dalgalar ve bakır pusula tonları',
-            prompt: base.prompt
-        };
+    if (!base.title) {
+        const titleMatch = text.match(/başlık[:\-\s]*([^\n]+)/i);
+        base.title = titleMatch ? titleMatch[1].trim() : 'Gezgin';
     }
 
-function generateOfflineProjectFiles(project) {
-        const { title, author, description, features, stack, mood } = project;
+    if (!base.author) {
+        const authorMatch = text.match(/yazar[:\-\s]*([^\n]+)/i);
+        base.author = authorMatch ? authorMatch[1].trim() : (this.settings?.displayName || 'Bilinmeyen Kaptan');
+    }
 
-        const readme = `# ${title}
+    if (!base.prompt) {
+        base.prompt = text.trim();
+    }
+
+    const description = base.prompt || 'Denizleri keşfeden kaptanın rotalarını ve kültürel notlarını paylaşan statik gezi sitesi.';
+    const analysis = base.analysis || {};
+
+    const recommendedStack = analysis.recommendedStack || {
+        frontend: ['HTML5', 'CSS3', 'JavaScript'],
+        backend: ['Static'],
+        database: ['JSON files'],
+        deployment: ['Vercel']
+    };
+
+    const features = analysis.features || [
+        'Deniz temalı kahraman bölüm',
+        'İnteraktif rota kartları',
+        'Perde efektiyle sayfa geçişleri',
+        'Günlük kayıtları ve gastronomi köşesi'
+    ];
+
+    const mission = base.prompt?.split('\n')[0] || 'Kaptanın keşiflerini dünyayla paylaşmak';
+
+    return {
+        title: base.title,
+        author: base.author,
+        description,
+        mission,
+        features,
+        stack: recommendedStack,
+        mood: 'lacivert denizler, köpük beyazı dalgalar ve bakır pusula tonları',
+        prompt: base.prompt
+    };
+}
+
+function generateOfflineProjectFiles(project) {
+    const { title, author, description, features, stack, mood } = project;
+
+    const readme = `# ${title}
 
 ${description}
 
@@ -327,7 +327,7 @@ npx serve .
 - Işık ve karanlık tema geçişi ekleme
 `;
 
-        const html = `<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -498,7 +498,7 @@ npx serve .
 </body>
 </html>`;
 
-        const css = `:root {
+    const css = `:root {
     --navy: #081b33;
     --deep-navy: #050f1f;
     --foam: #e9f6ff;
@@ -936,7 +936,7 @@ body {
     }
 }`;
 
-        const script = `document.addEventListener('DOMContentLoaded', () => {
+    const script = `document.addEventListener('DOMContentLoaded', () => {
     const navToggle = document.querySelector('.nav-toggle');
     const navLinks = document.querySelector('.nav-links');
     const transitionLayer = document.querySelector('.page-transition');
@@ -1020,13 +1020,13 @@ body {
     setTimeout(() => transitionLayer?.classList.remove('active'), 600);
 });`;
 
-        return {
-            readme,
-            index: html,
-            styles: css,
-            script
-        };
-    }
+    return {
+        readme,
+        index: html,
+        styles: css,
+        script
+    };
+}
 
 function buildOfflineCompletionMessage(project) {
     const title = project?.title || 'Gezgin';
@@ -1238,7 +1238,7 @@ class KodCanavari {
 
     // ===== WORKSPACE ROOT PERSISTENCE =====
     initializeWorkspaceRoot() {
-        // Initialize workspace root from localStorage or default to Desktop
+        // Initialize workspace root from localStorage ONLY (no default to Desktop!)
         const savedRoot = window.localStorage.getItem('currentFolder');
         if (savedRoot) {
             window.__CURRENT_FOLDER__ = savedRoot;
@@ -1247,10 +1247,11 @@ class KodCanavari {
             this.workspaceRoot = savedRoot;
             console.log('📁 Workspace root restored:', savedRoot);
         } else {
-            // Default to Desktop
-            const desktopPath = require('path').join(require('os').homedir(), 'OneDrive', 'Desktop');
-            this.setWorkspaceRoot(desktopPath, true);  // ✅ Mark as initial
-            console.log('📁 Workspace root defaulted to Desktop:', desktopPath);
+            // ⚠️ NO DEFAULT! User MUST select folder via "Klasör Seç" button
+            console.warn('⚠️ Workspace root not set! User must select folder via "Klasör Seç" button.');
+            this.workspaceRoot = null;
+            this.currentWorkingDirectory = null;
+            window.__CURRENT_FOLDER__ = null;
         }
     }
 
@@ -1259,19 +1260,19 @@ class KodCanavari {
             console.error('❌ setWorkspaceRoot: Invalid path:', absolutePath);
             return;
         }
-        
+
         // ✅ STABILITY FIX: Track initial root separately
         if (isInitial && !this.initialWorkspaceRoot) {
             this.initialWorkspaceRoot = absolutePath;
             console.log('🎯 Initial workspace root set:', absolutePath);
         }
-        
+
         window.localStorage.setItem('currentFolder', absolutePath);
         window.__CURRENT_FOLDER__ = absolutePath;
         this.currentWorkingDirectory = absolutePath;
         this.currentFolder = absolutePath;
         this.workspaceRoot = absolutePath;
-        
+
         console.log('✅ Workspace root set:', absolutePath);
     }
 
@@ -1280,32 +1281,32 @@ class KodCanavari {
         if (useInitial && this.initialWorkspaceRoot) {
             return this.initialWorkspaceRoot;
         }
-        
+
         const root = this.workspaceRoot || window.__CURRENT_FOLDER__ || window.localStorage.getItem('currentFolder');
-        
+
         if (!root) {
             console.warn('⚠️ getWorkspaceRoot: No workspace root set, using default Desktop');
             const desktopPath = require('path').join(require('os').homedir(), 'OneDrive', 'Desktop');
             this.setWorkspaceRoot(desktopPath, true);
             return desktopPath;
         }
-        
+
         return root;
     }
 
     // ✅ KAPTAN YAMASI: Merkezi path çözümleme (tüm dosya işlemleri buradan)
     resolvePath(relativePath) {
         const baseRoot = this.initialWorkspaceRoot || this.workspaceRoot || this.getWorkspaceRoot();
-        
+
         if (!baseRoot) {
             throw new Error('❌ No workspace root set - cannot resolve path');
         }
-        
+
         // Absolute path ise olduğu gibi dön
         if (require('path').isAbsolute(relativePath)) {
             return relativePath;
         }
-        
+
         // Relative path'i base root'tan çöz
         const resolved = require('path').resolve(baseRoot, relativePath);
         console.log(`📍 Path resolved: ${relativePath} → ${resolved}`);
@@ -1359,7 +1360,7 @@ class KodCanavari {
             window.electronAPI = {
                 // Expose ipcRenderer for advanced usage
                 ipcRenderer: ipcRenderer,
-                
+
                 // File System API'leri
                 readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
                 readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
@@ -1369,7 +1370,7 @@ class KodCanavari {
                 openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
                 openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
                 saveFileDialog: () => ipcRenderer.invoke('save-file-dialog'),
-                
+
                 // MCP API'leri (Old - keep for compatibility)
                 mcpStatus: () => ipcRenderer.invoke('mcp-status'),
                 mcpListTools: () => ipcRenderer.invoke('mcp-list-tools'),
@@ -1380,24 +1381,24 @@ class KodCanavari {
                 mcpListFiles: (directoryPath) => ipcRenderer.invoke('mcp-list-files', directoryPath),
                 mcpGenerateProject: (projectName, projectType, basePath, workingDirectory) => ipcRenderer.invoke('mcp-generate-project', projectName, projectType, basePath, workingDirectory),
                 mcpCallTool: (toolName, args) => ipcRenderer.invoke('mcp-call-tool', toolName, args),
-                
+
                 // MCP API'leri (New - Claude Integration)
                 mcpNewListTools: () => ipcRenderer.invoke('mcp-new:list-tools'),
                 mcpNewCallTool: (toolName, args) => ipcRenderer.invoke('mcp-new:call-tool', toolName, args),
                 mcpNewGetStatus: () => ipcRenderer.invoke('mcp-new:get-status'),
                 mcpNewGetLog: () => ipcRenderer.invoke('mcp-new:get-log'),
                 mcpNewSetFileWhitelist: (rootPath) => ipcRenderer.invoke('mcp-new:set-file-whitelist', rootPath),
-                
+
                 // LLM API'leri (Unified OpenAI + Claude)
                 llmAsk: (provider, messages, options) => ipcRenderer.invoke('llm:ask', { provider, messages, options }),
                 llmSetApiKey: (provider, apiKey) => ipcRenderer.invoke('llm:set-api-key', { provider, apiKey }),
                 llmGetModels: (provider) => ipcRenderer.invoke('llm:get-models', { provider }),
                 llmSetModel: (provider, model) => ipcRenderer.invoke('llm:set-model', { provider, model }),
-                
+
                 // Claude Agent API'leri
                 claudeGetStatus: () => ipcRenderer.invoke('claude:get-status'),
                 claudeClearHistory: () => ipcRenderer.invoke('claude:clear-history'),
-                
+
                 // AI (GitHub Models API) API'leri
                 aiInitialize: (workspacePath) => ipcRenderer.invoke('ai-initialize', workspacePath),
                 aiChat: (message, options) => ipcRenderer.invoke('ai-chat', message, options),
@@ -1407,35 +1408,35 @@ class KodCanavari {
                 aiStatus: () => ipcRenderer.invoke('ai-status'),
                 aiSetModel: (modelName) => ipcRenderer.invoke('ai-set-model', modelName),
                 aiClearHistory: () => ipcRenderer.invoke('ai-clear-history'),
-                
+
                 // Continue Agent API'leri
                 continueInitialize: (workspacePath) => ipcRenderer.invoke('continue-initialize', workspacePath),
                 continueProcessPrompt: (prompt, context) => ipcRenderer.invoke('continue-process-prompt', prompt, context),
                 continueStatus: () => ipcRenderer.invoke('continue-status'),
                 continueUpdateApiKey: (apiKey) => ipcRenderer.invoke('continue-update-api-key', apiKey),
                 continueStop: () => ipcRenderer.invoke('continue-stop'),
-                
+
                 // Streaming Process API'leri
                 startProcess: (processId, command, cwd) => ipcRenderer.invoke('start-process', processId, command, cwd),
                 stopProcess: (processId) => ipcRenderer.invoke('stop-process', processId),
                 listProcesses: () => ipcRenderer.invoke('list-processes')
             };
             console.log('✅ electronAPI initialized with IPC communication');
-            
+
             // ===== STREAMING PROCESS EVENT LISTENERS =====
             // Setup event listeners for streaming process output
             ipcRenderer.on('process-output', (event, data) => {
                 this.handleProcessOutput(data.processId, data.type, data.data);
             });
-            
+
             ipcRenderer.on('process-exit', (event, data) => {
                 this.handleProcessExit(data.processId, data.exitCode, data.signal);
             });
-            
+
             ipcRenderer.on('process-error', (event, data) => {
                 this.handleProcessError(data.processId, data.error);
             });
-            
+
             console.log('✅ Streaming process event listeners registered');
         }
 
@@ -1470,7 +1471,7 @@ class KodCanavari {
         setTimeout(() => {
             this.updateLineNumbers();
         }, 100);
-        
+
         // ✨ Initialize Claude UI (async, non-blocking)
         setTimeout(async () => {
             await this.initializeClaudeUI();
@@ -1488,19 +1489,19 @@ class KodCanavari {
     async checkMCPAvailability() {
         try {
             console.log('🔍 Checking MCP tools availability...');
-            
+
             // Try to fetch MCP status
             const response = await fetch('http://localhost:7777/health', {
                 method: 'GET',
                 timeout: 2000
             }).catch(() => null);
-            
+
             if (!response || !response.ok) {
                 // MCP tools offline - show banner
                 this.showMCPFallbackBanner();
                 return;
             }
-            
+
             console.log('✅ MCP tools are online');
         } catch (error) {
             console.warn('⚠️ MCP tools check failed:', error);
@@ -1510,7 +1511,7 @@ class KodCanavari {
 
     showMCPFallbackBanner() {
         console.warn('⚠️ MCP tools offline - falling back to chat-only mode');
-        
+
         const banner = document.createElement('div');
         banner.id = 'mcp-fallback-banner';
         banner.style.cssText = `
@@ -1531,7 +1532,7 @@ class KodCanavari {
             gap: 12px;
             animation: slideDown 0.3s ease;
         `;
-        
+
         banner.innerHTML = `
             <span>⚠️</span>
             <span>MCP Tools Offline - Chat-Only Mode Active</span>
@@ -1545,14 +1546,14 @@ class KodCanavari {
                 font-size: 12px;
             ">Tamam</button>
         `;
-        
+
         document.body.appendChild(banner);
-        
+
         // Close button
         document.getElementById('mcp-banner-close')?.addEventListener('click', () => {
             banner.remove();
         });
-        
+
         // Auto-remove after 10 seconds
         setTimeout(() => {
             banner.remove();
@@ -1613,15 +1614,15 @@ class KodCanavari {
             if (!Array.isArray(this.settings.customTemplates)) {
                 this.settings.customTemplates = [];
             }
-            
+
             // Set default economical models if not set
             if (!this.settings.currentModel) {
                 const provider = this.settings.llmProvider || 'openai';
-                this.settings.currentModel = provider === 'anthropic' 
+                this.settings.currentModel = provider === 'anthropic'
                     ? 'claude-3-haiku-20240307'  // Claude Haiku (ekonomik)
                     : 'gpt-4o-mini';              // GPT-4o Mini (ekonomik)
             }
-            
+
             // Set default model to economical for backward compatibility
             if (!this.settings.model || this.settings.model === 'gpt-4') {
                 this.settings.model = 'gpt-4o-mini'; // Default to economical model
@@ -1676,8 +1677,8 @@ class KodCanavari {
         // Load recent files
         this.updateRecentFiles();
 
-    // Prepare quick start templates UI
-    this.initializeQuickTemplateUI();
+        // Prepare quick start templates UI
+        this.initializeQuickTemplateUI();
 
         // Wire top header controls (if present)
         const topModel = document.getElementById('topModelSelect');
@@ -1734,15 +1735,15 @@ class KodCanavari {
             console.log('🔑 Top save API key clicked');
             this.saveApiKeyFromTop();
         });
-        
+
         // ===== CLAUDE AI + MCP UI EVENT LISTENERS =====
-        
+
         // Claude API key save
         document.getElementById('topSaveClaudeApiKey')?.addEventListener('click', () => {
             console.log('🧠 Save Claude API key clicked');
             this.saveClaudeApiKey();
         });
-        
+
         // Provider selection
         const providerSelect = document.getElementById('llmProviderSelect');
         if (providerSelect) {
@@ -1751,7 +1752,7 @@ class KodCanavari {
                 this.onProviderChange(e.target.value);
             });
         }
-        
+
         // Model selection
         const modelSelect = document.getElementById('llmModelSelect');
         if (modelSelect) {
@@ -1760,7 +1761,7 @@ class KodCanavari {
                 this.onModelChange(e.target.value);
             });
         }
-        
+
         // Tools toggle
         const toolsCheckbox = document.getElementById('toolsEnabledCheckbox');
         if (toolsCheckbox) {
@@ -1770,7 +1771,7 @@ class KodCanavari {
                 this.saveSettings();
             });
         }
-        
+
         // ===== END CLAUDE AI + MCP UI =====
 
         // Quick action buttons
@@ -1932,13 +1933,13 @@ class KodCanavari {
             codeEditor.addEventListener('click', () => this.handleEditorSelectionChange());
             codeEditor.addEventListener('keyup', () => this.handleEditorSelectionChange());
         }
-        
+
         // Editor wrapper scroll sync
         const editorWrapper = document.querySelector('.editor-wrapper');
         if (editorWrapper) {
             editorWrapper.addEventListener('scroll', () => this.syncEditorScroll());
         }
-        
+
         // Code folding icons click
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('fold-icon') && e.target.classList.contains('visible')) {
@@ -1946,7 +1947,7 @@ class KodCanavari {
                 this.toggleFold(lineIndex);
             }
         });
-        
+
         // Minimap click
         const minimap = document.getElementById('minimap');
         if (minimap) {
@@ -1986,14 +1987,14 @@ class KodCanavari {
         // Modal close buttons
         document.getElementById('closeSettingsModal')?.addEventListener('click', () => this.hideSettings());
         document.getElementById('closeAboutModal')?.addEventListener('click', () => this.hideAbout());
-    document.getElementById('settingsCloseBtn')?.addEventListener('click', () => this.hideSettings());
-    document.getElementById('aboutCloseBtn')?.addEventListener('click', () => this.hideAbout());
+        document.getElementById('settingsCloseBtn')?.addEventListener('click', () => this.hideSettings());
+        document.getElementById('aboutCloseBtn')?.addEventListener('click', () => this.hideAbout());
 
         // Go to Line modal
         document.getElementById('closeGotoLineModal')?.addEventListener('click', () => this.hideGotoLineModal());
         document.getElementById('gotoLineBtn')?.addEventListener('click', () => this.gotoLine());
         document.getElementById('cancelGotoLineBtn')?.addEventListener('click', () => this.hideGotoLineModal());
-        
+
         // Go to Line input Enter key
         const gotoLineInput = document.getElementById('gotoLineInput');
         if (gotoLineInput) {
@@ -2010,8 +2011,8 @@ class KodCanavari {
 
         // Window events
         window.addEventListener('beforeunload', () => this.beforeUnload());
-    window.addEventListener('mcpStatusChanged', () => this.updateArtistStatus());
-    window.addEventListener('focus', () => this.updateArtistStatus());
+        window.addEventListener('mcpStatusChanged', () => this.updateArtistStatus());
+        window.addEventListener('focus', () => this.updateArtistStatus());
     }
 
     setupIPC() {
@@ -2193,12 +2194,12 @@ class KodCanavari {
             this.currentTab = tabId;
             this.currentFile = tabData;
             this.updateHighlight();
-            
+
             // Wait for DOM update before recalculating line numbers & indent guides
             setTimeout(() => {
                 this.updateLineNumbers(); // ✨ Update line numbers + indent guides
             }, 0);
-            
+
             this.updateWindowTitle(tabData.fileName);
         }
     }
@@ -2250,7 +2251,7 @@ class KodCanavari {
         // ✅ DISABLED: Syntax highlighting overlay causing visual issues
         // Just return - let the plain textarea show the code
         return;
-        
+
         /* COMMENTED OUT - Causing double text rendering
         const editor = document.getElementById('codeEditor');
         const highlight = document.getElementById('codeHighlight');
@@ -2306,7 +2307,7 @@ class KodCanavari {
             highlight.scrollTop = editor.scrollTop;
             highlight.scrollLeft = editor.scrollLeft;
         }
-        
+
         this.syncEditorScroll();
     }
 
@@ -2314,28 +2315,28 @@ class KodCanavari {
     syncEditorScroll() {
         const editorWrapper = document.querySelector('.editor-wrapper');
         if (!editorWrapper) return;
-        
+
         const scrollTop = editorWrapper.scrollTop;
         const scrollLeft = editorWrapper.scrollLeft;
-        
+
         // Sync line numbers scroll (vertical only)
         const lineNumbers = document.getElementById('lineNumbers');
         if (lineNumbers) {
             lineNumbers.scrollTop = scrollTop;
         }
-        
+
         // Sync fold icons scroll (vertical only)
         const foldIcons = document.getElementById('foldIcons');
         if (foldIcons) {
             foldIcons.scrollTop = scrollTop;
         }
-        
+
         // Sync indent guides scroll (both axes)
         const indentGuides = document.getElementById('indentGuides');
         if (indentGuides) {
             indentGuides.style.transform = `translate(-${scrollLeft}px, -${scrollTop}px)`;
         }
-        
+
         // Update minimap viewport
         this.updateMinimapViewport();
     }
@@ -2344,33 +2345,33 @@ class KodCanavari {
     updateLineNumbers() {
         const editor = document.getElementById('codeEditor');
         const lineNumbers = document.getElementById('lineNumbers');
-        
+
         if (!editor || !lineNumbers) return;
-        
+
         const code = editor.value;
         const lines = code.split('\n');
         const lineCount = lines.length;
-        
+
         // Generate line numbers HTML
         let lineNumbersHTML = '';
         for (let i = 1; i <= lineCount; i++) {
             lineNumbersHTML += `<span>${i}</span>`;
         }
-        
+
         lineNumbers.innerHTML = lineNumbersHTML;
-        
+
         // Sync scroll position
         lineNumbers.scrollTop = editor.scrollTop;
-        
+
         // Update indent guides (VS Code style)
         this.updateIndentGuides();
-        
+
         // Update bracket matching
         this.highlightMatchingBracket();
-        
+
         // Update code folding icons
         this.updateFoldIcons();
-        
+
         // Update minimap
         this.updateMinimap();
     }
@@ -2379,21 +2380,21 @@ class KodCanavari {
     updateFoldIcons() {
         const editor = document.getElementById('codeEditor');
         const foldIconsContainer = document.getElementById('foldIcons');
-        
+
         if (!editor || !foldIconsContainer) return;
-        
+
         const lines = editor.value.split('\n');
         let html = '';
-        
+
         if (!this.foldedRegions) {
             this.foldedRegions = new Set();
         }
-        
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const isFoldable = this.isLineFoldable(line);
             const isFolded = this.foldedRegions.has(i);
-            
+
             if (isFoldable) {
                 const icon = isFolded ? '▶' : '▼';
                 html += `<span class="fold-icon visible" data-line="${i}">${icon}</span>`;
@@ -2401,30 +2402,30 @@ class KodCanavari {
                 html += '<span class="fold-icon"></span>';
             }
         }
-        
+
         foldIconsContainer.innerHTML = html;
-        
+
         // Sync scroll
         foldIconsContainer.scrollTop = editor.scrollTop;
     }
-    
+
     isLineFoldable(line) {
         // Check if line has opening bracket/brace
         const trimmed = line.trim();
-        return trimmed.endsWith('{') || 
-               trimmed.includes('function') && trimmed.includes('{') ||
-               trimmed.includes('class') && trimmed.includes('{') ||
-               trimmed.includes('if') && trimmed.includes('{') ||
-               trimmed.includes('for') && trimmed.includes('{') ||
-               trimmed.includes('while') && trimmed.includes('{');
+        return trimmed.endsWith('{') ||
+            trimmed.includes('function') && trimmed.includes('{') ||
+            trimmed.includes('class') && trimmed.includes('{') ||
+            trimmed.includes('if') && trimmed.includes('{') ||
+            trimmed.includes('for') && trimmed.includes('{') ||
+            trimmed.includes('while') && trimmed.includes('{');
     }
-    
+
     toggleFold(lineIndex) {
         const editor = document.getElementById('codeEditor');
         if (!editor) return;
-        
+
         const lines = editor.value.split('\n');
-        
+
         if (this.foldedRegions.has(lineIndex)) {
             // Unfold
             this.foldedRegions.delete(lineIndex);
@@ -2435,13 +2436,13 @@ class KodCanavari {
                 this.foldedRegions.add(lineIndex);
             }
         }
-        
+
         this.applyFolding();
     }
-    
+
     findClosingBracket(lines, startLine) {
         let depth = 0;
-        
+
         for (let i = startLine; i < lines.length; i++) {
             const line = lines[i];
             for (const char of line) {
@@ -2452,17 +2453,17 @@ class KodCanavari {
                 }
             }
         }
-        
+
         return -1;
     }
-    
+
     applyFolding() {
         const editor = document.getElementById('codeEditor');
         if (!editor) return;
-        
+
         const lines = editor.value.split('\n');
         const lineElements = document.querySelectorAll('.line-numbers span');
-        
+
         // Hide/show lines
         this.foldedRegions.forEach(startLine => {
             const endLine = this.findClosingBracket(lines, startLine);
@@ -2475,7 +2476,7 @@ class KodCanavari {
                 }
             }
         });
-        
+
         this.updateFoldIcons();
     }
 
@@ -2483,36 +2484,36 @@ class KodCanavari {
     updateIndentGuides() {
         const editor = document.getElementById('codeEditor');
         const indentGuidesContainer = document.getElementById('indentGuides');
-        
+
         if (!editor || !indentGuidesContainer) return;
-        
+
         const code = editor.value;
         const lines = code.split('\n');
-        
+
         // Calculate indent levels for each line
         const indentLevels = lines.map(line => {
             const match = line.match(/^(\s*)/);
             const spaces = match ? match[1].length : 0;
             return Math.floor(spaces / 4); // 4 spaces = 1 indent level
         });
-        
+
         // Find indent guide ranges (start-end pairs for each level)
         const guides = [];
         const tabSize = 4; // 4 characters per tab
-        
+
         for (let level = 1; level <= Math.max(...indentLevels); level++) {
             let startLine = -1;
-            
+
             for (let i = 0; i < lines.length; i++) {
                 const currentLevel = indentLevels[i];
                 const nextLevel = i + 1 < lines.length ? indentLevels[i + 1] : 0;
                 const isEmptyLine = lines[i].trim().length === 0;
-                
+
                 // Start a guide block
                 if (currentLevel >= level && startLine === -1) {
                     startLine = i;
                 }
-                
+
                 // End a guide block
                 if (startLine !== -1 && (currentLevel < level || i === lines.length - 1)) {
                     // Skip if it's a single line or just empty lines
@@ -2528,17 +2529,17 @@ class KodCanavari {
                 }
             }
         }
-        
+
         // Render indent guides as absolute positioned divs
         const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
         const charWidth = this.getCharWidth(editor);
-        
+
         let guidesHTML = '';
         guides.forEach(guide => {
             const top = guide.startLine * lineHeight;
             const height = (guide.endLine - guide.startLine + 1) * lineHeight;
             const left = guide.column * charWidth;
-            
+
             guidesHTML += `<div class="indent-guide" style="
                 position: absolute;
                 top: ${top}px;
@@ -2550,9 +2551,9 @@ class KodCanavari {
                 pointer-events: none;
             "></div>`;
         });
-        
+
         indentGuidesContainer.innerHTML = guidesHTML;
-        
+
         // Sync scroll position
         indentGuidesContainer.scrollTop = editor.scrollTop;
         indentGuidesContainer.scrollLeft = editor.scrollLeft;
@@ -2561,21 +2562,21 @@ class KodCanavari {
     // Helper: Get character width in editor
     getCharWidth(editor) {
         if (!editor) return 8;
-        
+
         // Cache the result
         if (this._cachedCharWidth) return this._cachedCharWidth;
-        
+
         // Create temporary span to measure character width
         const span = document.createElement('span');
         span.style.font = getComputedStyle(editor).font;
         span.style.visibility = 'hidden';
         span.style.position = 'absolute';
         span.textContent = 'X';
-        
+
         document.body.appendChild(span);
         const width = span.offsetWidth;
         document.body.removeChild(span);
-        
+
         this._cachedCharWidth = width;
         return width;
     }
@@ -2600,7 +2601,7 @@ class KodCanavari {
     showGotoLineModal() {
         const modal = document.getElementById('gotoLineModal');
         const input = document.getElementById('gotoLineInput');
-        
+
         if (modal && input) {
             modal.classList.remove('hidden');
             input.value = '';
@@ -2618,35 +2619,35 @@ class KodCanavari {
     gotoLine() {
         const input = document.getElementById('gotoLineInput');
         const editor = document.getElementById('codeEditor');
-        
+
         if (!input || !editor) return;
-        
+
         const lineNumber = parseInt(input.value);
         if (isNaN(lineNumber) || lineNumber < 1) {
             return;
         }
-        
+
         const lines = editor.value.split('\n');
         const totalLines = lines.length;
-        
+
         // Clamp to valid range
         const targetLine = Math.min(lineNumber, totalLines);
-        
+
         // Calculate character position
         let charPos = 0;
         for (let i = 0; i < targetLine - 1; i++) {
             charPos += lines[i].length + 1; // +1 for newline
         }
-        
+
         // Set cursor position
         editor.focus();
         editor.setSelectionRange(charPos, charPos + (lines[targetLine - 1]?.length || 0));
-        
+
         // Scroll to line
         const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 20;
         const scrollTop = (targetLine - 1) * lineHeight - (editor.clientHeight / 2);
         editor.scrollTop = Math.max(0, scrollTop);
-        
+
         // Update UI
         this.syncHighlight();
         this.updateCursorPosition();
@@ -2833,7 +2834,7 @@ class KodCanavari {
         try {
             // Check if API key is set for current provider
             const provider = this.settings.llmProvider || 'openai';
-            
+
             if (provider === 'openai' && !this.settings.apiKey) {
                 throw new Error('OpenAI API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
             } else if (provider === 'anthropic' && !this.settings.claudeApiKey) {
@@ -2847,12 +2848,12 @@ class KodCanavari {
             } else {
                 // ✨ Enhanced Ask Mode - Unified LLM call (OpenAI or Claude)
                 const enhancedPrompt = this.addExecutionContext(contextAwarePrompt);
-                
+
                 // Convert to messages format for unified LLM interface
                 const messages = [
                     { role: 'user', content: enhancedPrompt }
                 ];
-                
+
                 // Use unified LLM interface (routes to OpenAI or Claude)
                 const response = await this.queueOpenAIRequest(async () => {
                     return await this.callLLM(messages, {
@@ -2860,7 +2861,7 @@ class KodCanavari {
                         maxTokens: 4096
                     });
                 });
-                
+
                 this.addContextualChatMessage('ai', response, {
                     mode: 'ask',
                     hasContext: !!conversationContext
@@ -3578,7 +3579,7 @@ Not:
 
         const line = document.createElement('div');
         line.className = `terminal-line ${type}`;
-        
+
         // If already HTML (from ANSI parser), use innerHTML
         // Otherwise process for links and commands
         if (isHtml) {
@@ -3596,24 +3597,24 @@ Not:
     makeTerminalLinksClickable(text) {
         // At this point, text already has ANSI parsed to HTML spans
         // We need to inject links while preserving those spans
-        
+
         // URL regex pattern - capture full URL including port numbers
         // Match: http://localhost:5179/ or https://example.com/path
         const urlPattern = /(https?:\/\/[a-zA-Z0-9]+(:[0-9]+)?(\/[^\s<>"']*)?)/g;
-        
+
         // Replace URLs with clickable links
         let processed = text.replace(urlPattern, (url) => {
             // Clean URL (remove trailing punctuation but keep port numbers)
             let cleanUrl = url.replace(/[.,;!?)'"]$/, ''); // Remove trailing punctuation
-            
+
             // Remove trailing slash if it's the only path
             if (cleanUrl.endsWith('/') && cleanUrl.split('/').length === 4) {
                 cleanUrl = cleanUrl.slice(0, -1);
             }
-            
+
             return `<a href="#" class="terminal-link" onclick="event.preventDefault(); window.app.openExternalUrl('${cleanUrl}');" title="Tıklayarak tarayıcıda aç">${cleanUrl}</a>`;
         });
-        
+
         return processed;
     }
 
@@ -3707,29 +3708,29 @@ Not:
             /^vite/i,
             /^yarn\s+(dev|start|serve)/i
         ];
-        
+
         return streamingPatterns.some(pattern => pattern.test(command));
     }
 
     // Start a streaming process with live output
     async startStreamingProcess(command) {
         const processId = `process_${Date.now()}`;
-        
+
         try {
             // Start the process
             const result = await window.electronAPI.startProcess(
-                processId, 
-                command, 
+                processId,
+                command,
                 this.currentWorkingDirectory
             );
-            
+
             if (result.success) {
                 // Track active process
                 this.activeProcesses.set(processId, {
                     command,
                     startTime: Date.now()
                 });
-                
+
                 this.addTerminalLine(`Started streaming process [${processId}]`, 'success');
                 this.addTerminalLine(`Press Ctrl+C or use 'stop ${processId}' to terminate`, 'output');
             } else {
@@ -3744,7 +3745,7 @@ Not:
     async stopProcess(processId) {
         try {
             const result = await window.electronAPI.stopProcess(processId);
-            
+
             if (result.success) {
                 this.addTerminalLine(`Process ${processId} stopped`, 'success');
                 this.activeProcesses.delete(processId);
@@ -3760,12 +3761,12 @@ Not:
     async listActiveProcesses() {
         try {
             const processes = await window.electronAPI.listProcesses();
-            
+
             if (processes.length === 0) {
                 this.addTerminalLine('No active processes', 'output');
                 return;
             }
-            
+
             this.addTerminalLine('Active Streaming Processes:', 'success');
             processes.forEach(processId => {
                 const info = this.activeProcesses.get(processId);
@@ -3786,13 +3787,13 @@ Not:
     handleProcessOutput(processId, type, data) {
         // Color-code output: stdout=white, stderr=red
         const cssClass = type === 'stderr' ? 'error' : 'output';
-        
+
         // Split by lines and add each as separate terminal line
         const lines = data.split('\n');
         lines.forEach((line, index) => {
             // Skip last empty line from split
             if (index === lines.length - 1 && !line) return;
-            
+
             // IMPORTANT: Parse ANSI codes FIRST, then make links clickable
             // This prevents ANSI spans from breaking HTML link tags
             let htmlLine = this.parseAnsiToHtml(line);
@@ -3832,7 +3833,7 @@ Not:
         html = html.replace(/\x1b\[([0-9;]+)m|\u001b\[([0-9;]+)m|\[([0-9;]+)m/g, (match, code1, code2, code3) => {
             const code = code1 || code2 || code3;
             const codes = code.split(';');
-            
+
             let styles = '';
             codes.forEach(c => {
                 if (c === '0') {
@@ -3860,7 +3861,7 @@ Not:
                 // Reset - close any open span
                 return '</span>';
             }
-            
+
             return ''; // Remove the escape code
         });
 
@@ -3868,7 +3869,7 @@ Not:
         const openSpans = (html.match(/<span/g) || []).length;
         const closeSpans = (html.match(/<\/span>/g) || []).length;
         const unclosed = openSpans - closeSpans;
-        
+
         for (let i = 0; i < unclosed; i++) {
             html += '</span>';
         }
@@ -3879,12 +3880,12 @@ Not:
     // Handle process exit event
     handleProcessExit(processId, exitCode, signal) {
         const statusType = exitCode === 0 ? 'success' : 'error';
-        const exitMessage = signal 
+        const exitMessage = signal
             ? `Process ${processId} terminated with signal ${signal}`
             : `Process ${processId} exited with code ${exitCode}`;
-        
+
         this.addTerminalLine(exitMessage, statusType);
-        
+
         // Remove process from active list if we're tracking it
         if (this.activeProcesses) {
             this.activeProcesses.delete(processId);
@@ -3894,7 +3895,7 @@ Not:
     // Handle process error event
     handleProcessError(processId, error) {
         this.addTerminalLine(`Process Error [${processId}]: ${error}`, 'error');
-        
+
         // Remove process from active list if we're tracking it
         if (this.activeProcesses) {
             this.activeProcesses.delete(processId);
@@ -3975,27 +3976,27 @@ Not:
             this.addChatMessage('system', '✅ OpenAI API anahtarı üst bardan kaydedildi.');
         }
     }
-    
+
     // ===== CLAUDE AI + MCP INTEGRATION METHODS =====
-    
+
     async saveClaudeApiKey() {
         const claudeKeyInput = document.getElementById('topClaudeApiKey');
         if (!claudeKeyInput) return;
-        
+
         const apiKey = claudeKeyInput.value.trim();
-        
+
         if (!apiKey) {
             this.showNotification('❌ Claude API anahtarı boş olamaz', 'error');
             return;
         }
-        
+
         try {
             // Send API key to main process (memory-only storage)
             const result = await window.electronAPI.ipcRenderer.invoke('llm:set-api-key', {
                 provider: 'anthropic',
                 apiKey: apiKey
             });
-            
+
             if (result.success) {
                 this.settings.claudeApiKey = apiKey;
                 this.saveSettings();
@@ -4005,20 +4006,20 @@ Not:
             } else {
                 throw new Error(result.error || 'Failed to set API key');
             }
-            
+
         } catch (error) {
             console.error('❌ Claude API key save error:', error);
             this.showNotification(`❌ Hata: ${error.message}`, 'error');
         }
     }
-    
+
     async onProviderChange(provider) {
         this.settings.llmProvider = provider;
         this.saveSettings();
-        
+
         // Load models for selected provider
         await this.loadModelsForProvider(provider);
-        
+
         // Show appropriate API key reminder
         if (provider === 'anthropic') {
             const hasKey = !!this.settings.claudeApiKey;
@@ -4031,18 +4032,18 @@ Not:
                 this.showNotification('⚠️ OpenAI API anahtarı gerekli', 'warning');
             }
         }
-        
+
         this.updateStatus(`Provider değiştirildi: ${provider === 'anthropic' ? 'Claude' : 'OpenAI'}`);
     }
-    
+
     async loadModelsForProvider(provider) {
         const modelSelect = document.getElementById('llmModelSelect');
         if (!modelSelect) return;
-        
+
         // Show/hide appropriate optgroups
         const openaiGroups = ['openaiEconomicGroup', 'openaiProductionGroup'];
         const claudeGroups = ['claudeEconomicGroup', 'claudeBalancedGroup', 'claudeProductionGroup'];
-        
+
         if (provider === 'openai') {
             // Show OpenAI groups, hide Claude groups
             openaiGroups.forEach(id => {
@@ -4053,11 +4054,11 @@ Not:
                 const group = document.getElementById(id);
                 if (group) group.classList.add('hidden');
             });
-            
+
             // Select default OpenAI model (GPT-4o Mini for economy)
             modelSelect.value = 'gpt-4o-mini';
             this.settings.currentModel = 'gpt-4o-mini';
-            
+
         } else if (provider === 'anthropic') {
             // Show Claude groups, hide OpenAI groups
             openaiGroups.forEach(id => {
@@ -4068,65 +4069,65 @@ Not:
                 const group = document.getElementById(id);
                 if (group) group.classList.remove('hidden');
             });
-            
+
             // Select default Claude model (Haiku for economy)
             modelSelect.value = 'claude-3-haiku-20240307';
             this.settings.currentModel = 'claude-3-haiku-20240307';
         }
-        
+
         this.saveSettings();
         this.updateStatus(`Model listesi güncellendi: ${provider === 'anthropic' ? 'Claude' : 'OpenAI'}`);
-        
+
         console.log(`✅ Loaded models for ${provider}, default: ${this.settings.currentModel}`);
     }
-    
+
     async onModelChange(model) {
         const provider = this.settings.llmProvider || 'openai';
         this.settings.currentModel = model;
         this.saveSettings();
-        
+
         try {
             const result = await window.electronAPI.ipcRenderer.invoke('llm:set-model', {
                 provider,
                 model
             });
-            
+
             if (result.success) {
                 console.log(`✅ Model changed to: ${model}`);
                 this.updateStatus(`Model: ${model}`);
             }
-            
+
         } catch (error) {
             console.error('❌ Model change error:', error);
         }
     }
-    
+
     async initializeClaudeUI() {
         // Initialize provider selector
         const providerSelect = document.getElementById('llmProviderSelect');
         if (providerSelect) {
             providerSelect.value = this.settings.llmProvider || 'openai';
         }
-        
+
         // Initialize tools toggle
         const toolsCheckbox = document.getElementById('toolsEnabledCheckbox');
         if (toolsCheckbox) {
             toolsCheckbox.checked = this.settings.toolsEnabled || false;
         }
-        
+
         // Load models for current provider
         const currentProvider = this.settings.llmProvider || 'openai';
         await this.loadModelsForProvider(currentProvider);
-        
+
         // Set saved Claude API key if exists
         const claudeKeyInput = document.getElementById('topClaudeApiKey');
         if (claudeKeyInput && this.settings.claudeApiKey) {
             claudeKeyInput.value = this.settings.claudeApiKey;
         }
-        
+
         console.log('✅ Claude UI initialized');
     }
-    
+
     // ===== END CLAUDE AI + MCP METHODS =====
 
     async refreshExplorer() {
@@ -4662,24 +4663,24 @@ Not:
         if (bracketPairs[e.key]) {
             e.preventDefault();
             const closingChar = bracketPairs[e.key];
-            
+
             if (hasSelection) {
                 // Wrap selection with brackets
-                editor.value = 
-                    editor.value.substring(0, start) + 
-                    e.key + selectedText + closingChar + 
+                editor.value =
+                    editor.value.substring(0, start) +
+                    e.key + selectedText + closingChar +
                     editor.value.substring(end);
                 editor.selectionStart = start + 1;
                 editor.selectionEnd = end + 1;
             } else {
                 // Insert bracket pair
-                editor.value = 
-                    editor.value.substring(0, start) + 
-                    e.key + closingChar + 
+                editor.value =
+                    editor.value.substring(0, start) +
+                    e.key + closingChar +
                     editor.value.substring(end);
                 editor.selectionStart = editor.selectionEnd = start + 1;
             }
-            
+
             this.onEditorChange();
             return;
         }
@@ -4699,12 +4700,12 @@ Not:
         if (e.key === 'Backspace' && !hasSelection) {
             const charBefore = editor.value.charAt(start - 1);
             const charAfter = editor.value.charAt(start);
-            
+
             // Check if we're between a bracket pair
             if (bracketPairs[charBefore] === charAfter) {
                 e.preventDefault();
-                editor.value = 
-                    editor.value.substring(0, start - 1) + 
+                editor.value =
+                    editor.value.substring(0, start - 1) +
                     editor.value.substring(start + 1);
                 editor.selectionStart = editor.selectionEnd = start - 1;
                 this.onEditorChange();
@@ -4842,35 +4843,35 @@ Not:
         const editor = document.getElementById('codeEditor');
         const canvas = document.getElementById('minimapCanvas');
         const viewport = document.getElementById('minimapViewport');
-        
+
         if (!editor || !canvas || !viewport) return;
-        
+
         const ctx = canvas.getContext('2d');
         const lines = editor.value.split('\n');
-        
+
         // Set canvas size
         const containerWidth = 100;
         const lineHeight = 2; // Minimap line height in pixels
         canvas.width = containerWidth;
         canvas.height = Math.max(lines.length * lineHeight, 300);
-        
+
         // Clear canvas
         ctx.fillStyle = '#1e1e1e';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
+
         // Draw code lines
         lines.forEach((line, index) => {
             const y = index * lineHeight;
             const trimmed = line.trim();
-            
+
             if (trimmed.length > 0) {
                 // Calculate line "density" (how much code)
                 const density = Math.min(trimmed.length / 80, 1);
                 const width = containerWidth * density;
-                
+
                 // Color based on content
                 let color = '#d4d4d4'; // Default text color
-                
+
                 if (trimmed.startsWith('//') || trimmed.startsWith('/*')) {
                     color = '#6a9955'; // Comment green
                 } else if (trimmed.includes('function') || trimmed.includes('class') || trimmed.includes('const') || trimmed.includes('let')) {
@@ -4880,51 +4881,51 @@ Not:
                 } else if (trimmed.includes('{') || trimmed.includes('}')) {
                     color = '#ffd700'; // Bracket gold
                 }
-                
+
                 ctx.fillStyle = color;
                 ctx.fillRect(5, y, width - 10, lineHeight);
             }
         });
-        
+
         // Update viewport indicator
         this.updateMinimapViewport();
     }
-    
+
     updateMinimapViewport() {
         const editor = document.getElementById('codeEditor');
         const editorWrapper = document.querySelector('.editor-wrapper');
         const viewport = document.getElementById('minimapViewport');
         const canvas = document.getElementById('minimapCanvas');
-        
+
         if (!editor || !editorWrapper || !viewport || !canvas) return;
-        
+
         const lineHeight = 2;
         const totalLines = editor.value.split('\n').length;
         const visibleLines = Math.floor(editorWrapper.clientHeight / parseInt(window.getComputedStyle(editor).lineHeight));
-        
+
         const scrollPercentage = editorWrapper.scrollTop / (editorWrapper.scrollHeight - editorWrapper.clientHeight);
         const viewportHeight = (visibleLines / totalLines) * canvas.height;
         const viewportTop = scrollPercentage * (canvas.height - viewportHeight);
-        
+
         viewport.style.top = `${viewportTop}px`;
         viewport.style.height = `${viewportHeight}px`;
     }
-    
+
     handleMinimapClick(e) {
         const editor = document.getElementById('codeEditor');
         const editorWrapper = document.querySelector('.editor-wrapper');
         const canvas = document.getElementById('minimapCanvas');
-        
+
         if (!editor || !editorWrapper || !canvas) return;
-        
+
         const rect = canvas.getBoundingClientRect();
         const clickY = e.clientY - rect.top;
         const lineHeight = parseInt(window.getComputedStyle(editor).lineHeight);
         const totalLines = editor.value.split('\n').length;
-        
+
         // Calculate which line was clicked
         const clickedLine = Math.floor((clickY / canvas.height) * totalLines);
-        
+
         // Scroll to that line
         editorWrapper.scrollTop = clickedLine * lineHeight;
     }
@@ -4967,30 +4968,30 @@ Not:
     }
 
     // ===== UNIFIED LLM CALL (OpenAI + Claude) =====
-    
+
     // ✅ RATE LIMITING GUARD
     async checkRateLimit() {
         const now = Date.now();
-        
+
         // Remove old timestamps outside window
         this.requestTimestamps = this.requestTimestamps.filter(
             timestamp => now - timestamp < this.rateLimitWindow
         );
-        
+
         // Check if limit exceeded
         if (this.requestTimestamps.length >= this.maxRequestsPerWindow) {
             const oldestRequest = this.requestTimestamps[0];
             const waitTime = Math.ceil((this.rateLimitWindow - (now - oldestRequest)) / 1000);
-            
+
             return {
                 allowed: false,
                 message: `Too many requests. Wait ${waitTime} seconds.`
             };
         }
-        
+
         // Add current request
         this.requestTimestamps.push(now);
-        
+
         return { allowed: true };
     }
 
@@ -5000,23 +5001,23 @@ Not:
         const inputText = messages.map(m => m.content).join(' ');
         const estimatedInputTokens = Math.ceil(inputText.length / 4);
         const estimatedTotalTokens = estimatedInputTokens + (maxTokens || 2048);
-        
+
         this.tokenBudget.used += estimatedTotalTokens;
-        
+
         const percentUsed = (this.tokenBudget.used / this.tokenBudget.limit * 100).toFixed(1);
         console.log(`💰 Token Budget: ${this.tokenBudget.used}/${this.tokenBudget.limit} (${percentUsed}%)`);
-        
+
         // Warning at 80%
         if (percentUsed >= 80 && percentUsed < 90) {
             this.showNotification('⚠️ Token budget 80% kullanıldı', 'warning');
         }
-        
+
         // Critical at 90%
         if (percentUsed >= 90) {
             this.showNotification('🚨 Token budget kritik seviyede!', 'error');
         }
     }
-    
+
     // Get maximum tokens for a model
     getModelMaxTokens(provider, model) {
         if (provider === 'anthropic') {
@@ -5037,7 +5038,7 @@ Not:
         } else {
             // OpenAI models
             if (model.includes('gpt-4o')) {
-                return 16384; // GPT-4o and GPT-4o-mini: 16K max output
+                return 4096; // GPT-4o and GPT-4o-mini: REDUCED to 4K to prevent JSON truncation!
             }
             if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) {
                 return 4096; // GPT-4 Turbo: 4K max output (128K context input)
@@ -5051,37 +5052,37 @@ Not:
             return 4096; // GPT-3.5 standard and others
         }
     }
-    
+
     async callLLM(messages, options = {}) {
         const provider = this.settings.llmProvider || 'openai';
         const model = this.settings.currentModel;
         const toolsEnabled = this.settings.toolsEnabled || false;
         let { systemPrompt, maxTokens, temperature } = options;
-        
+
         // ✅ RATE LIMITING GUARD
         const rateLimitCheck = await this.checkRateLimit();
         if (!rateLimitCheck.allowed) {
             throw new Error(`⏱️ Rate limit: ${rateLimitCheck.message}`);
         }
-        
+
         // ✅ TOKEN BUDGET TRACKER
         this.trackTokenUsage(messages, maxTokens);
-        
+
         // Auto-adjust maxTokens based on model limits
         const modelMaxTokens = this.getModelMaxTokens(provider, model);
         if (!maxTokens || maxTokens > modelMaxTokens) {
             maxTokens = modelMaxTokens;
             console.log(`📊 Adjusted maxTokens to ${maxTokens} for model ${model}`);
         }
-        
+
         console.log(`🤖 Calling ${provider} (${model}) - Tools: ${toolsEnabled} - MaxTokens: ${maxTokens}`);
-        
+
         try {
             if (provider === 'anthropic') {
                 // Claude path - pass all options
-                return await this.callClaude(messages, { 
-                    model, 
-                    toolsEnabled, 
+                return await this.callClaude(messages, {
+                    model,
+                    toolsEnabled,
                     systemPrompt,
                     maxTokens,
                     temperature
@@ -5095,20 +5096,20 @@ Not:
                     ...options
                 });
             }
-            
+
         } catch (error) {
             console.error(`❌ ${provider} call failed:`, error);
             throw error;
         }
     }
-    
+
     async callClaude(messages, options = {}) {
         if (!this.settings.claudeApiKey) {
             throw new Error('Claude API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
         }
-        
+
         const { model, toolsEnabled, systemPrompt, maxTokens, temperature } = options;
-        
+
         try {
             const result = await window.electronAPI.ipcRenderer.invoke('llm:ask', {
                 provider: 'anthropic',
@@ -5119,17 +5120,17 @@ Not:
                 maxTokens: maxTokens || 4096,
                 temperature: temperature || 0.7
             });
-            
+
             if (result.success) {
                 console.log(`✅ Claude response received (${result.model})`);
                 return result.response;
             } else {
                 throw new Error(result.error || 'Claude API call failed');
             }
-            
+
         } catch (error) {
             console.error('❌ Claude call error:', error);
-            
+
             // User-friendly error messages
             if (error.message.includes('API key')) {
                 throw new Error('Claude API anahtarı geçersiz veya ayarlanmamış');
@@ -5138,11 +5139,11 @@ Not:
             } else if (error.message.includes('rate limit')) {
                 throw new Error('Claude rate limit aşıldı. Lütfen bekleyip tekrar deneyin.');
             }
-            
+
             throw error;
         }
     }
-    
+
     // ===== END UNIFIED LLM CALL =====
 
     async callOpenAI(message, systemPrompt = null, options = {}) {
@@ -7232,7 +7233,7 @@ Please consider the conversation context when responding. Reference previous dis
             }
 
             // 🔧 PRODUCTION AGENT: Tool-First Policy Enforcement
-            const hasToolActions = analysis.plannedActions && analysis.plannedActions.some(action => 
+            const hasToolActions = analysis.plannedActions && analysis.plannedActions.some(action =>
                 action.tool && action.tool !== 'none' && action.action !== 'respond'
             );
 
@@ -7597,7 +7598,7 @@ CSS: Min 200 lines, modern design, responsive, animations
 JS: Min 50 lines, real functions, event listeners
 README: Min 80 lines, setup, features, usage, license
 
-🔥 TOKEN LIMIT WARNING: If your JSON response exceeds ~15K characters, it will be TRUNCATED!
+🔥 TOKEN LIMIT WARNING: Response MUST NOT exceed 8000 characters! If exceeded, it will be TRUNCATED!
 Strategy: Create MORE steps with SMALLER files instead of FEW steps with HUGE files.
 
 📊 ADAPTIVE COMPLEXITY RULES:
@@ -7605,10 +7606,12 @@ Strategy: Create MORE steps with SMALLER files instead of FEW steps with HUGE fi
 For SIMPLE projects (1-3 files): Full content OK
 For MEDIUM projects (4-8 files): Use concise content + comments like "/* add validation logic */"
 For COMPLEX projects (9+ files): 
-  - Step 1: Create PLAN.md with architecture overview
-  - Step 2: Create files.json with list of files to create
-  - Steps 3-N: Create core files with placeholder comments
-  - NEVER exceed 10 steps in a single response!
+  - Step 1: Create PLAN.md with architecture overview (max 50 lines)
+  - Step 2: Create ONLY critical config files (package.json, tsconfig.json)
+  - Step 3: Create ONLY 1-2 core source files with placeholder comments
+  - NEVER exceed 6 steps in a single response!
+  - NEVER include full file content over 30 lines!
+  - Use "/* ...implementation... */" for complex logic
   - Split large files into multiple steps if needed
 
 NIGHT ORDERS JSON SCHEMA (STRICT - NO SHORTCUTS):
@@ -7643,8 +7646,10 @@ NIGHT ORDERS JSON SCHEMA (STRICT - NO SHORTCUTS):
 
 ⚠️ CRITICAL RULES FOR orders.json:
 1. terminal.exec → args.cmd MUST NOT be empty (e.g., "node -v", "npm install")
-2. fs.write → args.content MUST be FULL file (NO <GÜNCELLE...>, <TAM İÇERİK>)
+2. fs.write → For files > 30 lines, use placeholder comments like "/* ...rest of logic... */"
 3. Every step.args MUST be complete (no null, undefined, empty strings)
+4. **MAX 6 STEPS PER RESPONSE** - If project needs more, create PLAN.md first
+5. **RESPONSE LIMIT: 3500 characters** - Be concise! Use placeholders for large files!
 
 RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -7767,30 +7772,33 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                 // Use unified LLM interface for analysis
                 response = await this.queueOpenAIRequest(async () => {
                     const messages = [{ role: 'user', content: analysisPrompt }];
-                    // ✅ FIX: Use MAXIMUM tokens to prevent truncation
-                    // GPT-4: 16384, GPT-3.5: 4096, Claude Opus: 16384
+                    // ✅ FIX: Use REDUCED tokens to prevent JSON truncation
+                    // CRITICAL: Large token limits cause LLM to generate incomplete JSON!
+                    // Strategy: Force concise responses by limiting output tokens
                     const provider = this.settings.llmProvider || 'openai';
                     const model = this.settings.currentModel;
-                    const modelMaxTokens = this.getModelMaxTokens(provider, model);
-                    
-                    // Request FULL output capacity
-                    return await this.callLLM(messages, { 
-                        temperature: 0.7, 
-                        maxTokens: modelMaxTokens // Use maximum available
+
+                    // OVERRIDE: Always use 4096 for analysis (prevents truncation)
+                    const safeMaxTokens = 4096;
+
+                    // Request SAFE output capacity (not FULL)
+                    return await this.callLLM(messages, {
+                        temperature: 0.7,
+                        maxTokens: safeMaxTokens // Use SAFE limit (4K) instead of maximum
                     });
                 });
 
                 // ✅ CHECK: Validate JSON is complete (not truncated)
                 const openBraces = (response.match(/\{/g) || []).length;
                 const closeBraces = (response.match(/\}/g) || []).length;
-                
+
                 if (openBraces !== closeBraces) {
                     console.warn(`⚠️ JSON truncation detected! Open:{${openBraces}} Close:{${closeBraces}}`);
-                    
+
                     if (retryCount < maxRetries) {
                         retryCount++;
                         console.log(`🔄 Retrying with simpler prompt (attempt ${retryCount + 1}/${maxRetries + 1})...`);
-                        
+
                         // Simplify request for retry
                         analysisPrompt = analysisPrompt.replace('detailed analysis', 'concise analysis');
                         continue;
@@ -7800,9 +7808,9 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                         response = this.attemptJSONRecovery(response);
                     }
                 }
-                
+
                 break; // Success!
-                
+
             } catch (error) {
                 retryCount++;
                 if (retryCount <= maxRetries) {
@@ -7837,15 +7845,15 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
         try {
             // STEP 1: AGGRESSIVE MARKDOWN REMOVAL
             let cleanedResponse = response;
-            
+
             // Check for markdown code blocks and extract JSON only
             if (cleanedResponse.includes('```')) {
                 console.log('📝 Removing markdown code blocks...');
-                
+
                 // Strategy 1: Try to extract from ```json ... ``` (even if incomplete)
                 const codeBlockStart = cleanedResponse.indexOf('```json');
                 const codeBlockEnd = cleanedResponse.lastIndexOf('```');
-                
+
                 if (codeBlockStart !== -1) {
                     if (codeBlockEnd > codeBlockStart) {
                         // Complete markdown block found
@@ -7863,7 +7871,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                     cleanedResponse = cleanedResponse.replace(/```/g, '');
                 }
             }
-            
+
             // STEP 2: AGGRESSIVE JSON EXTRACTION: Remove any text before first {
             const firstBraceIndex = cleanedResponse.indexOf('{');
             if (firstBraceIndex > 0) {
@@ -7878,27 +7886,27 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
             let jsonEndIndex = -1;
             let inString = false;
             let escapeNext = false;
-            
+
             for (let i = 0; i < cleanedResponse.length; i++) {
                 const char = cleanedResponse[i];
-                
+
                 // Handle escape sequences
                 if (escapeNext) {
                     escapeNext = false;
                     continue;
                 }
-                
+
                 if (char === '\\') {
                     escapeNext = true;
                     continue;
                 }
-                
+
                 // Track string boundaries (ignore braces inside strings)
                 if (char === '"') {
                     inString = !inString;
                     continue;
                 }
-                
+
                 // Only count braces outside of strings
                 if (!inString) {
                     if (char === '{') {
@@ -7915,7 +7923,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                     }
                 }
             }
-            
+
             if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
                 console.log('✅ DEBUG - Found complete JSON object');
                 let jsonText = cleanedResponse.substring(jsonStartIndex, jsonEndIndex + 1);
@@ -7924,7 +7932,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                 jsonText = this.sanitizeJsonResponse(jsonText);
 
                 const analysis = JSON.parse(jsonText);
-                
+
                 // DEBUG: Log parsed analysis structure
                 console.log('🔍 DEBUG - Parsed Analysis Keys:', Object.keys(analysis));
                 console.log('🔍 DEBUG - Has orders?', !!analysis.orders);
@@ -7943,7 +7951,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
 
                 if (isNightOrdersFormat && !analysis.requestType) {
                     console.log('🧭 NIGHT ORDERS DETECTED - Converting to HYBRID format');
-                    
+
                     // Build standardized Night Orders object
                     const nightOrders = {
                         mission: analysis.mission || 'Execute planned actions',
@@ -7955,7 +7963,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                             verify: p.verify ? Object.keys(p.verify).filter(k => p.verify[k] !== 'pending') : []
                         }))
                     };
-                    
+
                     // Wrap pure Night Orders in HYBRID structure
                     return {
                         requestType: 'command-execution',
@@ -7982,12 +7990,12 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                 }
 
                 analysis.route = route; // Attach route info
-                
+
                 // ✅ STRICT JSON-ONLY MODE: Validate response format
                 const validation = this.validateJSONOnlyResponse(response);
                 if (!validation.valid) {
                     console.warn('⚠️ Response format violation:', validation.reason);
-                    
+
                     // Auto-repair: Ask LLM to return pure JSON
                     const repairedResponse = await this.repairJSONResponse(userMessage, response, validation.reason);
                     if (repairedResponse) {
@@ -7995,7 +8003,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                         return this.parseOpenAIResponse(repairedResponse, route);
                     }
                 }
-                
+
                 return analysis;
             } else {
                 // ===== NO JSON FOUND - FATAL ERROR =====
@@ -8015,7 +8023,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
     // ✅ STRICT JSON-ONLY MODE: Validate response format
     validateJSONOnlyResponse(response) {
         const trimmed = response.trim();
-        
+
         // Check 1: Must start with {
         if (!trimmed.startsWith('{')) {
             return {
@@ -8023,7 +8031,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                 reason: 'Response does not start with JSON object (starts with: ' + trimmed.substring(0, 20) + ')'
             };
         }
-        
+
         // Check 2: Must end with }
         if (!trimmed.endsWith('}')) {
             return {
@@ -8031,7 +8039,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                 reason: 'Response does not end with JSON object (ends with: ' + trimmed.substring(trimmed.length - 20) + ')'
             };
         }
-        
+
         // Check 3: No text before first {
         const firstBrace = trimmed.indexOf('{');
         if (firstBrace > 0) {
@@ -8043,14 +8051,14 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                 };
             }
         }
-        
+
         return { valid: true };
     }
 
     // ✅ AUTO-REPAIR PROMPT: Fix format violations
     async repairJSONResponse(originalPrompt, brokenResponse, reason) {
         console.log('🔧 Attempting auto-repair for format violation...');
-        
+
         const repairPrompt = `⚠️ FORMAT ERROR DETECTED
 
 Your previous response had a format violation: ${reason}
@@ -8084,7 +8092,7 @@ Now provide the CORRECTED response (pure JSON only):`;
                 temperature: 0.1, // Very low for precise formatting
                 maxTokens: 8192
             });
-            
+
             console.log('✅ Repair attempt completed');
             return repairedResponse;
         } catch (error) {
@@ -8120,39 +8128,39 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         // Fix unterminated strings by finding the last valid position
         // Strategy: If parse fails, truncate at last complete object in plannedActions array
-        
+
         // First try: Just close missing brackets/braces
         let missingCloseBrackets = openBrackets - closeBrackets;
         let missingCloseBraces = openBraces - closeBraces;
 
         // Remove trailing commas
         sanitized = sanitized.replace(/,(\s*[\]}])/g, '$1');
-        
+
         // Remove incomplete trailing content (after last complete structure)
         // Find last complete object or array
         let lastValidPos = sanitized.length;
-        
+
         // If there are unterminated structures, try to truncate at last complete item
         if (missingCloseBraces > 0 || missingCloseBrackets > 0) {
             console.log('⚠️ Found unterminated structures, attempting to truncate...');
-            
+
             // Try to find "orders.steps" array first (more common)
             const stepsMatch = sanitized.match(/"steps":\s*\[([\s\S]*)/);
             if (stepsMatch) {
                 console.log('🔍 Found orders.steps array, truncating...');
                 const stepsStart = sanitized.indexOf(stepsMatch[0]);
                 const stepsContent = stepsMatch[1];
-                
+
                 // Find complete step objects
                 let bracketDepth = 1; // We're already inside the array
                 let braceDepth = 0;
                 let lastCompleteIndex = 0;
                 let inString = false;
                 let escapeNext = false;
-                
+
                 for (let i = 0; i < stepsContent.length; i++) {
                     const char = stepsContent[i];
-                    
+
                     // Handle string tracking
                     if (escapeNext) {
                         escapeNext = false;
@@ -8166,7 +8174,7 @@ Now provide the CORRECTED response (pure JSON only):`;
                         inString = !inString;
                         continue;
                     }
-                    
+
                     // Count braces only outside strings
                     if (!inString) {
                         if (char === '{') braceDepth++;
@@ -8187,17 +8195,17 @@ Now provide the CORRECTED response (pure JSON only):`;
                         }
                     }
                 }
-                
+
                 if (lastCompleteIndex > 0 && lastCompleteIndex < stepsContent.length) {
                     console.log(`✂️ Truncating orders.steps at last complete object (char ${lastCompleteIndex})`);
                     sanitized = sanitized.substring(0, stepsStart + '"steps": ['.length + lastCompleteIndex);
-                    
+
                     // Recalculate after truncation
                     missingCloseBrackets = (sanitized.match(/\[/g) || []).length - (sanitized.match(/\]/g) || []).length;
                     missingCloseBraces = (sanitized.match(/\{/g) || []).length - (sanitized.match(/\}/g) || []).length;
                 }
             }
-            
+
             // Fallback: Try plannedActions array
             else {
                 const actionsMatch = sanitized.match(/"plannedActions":\s*\[([\s\S]*)/);
@@ -8205,12 +8213,12 @@ Now provide the CORRECTED response (pure JSON only):`;
                     console.log('🔍 Found plannedActions array, truncating...');
                     const actionsStart = sanitized.indexOf(actionsMatch[0]);
                     const actionsContent = actionsMatch[1];
-                    
+
                     // Same logic as above
                     let bracketDepth = 1;
                     let braceDepth = 0;
                     let lastCompleteIndex = 0;
-                    
+
                     for (let i = 0; i < actionsContent.length; i++) {
                         const char = actionsContent[i];
                         if (char === '{') braceDepth++;
@@ -8228,11 +8236,11 @@ Now provide the CORRECTED response (pure JSON only):`;
                             }
                         }
                     }
-                    
+
                     if (lastCompleteIndex > 0 && lastCompleteIndex < actionsContent.length) {
                         console.log('✂️ Truncating plannedActions at last complete object');
                         sanitized = sanitized.substring(0, actionsStart + '"plannedActions": ['.length + lastCompleteIndex);
-                        
+
                         missingCloseBrackets = (sanitized.match(/\[/g) || []).length - (sanitized.match(/\]/g) || []).length;
                         missingCloseBraces = (sanitized.match(/\{/g) || []).length - (sanitized.match(/\}/g) || []).length;
                     }
@@ -8268,11 +8276,11 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         for (let i = 0; i < messages.length; i++) {
             const msg = messages[i];
-            
+
             // Handle tool_calls sequence specially
             if (msg.role === 'assistant' && msg.tool_calls) {
                 deduplicated.push(msg);
-                
+
                 // Find and include corresponding tool responses
                 for (let j = i + 1; j < messages.length; j++) {
                     const nextMsg = messages[j];
@@ -8285,7 +8293,7 @@ Now provide the CORRECTED response (pure JSON only):`;
                 }
                 continue;
             }
-            
+
             // Handle tool messages - only if not already added
             if (msg.role === 'tool') {
                 if (!deduplicated.some(m => m.role === 'tool' && m.tool_call_id === msg.tool_call_id)) {
@@ -8293,7 +8301,7 @@ Now provide the CORRECTED response (pure JSON only):`;
                 }
                 continue;
             }
-            
+
             // Regular deduplication for other messages
             const key = `${msg.role}::${msg.content?.trim()}`;
             if (seen.has(key)) {
@@ -8447,14 +8455,14 @@ Now provide the CORRECTED response (pure JSON only):`;
 
             // 🎯 LIVE VISUALIZATION: Update current step
             const stepIcon = step.tool === 'write_file' || step.tool === 'fs.write' ? 'fa-pencil-alt' :
-                           step.tool === 'read_file' || step.tool === 'fs.read' ? 'fa-file-alt' :
-                           step.tool === 'run_cmd' ? 'fa-terminal' : 'fa-cog';
-            
+                step.tool === 'read_file' || step.tool === 'fs.read' ? 'fa-file-alt' :
+                    step.tool === 'run_cmd' ? 'fa-terminal' : 'fa-cog';
+
             const stepTarget = step.args.path || step.args.cmd || step.args.url || 'Processing...';
             const stepOperation = step.tool === 'write_file' ? '✍️ Writing' :
-                                step.tool === 'read_file' ? '📖 Reading' :
-                                step.tool === 'run_cmd' ? '⚡ Running' : '⚙️ Working';
-            
+                step.tool === 'read_file' ? '📖 Reading' :
+                    step.tool === 'run_cmd' ? '⚡ Running' : '⚙️ Working';
+
             this.updateCurrentOperation(`${stepOperation} (${i + 1}/${orders.steps.length})`, stepTarget, stepIcon);
             this.addTimelineStep(`Step ${step.id}: ${step.tool}`, 'active');
 
@@ -8468,7 +8476,7 @@ Now provide the CORRECTED response (pure JSON only):`;
                 try {
                     // Execute tool
                     await this.executeOrderStep(step);
-                    
+
                     // ✅ METRICS: Record successful execution
                     const executionTime = Date.now() - stepStartTime;
                     executionMetrics.steps.push({
@@ -8479,34 +8487,34 @@ Now provide the CORRECTED response (pure JSON only):`;
                         retries: retryCount
                     });
                     console.log(`⏱️ Step ${step.id} completed in ${executionTime}ms (retries: ${retryCount})`);
-                    
+
                     // 🎯 LIVE VISUALIZATION: Mark step completed
                     this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'completed');
                     this.liveVisualization.metrics.successCount++;
-                    
+
                     break; // Success, exit retry loop
-                    
+
                 } catch (error) {
                     lastError = error;
                     retryCount++;
-                    
+
                     if (retryCount <= maxRetries) {
                         console.warn(`⚠️ Step ${step.id} failed (attempt ${retryCount}/${maxRetries + 1}), retrying...`);
                         this.updateProgressMessage(progressMessage, `🔄 Step ${step.id}: Retry ${retryCount}/${maxRetries + 1}...`);
-                        
+
                         // 🎯 LIVE VISUALIZATION: Show retry
                         this.updateCurrentOperation(`🔄 Retrying (${retryCount}/${maxRetries + 1})`, stepTarget, 'fa-redo');
-                        
+
                         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
                     } else {
                         // Max retries exceeded
                         console.error(`❌ Step ${step.id} failed after ${maxRetries + 1} attempts:`, error.message);
-                        
+
                         // 🎯 LIVE VISUALIZATION: Mark step failed
                         this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'error');
                         this.liveVisualization.metrics.errorCount++;
                         this.updateProgressMessage(progressMessage, `❌ Step ${step.id}: ${error.message}`);
-                        
+
                         // ✅ METRICS: Record failed execution
                         const executionTime = Date.now() - stepStartTime;
                         executionMetrics.steps.push({
@@ -8526,7 +8534,7 @@ Now provide the CORRECTED response (pure JSON only):`;
                 if (step.verify && Array.isArray(step.verify)) {
                     for (const checkType of step.verify) {
                         const result = await this.runVerificationCheck(checkType, step);
-                        
+
                         // ✅ ENHANCEMENT: Handle 'skip' status
                         if (result === 'skip') {
                             verificationResults[checkType] = 'skip';
@@ -8562,12 +8570,12 @@ Now provide the CORRECTED response (pure JSON only):`;
         const totalExecutionTime = Date.now() - executionMetrics.startTime;
         const successCount = executionMetrics.steps.filter(s => s.status === 'success').length;
         const failCount = executionMetrics.steps.filter(s => s.status === 'failed').length;
-        
+
         console.log(`⏱️ EXECUTION METRICS:`);
         console.log(`   Total Time: ${(totalExecutionTime / 1000).toFixed(2)}s`);
         console.log(`   Success: ${successCount}, Failed: ${failCount}`);
         console.log(`   Steps:`, executionMetrics.steps);
-        
+
         // Add metrics to chat
         this.addChatMessage('ai', `
 ⏱️ **EXECUTION METRICS**
@@ -8580,16 +8588,16 @@ Success: ${successCount} | Failed: ${failCount}
         // Generate verification matrix report
         const matrixReport = this.generateVerificationMatrix(verificationResults, orders.acceptance);
         this.addChatMessage('ai', matrixReport);
-        
+
         // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
         await this.sendFeedbackToLLM(orders, verificationResults);
-        
+
         this.refreshExplorer();
     }
-    
+
     async sendFeedbackToLLM(orders, verificationResults) {
         console.log('🔄 Sending feedback to LLM for analysis...');
-        
+
         try {
             // Read created files to analyze content quality
             const createdFiles = [];
@@ -8611,15 +8619,15 @@ Success: ${successCount} | Failed: ${failCount}
                     }
                 }
             }
-            
+
             // ✅ ENHANCED ANALYSIS: Calculate detailed statistics
             const totalFiles = createdFiles.length;
-            const avgLength = totalFiles > 0 
+            const avgLength = totalFiles > 0
                 ? Math.round(createdFiles.reduce((sum, f) => sum + f.length, 0) / totalFiles)
                 : 0;
             const placeholderFiles = createdFiles.filter(f => f.hasPlaceholder);
             const emptyFiles = createdFiles.filter(f => f.isEmpty);
-            
+
             // Group files by type
             const byType = {
                 tsx: createdFiles.filter(f => f.path.endsWith('.tsx')),
@@ -8631,18 +8639,18 @@ Success: ${successCount} | Failed: ${failCount}
                 html: createdFiles.filter(f => f.path.endsWith('.html')),
                 md: createdFiles.filter(f => f.path.endsWith('.md'))
             };
-            
+
             // Determine BUILD fail reason
             let buildFailReason = 'Unknown';
             if (verificationResults.build === 'fail') {
                 const hasPackageJson = await this.checkFileExists('package.json');
-                buildFailReason = hasPackageJson 
-                    ? 'Build script failed (check dependencies/syntax)' 
+                buildFailReason = hasPackageJson
+                    ? 'Build script failed (check dependencies/syntax)'
                     : 'No package.json found (expected for initial setup)';
             } else if (verificationResults.build === 'skip') {
                 buildFailReason = 'Skipped: No package.json (normal for file-only projects)';
             }
-            
+
             // Build feedback report
             const feedbackPrompt = `
 🔄 AGENT FEEDBACK LOOP - POST-EXECUTION ANALYSIS
@@ -8654,9 +8662,9 @@ ${orders.acceptance.map(c => `- ${c}`).join('\n')}
 
 ✅ VERIFICATION RESULTS:
 ${Object.entries(verificationResults).map(([check, status]) => {
-    const icon = status === 'pass' ? '✅' : status === 'fail' ? '❌' : status === 'skip' ? '⏭️' : '⏳';
-    return `${icon} ${check.toUpperCase()}: ${status.toUpperCase()}`;
-}).join('\n')}
+                const icon = status === 'pass' ? '✅' : status === 'fail' ? '❌' : status === 'skip' ? '⏭️' : '⏳';
+                return `${icon} ${check.toUpperCase()}: ${status.toUpperCase()}`;
+            }).join('\n')}
 ${verificationResults.build === 'fail' || verificationResults.build === 'skip' ? `\n📌 BUILD Status: ${buildFailReason}` : ''}
 
 � FILES STATISTICS:
@@ -8667,20 +8675,20 @@ ${verificationResults.build === 'fail' || verificationResults.build === 'skip' ?
 
 📁 FILES BY TYPE:
 ${Object.entries(byType)
-    .filter(([type, files]) => files.length > 0)
-    .map(([type, files]) => {
-        const avgTypeLength = Math.round(files.reduce((sum, f) => sum + f.length, 0) / files.length);
-        return `- ${type.toUpperCase()}: ${files.length} files (avg: ${avgTypeLength} chars)`;
-    })
-    .join('\n')}
+                    .filter(([type, files]) => files.length > 0)
+                    .map(([type, files]) => {
+                        const avgTypeLength = Math.round(files.reduce((sum, f) => sum + f.length, 0) / files.length);
+                        return `- ${type.toUpperCase()}: ${files.length} files (avg: ${avgTypeLength} chars)`;
+                    })
+                    .join('\n')}
 
 📁 DETAILED FILE ANALYSIS:
 ${createdFiles.map(f => {
-    const status = f.isEmpty ? '❌ TOO SHORT' : f.hasPlaceholder ? '⚠️ PLACEHOLDER' : '✅ OK';
-    return `- ${f.path} [${status}]
+                        const status = f.isEmpty ? '❌ TOO SHORT' : f.hasPlaceholder ? '⚠️ PLACEHOLDER' : '✅ OK';
+                        return `- ${f.path} [${status}]
   - Length: ${f.length} chars
   - Preview: ${f.content.substring(0, 150).replace(/\n/g, ' ')}${f.content.length > 150 ? '...' : ''}`;
-}).join('\n')}
+                    }).join('\n')}
 
 🔍 YOUR TASK:
 Analyze the execution results and provide:
@@ -8696,11 +8704,11 @@ Format your response as a structured report with clear sections. BE SPECIFIC AND
             // Send feedback to LLM
             const response = await this.callLLM([
                 { role: 'user', content: feedbackPrompt }
-            ], { 
+            ], {
                 temperature: 0.3, // Lower temperature for analytical task
-                maxTokens: 4096 
+                maxTokens: 4096
             });
-            
+
             // Display LLM's analysis
             this.addChatMessage('ai', `
 📊 **POST-EXECUTION ANALYSIS**
@@ -8710,7 +8718,7 @@ ${response}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `);
-            
+
         } catch (error) {
             console.error('❌ Failed to send feedback to LLM:', error);
             // Don't fail the whole process if feedback fails
@@ -8733,17 +8741,17 @@ ${response}
             if (!step.args?.path) {
                 throw new Error(`${step.tool} requires args.path`);
             }
-            
+
             // Convert object/array content to JSON string
             if (typeof step.args.content === 'object' && step.args.content !== null) {
                 console.log('📦 Converting object content to JSON string for:', step.args.path);
                 step.args.content = JSON.stringify(step.args.content, null, 2);
             }
-            
+
             if (typeof step.args.content !== 'string') {
                 throw new Error(`${step.tool} requires args.content (string or object)`);
             }
-            
+
             // Strict placeholder detection for file content
             const placeholderPatterns = [
                 /<[A-ZÜĞİŞÇÖ_]+>/,       // <GÜNCELLE>, <TAM_İÇERİK>
@@ -8778,10 +8786,10 @@ ${response}
         // ✅ SMART CONTEXT AWARENESS: Check file context before creating
         if (step.tool === 'write_file' || step.tool === 'fs.write') {
             const contextWarnings = await this.checkFileContext(step.args.path, step.args.content);
-            
+
             if (contextWarnings.length > 0) {
                 const highSeverity = contextWarnings.filter(w => w.severity === 'high');
-                
+
                 if (highSeverity.length > 0) {
                     // Log warnings to console
                     console.warn('⚠️ CONTEXT WARNINGS for:', step.args.path);
@@ -8790,12 +8798,12 @@ ${response}
                         console.warn(`  Details: ${w.details}`);
                         console.warn(`  Suggestion: ${w.suggestion}`);
                     });
-                    
+
                     // Add warning message to chat
-                    const warningMessage = highSeverity.map(w => 
+                    const warningMessage = highSeverity.map(w =>
                         `${w.message}\n  📝 ${w.details}\n  💡 ${w.suggestion}`
                     ).join('\n\n');
-                    
+
                     this.addChatMessage('ai', `
 ⚠️ **UYARI**: \`${step.args.path}\` oluşturulmadan önce:
 
@@ -8818,7 +8826,7 @@ Komut: ${step.args.cmd}
 Tehlike: ${isDangerous.reason}
 
 Bu komutu çalıştırmak istediğinizden emin misiniz?`);
-                
+
                 if (!confirmed) {
                     throw new Error('User cancelled dangerous command execution');
                 }
@@ -8844,17 +8852,17 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
      */
     attemptJSONRecovery(truncatedJSON) {
         console.log('🔧 Attempting JSON recovery...');
-        
+
         let result = truncatedJSON.trim();
-        
+
         // Count braces
         const openBraces = (result.match(/\{/g) || []).length;
         const closeBraces = (result.match(/\}/g) || []).length;
         const openBrackets = (result.match(/\[/g) || []).length;
         const closeBrackets = (result.match(/\]/g) || []).length;
-        
+
         console.log(`📊 Brace analysis: {${openBraces} }${closeBraces} [${openBrackets} ]${closeBrackets}`);
-        
+
         // Remove incomplete last element (likely cut off)
         // Find last complete comma before truncation
         const lastComma = result.lastIndexOf(',');
@@ -8862,22 +8870,22 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
             result = result.substring(0, lastComma);
             console.log('✂️ Removed incomplete element after last comma');
         }
-        
+
         // Close arrays
         const arrayDeficit = openBrackets - closeBrackets;
         for (let i = 0; i < arrayDeficit; i++) {
             result += '\n]';
         }
-        
+
         // Close objects
         const braceDeficit = openBraces - closeBraces;
         for (let i = 0; i < braceDeficit; i++) {
             result += '\n}';
         }
-        
+
         console.log('✅ JSON recovery complete');
         console.log('🔍 Recovered JSON preview:', result.substring(0, 500));
-        
+
         return result;
     }
 
@@ -8894,13 +8902,13 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
             { pattern: /wget.*\|\s*sh/, reason: 'Remote script execution' },
             { pattern: />.*\/etc\//, reason: '/etc dizinine yazma' }
         ];
-        
+
         for (const { pattern, reason } of dangerousPatterns) {
             if (pattern.test(cmd)) {
                 return { dangerous: true, reason };
             }
         }
-        
+
         return { dangerous: false };
     }
 
@@ -9127,7 +9135,7 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
      */
     stopLiveVisualization() {
         this.liveVisualization.isActive = false;
-        
+
         // Final update
         this.updateExecutionMetrics();
     }
@@ -9201,15 +9209,15 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
                         console.log('⏭️ BUILD skipped: package.json not found (normal for initial files)');
                         return 'skip'; // Return special status instead of false
                     }
-                    
+
                     const buildResult = await this.runCommandWithAgent('npm run build');
-                    
+
                     // ✅ FIX: runCommandWithAgent returns object, not string
                     if (!buildResult || typeof buildResult !== 'object') {
                         console.warn('❌ BUILD failed: Invalid result format');
                         return false;
                     }
-                    
+
                     const output = (buildResult.stdout || '') + (buildResult.stderr || '');
                     const success = buildResult.success && !output.includes('error') && !output.includes('failed');
                     console.log(`🔍 BUILD check: success=${buildResult.success}, hasErrors=${output.includes('error')}`);
@@ -9224,21 +9232,21 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
                 try {
                     const hasIndexHtml = await this.checkFileExists('index.html');
                     const hasPackageJson = await this.checkFileExists('package.json');
-                    
+
                     if (!hasIndexHtml && !hasPackageJson) {
                         console.log('⏭️ RUN skipped: No entry point (index.html/package.json) found');
                         return 'skip';
                     }
-                    
+
                     // Try to run the project
                     const runResult = await this.runCommandWithAgent('npm start');
-                    
+
                     // ✅ FIX: runCommandWithAgent returns object, not string
                     if (!runResult || typeof runResult !== 'object') {
                         console.warn('❌ RUN failed: Invalid result format');
                         return false;
                     }
-                    
+
                     const output = (runResult.stdout || '') + (runResult.stderr || '');
                     const success = runResult.success && !output.includes('error');
                     console.log(`🔍 RUN check: success=${runResult.success}, hasErrors=${output.includes('error')}`);
@@ -9253,8 +9261,8 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
                 if (step.args && step.args.content) {
                     const content = step.args.content;
                     // Basic checks: no TODOs, no empty functions
-                    return !(/TODO|lorem|example/i.test(content)) && 
-                           !(/function\s+\w+\s*\([^)]*\)\s*\{\s*\}/g.test(content));
+                    return !(/TODO|lorem|example/i.test(content)) &&
+                        !(/function\s+\w+\s*\([^)]*\)\s*\{\s*\}/g.test(content));
                 }
                 return true;
 
@@ -9285,9 +9293,9 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
         const matrix = Object.entries(results)
             .map(([check, status]) => {
                 // ✅ ENHANCEMENT: Add 'skip' status support
-                const icon = status === 'pass' ? '✅' : 
-                            status === 'fail' ? '❌' : 
-                            status === 'skip' ? '⏭️' : '⏳';
+                const icon = status === 'pass' ? '✅' :
+                    status === 'fail' ? '❌' :
+                        status === 'skip' ? '⏭️' : '⏳';
                 return `${icon} ${check.toUpperCase()}: ${status.toUpperCase()}`;
             })
             .join('\n');
@@ -9296,7 +9304,7 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
         const failCount = Object.values(results).filter(v => v === 'fail').length;
         const skipCount = Object.values(results).filter(v => v === 'skip').length;
 
-        const resultSummary = skipCount > 0 
+        const resultSummary = skipCount > 0
             ? `${passCount} PASS / ${failCount} FAIL / ${skipCount} SKIP`
             : `${passCount} PASS / ${failCount} FAIL`;
 
@@ -9314,7 +9322,7 @@ ${matrix}
         try {
             // ✅ KAPTAN YAMASI: Merkezi path çözümleme
             const fullPath = this.resolvePath(filePath);
-            
+
             if (typeof electronAPI !== 'undefined' && electronAPI.readFile) {
                 await electronAPI.readFile(fullPath);
                 return true;
@@ -9330,12 +9338,12 @@ ${matrix}
         try {
             const hasPackageJson = await this.checkFileExists('package.json');
             if (!hasPackageJson) return false;
-            
+
             const result = await this.readFileWithAgent('package.json');
             const packageData = JSON.parse(result.content || result);
-            
-            return !!(packageData.dependencies?.[packageName] || 
-                     packageData.devDependencies?.[packageName]);
+
+            return !!(packageData.dependencies?.[packageName] ||
+                packageData.devDependencies?.[packageName]);
         } catch (e) {
             return false;
         }
@@ -9348,12 +9356,12 @@ ${matrix}
 
         // Check 1: Next.js + index.html conflict (ENHANCED)
         if (fileName === 'index.html') {
-            const hasNextConfig = await this.checkFileExists('next.config.js') || 
-                                  await this.checkFileExists('next.config.ts');
+            const hasNextConfig = await this.checkFileExists('next.config.js') ||
+                await this.checkFileExists('next.config.ts');
             const hasNextInPackage = await this.containsInPackage('next');
             const hasAppDir = await this.checkFileExists('app/layout.tsx') ||
-                             await this.checkFileExists('app/layout.js');
-            
+                await this.checkFileExists('app/layout.js');
+
             if (hasNextConfig || hasNextInPackage || hasAppDir) {
                 warnings.push({
                     severity: 'high',
@@ -9445,7 +9453,7 @@ ${matrix}
                     console.error('  - Empty functions:', hasEmptyFunction);
                     console.warn('⚠️ LLM did not follow RUNNABLE CONTRACT!');
                     console.warn('⚠️ Applying emergency patch with buildDefaultFileContent...');
-                    
+
                     // Emergency fallback - generate production-grade content
                     action.content = this.buildDefaultFileContent(action.fileName, action.description || '');
                     console.log('✅ Emergency patch applied, length:', action.content?.length || 0);
@@ -9595,27 +9603,27 @@ ${matrix}
 
         // ✅ NIGHT ORDERS FIX: Only validate truly invalid content, not short valid code
         // CRITICAL: console.log(), require(), etc. are valid even if short!
-        const isTrulyInvalid = !content || 
-                               content.trim() === '' || 
-                               content.includes('Bu alana') || 
-                               content.includes('kod yazın') || 
-                               content.includes('içerik buraya') || 
-                               content.toLowerCase().includes('placeholder') ||
-                               content.includes('TODO:') ||
-                               /<[A-ZÜĞİŞÇÖ_]+>/.test(content); // Turkish placeholder pattern
-        
+        const isTrulyInvalid = !content ||
+            content.trim() === '' ||
+            content.includes('Bu alana') ||
+            content.includes('kod yazın') ||
+            content.includes('içerik buraya') ||
+            content.toLowerCase().includes('placeholder') ||
+            content.includes('TODO:') ||
+            /<[A-ZÜĞİŞÇÖ_]+>/.test(content); // Turkish placeholder pattern
+
         if (isTrulyInvalid) {
             console.warn('⚠️ Invalid/placeholder content detected, generating professional content for:', fileName);
             console.log('📝 Original content was:', content?.substring(0, 100) + '...');
-            
+
             // Use professional template system
             content = this.generateDefaultFileContent(fileName);
-            
+
             // For "gezgin" project, use specific enhanced content
             if (fileName.toLowerCase().includes('index.html') || fileName === 'index.html') {
                 content = this.buildDefaultFileContent(fileName, 'Kaptan Gezgin - Denizlerin ve kültürlerin keşifçisi');
             }
-            
+
             console.log('✨ Generated enhanced content length:', content?.length || 0);
         } else {
             console.log('✅ Content validated as real code (length:', content.length, ')');
@@ -9689,14 +9697,14 @@ ${matrix}
         // Check for specific professional templates first
         const templates = this.getFileTemplates();
         const baseName = fileName.split('.')[0];
-        
+
         // Check for specific file patterns first
         for (const [pattern, template] of Object.entries(templates.specific)) {
             if (fileName.toLowerCase().includes(pattern.toLowerCase())) {
                 return typeof template === 'function' ? template(fileName, baseName) : template;
             }
         }
-        
+
         // Fall back to extension-based templates
         if (templates.byExtension[ext]) {
             const template = templates.byExtension[ext];
@@ -11338,13 +11346,31 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
             throw new Error('Komut belirtilmedi');
         }
 
-        // ✅ KAPTAN YAMASI: Working directory her zaman initialWorkspaceRoot
-        const workingDirectory = cwd || this.initialWorkspaceRoot || this.getWorkspaceRoot();
-        
+        // ✅ FIX: Use localStorage currentFolder (user-selected workspace) as priority
+        let workingDirectory = cwd;
+
         if (!workingDirectory) {
-            throw new Error('Çalışma klasörü seçilmedi (cwd=null). Lütfen klasör seçin.');
+            // Priority 1: localStorage currentFolder (user selected via folder picker)
+            workingDirectory = window.localStorage.getItem('currentFolder');
+
+            // Priority 2: window.__CURRENT_FOLDER__
+            if (!workingDirectory) {
+                workingDirectory = window.__CURRENT_FOLDER__;
+            }
+
+            // Priority 3: this.workspaceRoot
+            if (!workingDirectory) {
+                workingDirectory = this.workspaceRoot;
+            }
         }
-        
+
+        // ❌ NO FALLBACK TO DESKTOP! User MUST select folder first!
+        if (!workingDirectory) {
+            const errorMsg = '❌ Workspace root seçilmedi!\n\nLütfen önce:\n1. Sol panelde "📁 Klasör Seç" butonuna tıklayın\n2. Proje klasörünüzü seçin\n3. Tekrar deneyin';
+            this.showNotification(errorMsg, 'error');
+            throw new Error(errorMsg);
+        }
+
         console.log(`🔧 Command CWD: ${workingDirectory}`);
 
         try {
@@ -11360,16 +11386,16 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
             } catch (e) {
                 mcpAvailable = false;
             }
-            
+
             if (mcpAvailable) {
                 console.log(`🌐 Running command via MCP (5min timeout): ${command}`);
-                
+
                 try {
                     // Parse command into cmd + args
                     const parts = command.trim().split(/\s+/);
                     const cmd = parts[0];
                     const args = parts.slice(1);
-                    
+
                     const mcpResult = await fetch('http://127.0.0.1:7777/shell/run', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -11380,13 +11406,13 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
                             timeout: 300000     // 5 minutes
                         })
                     });
-                    
+
                     if (mcpResult.ok) {
                         const data = await mcpResult.json();
                         // MCP returns 'code' field, not 'exitCode'
                         const exitCode = data.code !== undefined ? data.code : (data.exitCode || -1);
                         console.log(`✅ MCP command completed: exitCode=${exitCode}, ok=${data.ok}`);
-                        
+
                         // 📺 Display output in terminal widget if available
                         if (typeof this.addTerminalLine === 'function') {
                             if (data.stdout) {
@@ -11398,7 +11424,7 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
                             const status = exitCode === 0 ? 'success' : 'error';
                             this.addTerminalLine(`Exit code: ${exitCode}`, status);
                         }
-                        
+
                         return {
                             success: data.ok && exitCode === 0,
                             stdout: data.stdout || '',
@@ -11415,7 +11441,7 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
             } else {
                 console.warn('⚠️ MCP server not available (port 7777), using IPC');
             }
-            
+
             // 🔄 FALLBACK: Use Electron IPC (30s timeout)
             if (window.electronAPI && window.electronAPI.runCommand) {
                 console.log(`🔧 Running command via IPC (30s timeout): ${command}`);
@@ -11467,7 +11493,7 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
         // Get task from chat or agent input
         const chatInput = document.getElementById('chatInput');
         const agentInput = document.getElementById('agentTaskInput');
-        
+
         let task = '';
         if (chatInput && chatInput.value.trim()) {
             task = chatInput.value.trim();
@@ -11483,29 +11509,29 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
         // Use new Continue-style agent if available and enabled
         if (this.continueAgent && this.aiMode.agentMode.useNewAgent) {
             console.log('🚀 Using Continue-style agent for task:', task);
-            
+
             try {
                 this.addChatMessage('user', task);
                 this.addChatMessage('ai', '🔄 Continue-style agent çalışıyor...');
-                
+
                 const result = await this.continueAgent.executeTask(task);
-                
+
                 if (result.success) {
-                    this.addChatMessage('ai', `✅ ${result.summary}\n\n📋 Sonuçlar:\n${result.results.map(r => 
+                    this.addChatMessage('ai', `✅ ${result.summary}\n\n📋 Sonuçlar:\n${result.results.map(r =>
                         r.success ? `✅ ${r.tool}: Başarılı` : `❌ ${r.tool}: ${r.error}`
                     ).join('\n')}`);
-                    
+
                     // Refresh file explorer
                     this.refreshExplorer();
                 } else {
                     this.addChatMessage('ai', `❌ Agent görevi tamamlayamadı: ${result.error}`);
                 }
-                
+
             } catch (error) {
                 console.error('❌ Continue agent error:', error);
                 this.addChatMessage('ai', `❌ Agent hatası: ${error.message}`);
             }
-            
+
             return;
         }
 
@@ -11765,7 +11791,7 @@ Bu seçili proje klasörünü analiz et, KayraDeniz'in kendi kaynak kodunu deği
                 let i = 0;
                 while (i < messages.length) {
                     const msg = messages[i];
-                    
+
                     if (msg.role === 'tool') {
                         // Look backwards for the assistant message with tool_calls
                         let foundToolCall = false;
@@ -11781,7 +11807,7 @@ Bu seçili proje klasörünü analiz et, KayraDeniz'in kendi kaynak kodunu deği
                             }
                             if (prevMsg.role === 'user') break; // Stop at user message
                         }
-                        
+
                         if (foundToolCall) {
                             cleanMessages.push(msg);
                         } else {
@@ -11792,11 +11818,11 @@ Bu seçili proje klasörünü analiz et, KayraDeniz'in kendi kaynak kodunu deği
                     }
                     i++;
                 }
-                
+
                 // 2. Validate final sequence
                 messages = cleanMessages;
                 const lastMsg = messages[messages.length - 1];
-                
+
                 // If last message is tool, ensure proper sequence
                 if (lastMsg && lastMsg.role === 'tool') {
                     // Must have assistant with tool_calls before it
@@ -11809,7 +11835,7 @@ Bu seçili proje klasörünü analiz et, KayraDeniz'in kendi kaynak kodunu deği
                         }
                         if (prevMsg.role === 'user') break;
                     }
-                    
+
                     if (!validSequence) {
                         console.error('Invalid tool message sequence, removing tool messages');
                         messages = messages.filter(m => m.role !== 'tool');
@@ -12457,7 +12483,7 @@ Format:
             } else {
                 throw new Error(`Komut hatası: ${result.stderr || 'Unknown error'}`);
             }
-            
+
             return result;
         } catch (error) {
             // Display error in terminal if available
@@ -12923,11 +12949,11 @@ Router Agent sizin için otomatik karar verir.
 
         this.currentFolder = folderPath;
         this.setWorkingDirectory(folderPath);
-        
+
         // ✅ STABILITY FIX: Don't change workspace root during navigation
         // Only update navigation-related properties
         // this.setWorkspaceRoot(folderPath);  // REMOVED
-        
+
         this.refreshExplorer();
     }
 
@@ -13028,7 +13054,7 @@ Router Agent sizin için otomatik karar verir.
         modal.id = 'filePreviewModal';
         modal.dataset.filePath = filePath;
         modal.dataset.originalContent = content;
-        
+
         modal.innerHTML = `
       <div class="modal-content" style="max-width: 80%; max-height: 85vh;">
         <div class="modal-header">
@@ -13065,22 +13091,22 @@ Router Agent sizin için otomatik karar verir.
         if (window.Prism) {
             window.Prism.highlightAllUnder(modal);
         }
-        
+
         // Store modal reference
         this.currentPreviewModal = modal;
     }
-    
+
     toggleEditMode() {
         const modal = document.getElementById('filePreviewModal');
         if (!modal) return;
-        
+
         const previewContent = document.getElementById('filePreviewContent');
         const editContent = document.getElementById('fileEditContent');
         const editModeBtn = document.getElementById('editModeBtn');
         const saveFileBtn = document.getElementById('saveFileBtn');
-        
+
         const isEditing = editContent.style.display !== 'none';
-        
+
         if (isEditing) {
             // Switch to preview mode
             previewContent.style.display = 'block';
@@ -13093,7 +13119,7 @@ Router Agent sizin için otomatik karar verir.
             editContent.style.display = 'block';
             editModeBtn.innerHTML = '<i class="fas fa-eye"></i> Önizleme';
             saveFileBtn.style.display = 'inline-block';
-            
+
             // Focus on textarea
             const textarea = document.getElementById('fileEditTextarea');
             if (textarea) {
@@ -13101,40 +13127,40 @@ Router Agent sizin için otomatik karar verir.
             }
         }
     }
-    
+
     async saveFileFromPreview() {
         const modal = document.getElementById('filePreviewModal');
         if (!modal) return;
-        
+
         const filePath = modal.dataset.filePath;
         const textarea = document.getElementById('fileEditTextarea');
         const newContent = textarea.value;
-        
+
         try {
             this.showLoading('Dosya kaydediliyor...');
-            
+
             const result = await this.ipc.invoke('write-file', filePath, newContent);
-            
+
             if (result.success) {
                 this.showNotification('Dosya başarıyla kaydedildi', 'success');
-                
+
                 // Update modal's original content
                 modal.dataset.originalContent = newContent;
-                
+
                 // Update preview display
                 const path = require('path');
                 const fileExtension = path.extname(filePath).toLowerCase();
                 const previewContent = document.getElementById('filePreviewContent');
                 previewContent.innerHTML = `<pre><code class="language-${this.getLanguageFromExtension(fileExtension)}">${this.escapeHtml(newContent)}</code></pre>`;
-                
+
                 // Re-apply syntax highlighting
                 if (window.Prism) {
                     window.Prism.highlightAllUnder(previewContent);
                 }
-                
+
                 // Switch back to preview mode
                 this.toggleEditMode();
-                
+
                 // If file is open in a tab, update it
                 const existingTab = this.findTabByFilePath(filePath);
                 if (existingTab) {
@@ -13143,37 +13169,37 @@ Router Agent sizin için otomatik karar verir.
                         tabData.editor.setValue(newContent);
                     }
                 }
-                
+
             } else {
                 this.showNotification('Dosya kaydedilemedi: ' + result.error, 'error');
             }
-            
+
             this.hideLoading();
-            
+
         } catch (error) {
             this.hideLoading();
             this.showNotification('Kaydetme hatası: ' + error.message, 'error');
         }
     }
-    
+
     closeFilePreview() {
         const modal = document.getElementById('filePreviewModal');
         if (modal) {
             const textarea = document.getElementById('fileEditTextarea');
             const editContent = document.getElementById('fileEditContent');
-            
+
             // Check if in edit mode and has unsaved changes
             if (editContent && editContent.style.display !== 'none' && textarea) {
                 const originalContent = modal.dataset.originalContent;
                 const currentContent = textarea.value;
-                
+
                 if (originalContent !== currentContent) {
                     if (!confirm('Kaydedilmemiş değişiklikler var. Yine de kapatmak istiyor musunuz?')) {
                         return;
                     }
                 }
             }
-            
+
             modal.remove();
             this.currentPreviewModal = null;
         }
@@ -13990,7 +14016,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize GitHub and Code Agent managers
     if (typeof KayraGitHubCodeManager !== 'undefined') {
         window.githubCodeManager = new KayraGitHubCodeManager();
-        
+
         // MCP Client bağlantısını bekle ve set et
         setTimeout(() => {
             if (window.kodCanavari.mcpToolsManager) {
@@ -13998,7 +14024,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('✅ GitHub Code Manager MCP client ile bağlandı');
             }
         }, 2000);
-        
+
         console.log('✅ GitHub Code Manager başlatıldı');
     }
 
