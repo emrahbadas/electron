@@ -10,6 +10,20 @@ const { glob } = require('glob');
 const ElectronMCPClient = require('./mcp-client');
 const AIManager = require('../ai/ai-manager');
 const ContinueAgent = require('../ai/continue-agent');
+// ===== CLAUDE AI + MCP INTEGRATION =====
+const ClaudeAgent = require('./claude-agent');
+const MCPManager = require('./mcp-manager');
+
+// Fix Windows console encoding for Turkish characters
+if (process.platform === 'win32') {
+  // Set process encoding to UTF-8
+  if (process.stdout && process.stdout.setEncoding) {
+    process.stdout.setEncoding('utf8');
+  }
+  if (process.stderr && process.stderr.setEncoding) {
+    process.stderr.setEncoding('utf8');
+  }
+}
 
 const APP_DATA_ROOT = path.join(os.tmpdir(), 'kayradeniz-appdata');
 const CACHE_DIR = path.join(APP_DATA_ROOT, 'cache');
@@ -50,6 +64,14 @@ let cachedNativeIcon = null;
 let mcpClient = null; // MCP Client instance
 let aiManager = null; // AI Manager instance
 let continueAgent = null; // Continue Agent instance
+
+// ===== CLAUDE AI + MCP INSTANCES =====
+let claudeAgent = null; // Claude Agent instance
+let mcpManager = null; // MCP Manager instance
+let apiKeys = {
+    openai: null,
+    anthropic: null
+}; // API keys stored in memory only
 
 function ensureAppIcon() {
   if (resolvedIconPath && cachedNativeIcon && !cachedNativeIcon.isEmpty()) {
@@ -297,6 +319,16 @@ function createTray() {
 }
 
 // IPC handlers for file operations
+ipcMain.handle('open-external', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening external URL:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('open-file-dialog', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     filters: [
@@ -418,7 +450,7 @@ ipcMain.handle('run-command', async (event, command, cwd) => {
       env: env,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024, // 1MB buffer
-      timeout: 30000, // 30 second timeout
+      timeout: 300000, // 5 minute timeout (was 30s - too short for npm install/build)
       shell: isWindows ? 'powershell.exe' : true
     };
 
@@ -658,10 +690,385 @@ ipcMain.handle('mcp-call-tool', async (event, toolName, args) => {
   return await mcpClient.callTool(toolName, args);
 });
 
+// ========================================
+// CLAUDE AI + MCP INTEGRATION IPC HANDLERS
+// ========================================
+
+// Initialize Claude Agent and MCP Manager
+async function initializeClaudeAndMCP() {
+    try {
+        console.log('🚀 Initializing Claude Agent and MCP Manager...');
+        
+        // Initialize Claude Agent
+        claudeAgent = new ClaudeAgent();
+        console.log('✅ Claude Agent created');
+        
+        // Initialize MCP Manager with permission callback
+        mcpManager = new MCPManager(async (toolName, args) => {
+            // Permission callback - show dialog in renderer
+            return await showToolPermissionDialog(toolName, args);
+        });
+        console.log('✅ MCP Manager created');
+        
+        // Link MCP Manager to Claude Agent
+        claudeAgent.setMCPManager(mcpManager);
+        
+        // Try to connect to MCP servers (non-blocking)
+        mcpManager.connectAll()
+            .then(results => {
+                console.log('🔌 MCP Connection results:', results);
+            })
+            .catch(error => {
+                console.warn('⚠️ MCP connection failed (non-critical):', error.message);
+            });
+        
+        console.log('✅ Claude + MCP initialization complete');
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize Claude + MCP:', error);
+    }
+}
+
+// Show permission dialog for tool calls
+async function showToolPermissionDialog(toolName, args) {
+    return new Promise((resolve) => {
+        if (!mainWindow) {
+            resolve({ allowed: false, reason: 'No main window' });
+            return;
+        }
+        
+        // Send permission request to renderer
+        mainWindow.webContents.send('mcp:request-permission', { toolName, args });
+        
+        // Wait for response with timeout
+        const timeout = setTimeout(() => {
+            ipcMain.removeListener('mcp:permission-response', responseHandler);
+            resolve({ allowed: false, reason: 'Timeout' });
+        }, 30000); // 30 seconds
+        
+        const responseHandler = (event, response) => {
+            clearTimeout(timeout);
+            ipcMain.removeListener('mcp:permission-response', responseHandler);
+            resolve(response);
+        };
+        
+        ipcMain.once('mcp:permission-response', responseHandler);
+    });
+}
+
+// llm:ask - Unified LLM endpoint (OpenAI or Claude)
+ipcMain.handle('llm:ask', async (event, request) => {
+    const { provider, model, messages, toolsEnabled, systemPrompt, maxTokens, temperature } = request;
+    
+    try {
+        if (provider === 'anthropic') {
+            // Claude path
+            if (!claudeAgent) {
+                throw new Error('Claude Agent not initialized');
+            }
+            
+            if (!apiKeys.anthropic) {
+                throw new Error('Claude API key not set');
+            }
+            
+            // Ensure API key is set
+            if (!claudeAgent.getStatus().hasApiKey) {
+                claudeAgent.setApiKey(apiKeys.anthropic);
+            }
+            
+            // Call Claude with all options
+            const response = await claudeAgent.askClaude(messages, {
+                model: model || claudeAgent.currentModel,
+                toolsEnabled: toolsEnabled || false,
+                systemPrompt: systemPrompt || null,
+                maxTokens: maxTokens || 4096,
+                temperature: temperature || 0.7
+            });
+            
+            return {
+                success: true,
+                provider: 'anthropic',
+                model: model || claudeAgent.currentModel,
+                response: response
+            };
+            
+        } else if (provider === 'openai') {
+            // OpenAI path (existing code agent)
+            // Fallback to existing OpenAI implementation
+            throw new Error('OpenAI provider - use existing code path');
+            
+        } else {
+            throw new Error(`Unknown provider: ${provider}`);
+        }
+        
+    } catch (error) {
+        console.error('❌ llm:ask error:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+});
+
+// llm:set-api-key - Set API key for a provider
+ipcMain.handle('llm:set-api-key', async (event, { provider, apiKey }) => {
+    try {
+        if (provider === 'anthropic') {
+            apiKeys.anthropic = apiKey;
+            
+            if (claudeAgent) {
+                claudeAgent.setApiKey(apiKey);
+            }
+            
+            console.log('✅ Claude API key set');
+            return { success: true };
+            
+        } else if (provider === 'openai') {
+            apiKeys.openai = apiKey;
+            console.log('✅ OpenAI API key set');
+            return { success: true };
+            
+        } else {
+            throw new Error(`Unknown provider: ${provider}`);
+        }
+        
+    } catch (error) {
+        console.error('❌ set-api-key error:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// llm:get-models - Get available models for a provider
+ipcMain.handle('llm:get-models', async (event, { provider }) => {
+    try {
+        if (provider === 'anthropic') {
+            // Claude Agent should be initialized even without API key
+            // getAvailableModels() just returns a static dictionary
+            if (!claudeAgent) {
+                console.warn('⚠️ Claude Agent not initialized, initializing now...');
+                claudeAgent = new ClaudeAgent();
+            }
+            
+            return {
+                success: true,
+                models: claudeAgent.getAvailableModels()
+            };
+            
+        } else if (provider === 'openai') {
+            // Return OpenAI models
+            return {
+                success: true,
+                models: {
+                    'gpt-4': 'GPT-4',
+                    'gpt-4-turbo': 'GPT-4 Turbo',
+                    'gpt-3.5-turbo': 'GPT-3.5 Turbo'
+                }
+            };
+            
+        } else {
+            throw new Error(`Unknown provider: ${provider}`);
+        }
+        
+    } catch (error) {
+        console.error('❌ get-models error:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// llm:set-model - Set model for a provider
+ipcMain.handle('llm:set-model', async (event, { provider, model }) => {
+    try {
+        if (provider === 'anthropic') {
+            if (!claudeAgent) {
+                console.warn('⚠️ Claude Agent not initialized, initializing now...');
+                claudeAgent = new ClaudeAgent();
+            }
+            
+            claudeAgent.setModel(model);
+            console.log(`✅ Claude model set to: ${model}`);
+            return { success: true };
+            
+        } else {
+            // OpenAI model change handled elsewhere
+            return { success: true };
+        }
+        
+    } catch (error) {
+        console.error('❌ set-model error:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// mcp:list-tools - List all available MCP tools
+ipcMain.handle('mcp-new:list-tools', async () => {
+    try {
+        if (!mcpManager) {
+            throw new Error('MCP Manager not initialized');
+        }
+        
+        const tools = await mcpManager.listTools();
+        
+        return {
+            success: true,
+            tools: tools
+        };
+        
+    } catch (error) {
+        console.error('❌ mcp:list-tools error:', error);
+        return {
+            success: false,
+            error: error.message,
+            tools: []
+        };
+    }
+});
+
+// mcp:call-tool - Call an MCP tool (with permission check)
+ipcMain.handle('mcp-new:call-tool', async (event, { toolName, args }) => {
+    try {
+        if (!mcpManager) {
+            throw new Error('MCP Manager not initialized');
+        }
+        
+        const result = await mcpManager.callTool(toolName, args);
+        
+        return {
+            success: true,
+            result: result
+        };
+        
+    } catch (error) {
+        console.error('❌ mcp:call-tool error:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+});
+
+// mcp:get-status - Get MCP Manager status
+ipcMain.handle('mcp-new:get-status', async () => {
+    try {
+        if (!mcpManager) {
+            return {
+                success: false,
+                error: 'MCP Manager not initialized',
+                status: {}
+            };
+        }
+        
+        const status = mcpManager.getStatus();
+        
+        return {
+            success: true,
+            status: status
+        };
+        
+    } catch (error) {
+        console.error('❌ mcp:get-status error:', error);
+        return {
+            success: false,
+            error: error.message,
+            status: {}
+        };
+    }
+});
+
+// mcp:get-log - Get MCP call log
+ipcMain.handle('mcp-new:get-log', async () => {
+    try {
+        if (!mcpManager) {
+            throw new Error('MCP Manager not initialized');
+        }
+        
+        const log = mcpManager.getCallLog();
+        
+        return {
+            success: true,
+            log: log
+        };
+        
+    } catch (error) {
+        console.error('❌ mcp:get-log error:', error);
+        return {
+            success: false,
+            error: error.message,
+            log: []
+        };
+    }
+});
+
+// mcp:set-file-whitelist - Set file whitelist root
+ipcMain.handle('mcp-new:set-file-whitelist', async (event, { rootPath }) => {
+    try {
+        if (!mcpManager) {
+            throw new Error('MCP Manager not initialized');
+        }
+        
+        mcpManager.setFileWhitelistRoot(rootPath);
+        
+        return { success: true };
+        
+    } catch (error) {
+        console.error('❌ mcp:set-file-whitelist error:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// claude:get-status - Get Claude Agent status
+ipcMain.handle('claude:get-status', async () => {
+    try {
+        if (!claudeAgent) {
+            return {
+                success: false,
+                error: 'Claude Agent not initialized',
+                status: {}
+            };
+        }
+        
+        const status = claudeAgent.getStatus();
+        
+        return {
+            success: true,
+            status: status
+        };
+        
+    } catch (error) {
+        console.error('❌ claude:get-status error:', error);
+        return {
+            success: false,
+            error: error.message,
+            status: {}
+        };
+    }
+});
+
+// claude:clear-history - Clear conversation history
+ipcMain.handle('claude:clear-history', async () => {
+    try {
+        if (!claudeAgent) {
+            throw new Error('Claude Agent not initialized');
+        }
+        
+        claudeAgent.clearHistory();
+        
+        return { success: true };
+        
+    } catch (error) {
+        console.error('❌ claude:clear-history error:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// ========================================
+// END CLAUDE AI + MCP INTEGRATION
+// ========================================
+
 // App event handlers
 app.whenReady().then(async () => {
   await createWindow();
   await initializeMCPClient();
+  await initializeClaudeAndMCP(); // ✨ Initialize Claude + MCP
 });
 
 // MCP Client başlatma

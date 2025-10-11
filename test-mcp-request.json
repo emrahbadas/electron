@@ -1,0 +1,6 @@
+{
+  "cmd": "echo",
+  "args": ["Merhaba MCP!"],
+  "cwd": ".",
+  "timeout": 5000
+}

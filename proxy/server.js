@@ -5,9 +5,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Mini MCP Router
+const mcpRouter = require('./mcp-mini.js');
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Mount MCP endpoints
+app.use('/mcp', mcpRouter);
+console.log('🔧 Mini MCP mounted at /mcp/*');
 
 // GitHub Models API Proxy
 app.post('/ai/chat', async (req, res) => {
@@ -98,12 +105,15 @@ app.get('/ai/models', async (req, res) => {
     }
 });
 
-// Health check
+// Health check (proxy server)
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'OK', 
+        service: 'AI Proxy Server',
         timestamp: new Date().toISOString(),
-        github_token: process.env.GITHUB_TOKEN ? 'Configured' : 'Missing'
+        github_token: process.env.GITHUB_TOKEN ? 'Configured' : 'Missing',
+        mcp_enabled: true,
+        mcp_health: `http://127.0.0.1:${PORT}/mcp/health`
     });
 });
 
@@ -113,6 +123,15 @@ app.listen(PORT, '127.0.0.1', () => {
     console.log(`📋 Health check: http://127.0.0.1:${PORT}/health`);
     console.log(`🤖 AI Chat endpoint: http://127.0.0.1:${PORT}/ai/chat`);
     console.log(`📊 Models endpoint: http://127.0.0.1:${PORT}/ai/models`);
+    console.log(`\n🔧 Mini MCP Endpoints:`);
+    console.log(`   - FS: /mcp/fs/{read,write,exists}`);
+    console.log(`   - Shell: /mcp/shell/run`);
+    console.log(`   - Build: /mcp/build`);
+    console.log(`   - Test: /mcp/test`);
+    console.log(`   - Probe: /mcp/probe`);
+    console.log(`   - Guard: /mcp/context/guard`);
+    console.log(`   - Verify: /mcp/verify`);
+    console.log(`   - Health: /mcp/health\n`);
 });
 
 module.exports = app;

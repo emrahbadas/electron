@@ -2,8 +2,8 @@
 // Modern AI-powered code generation and file management
 
 // ===== KAYRA TOOLS SYSTEM =====
-// import { KayraToolsIntegration } from './kayra-tools-integration.js';
-// ES6 import devre dışı - Electron CommonJS uyumluluğu için
+// KayraToolsIntegration is loaded via ES module in index.html
+// It will be available on window object after module loads
 
 // ===== TOKEN & CHUNKING UTILITIES =====
 // ≈4 char = 1 token kaba tahmin
@@ -42,9 +42,26 @@ ${content}
 * ${task} tamamlandı. Daha fazla analiz için yeni komut verin.`;
 };
 
+// Modern OS detection helper
+const detectOS = () => {
+    // Try Electron process first (most reliable)
+    if (typeof process !== 'undefined' && process.platform) {
+        return process.platform === 'win32' ? 'windows' : 'unix';
+    }
+    
+    // Fallback to userAgent (more reliable than navigator.platform)
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes('win')) return 'windows';
+    if (userAgent.includes('mac')) return 'unix';
+    if (userAgent.includes('linux')) return 'unix';
+    
+    // Last resort: navigator.platform (deprecated but still works)
+    return navigator.platform?.toLowerCase().includes('win') ? 'windows' : 'unix';
+};
+
 // Enhanced OS-specific command helper
 const getOSCommands = () => {
-    const isWindows = navigator.platform.toLowerCase().includes('win');
+    const isWindows = detectOS() === 'windows';
 
     return {
         checkPort: isWindows
@@ -1104,6 +1121,16 @@ class KodCanavari {
         // Production Agent: Tool-First Policy (2 messages without tool = force tool)
         this.consecutiveNoToolMessages = 0;
 
+        // ✅ RATE LIMITING & TOKEN TRACKING
+        this.rateLimitWindow = 60000; // 1 minute window
+        this.maxRequestsPerWindow = 20; // Max 20 requests per minute
+        this.requestTimestamps = [];
+        this.tokenBudget = {
+            used: 0,
+            limit: 100000, // 100K tokens per session
+            sessionStart: Date.now()
+        };
+
         // Emergency reset function for debugging
         setInterval(() => {
             if (this.isProcessingMessage) {
@@ -1126,6 +1153,9 @@ class KodCanavari {
 
         // ===== WORKSPACE ROOT PERSISTENCE =====
         // Global workspace root management for consistent file operations
+        // ✅ STABILITY FIX: Separate initial root from navigation root
+        this.initialWorkspaceRoot = null;  // Set once at project start, never changes
+        this.workspaceRoot = null;         // Current navigation root (can change)
         this.initializeWorkspaceRoot();
 
         // ===== GITHUB & CODE AGENT INTEGRATION =====
@@ -1176,6 +1206,20 @@ class KodCanavari {
         // Pending action for hybrid mode
         this.pendingAction = null;
 
+        // 🎯 REAL-TIME VISUALIZATION STATE
+        this.liveVisualization = {
+            isActive: false,
+            startTime: null,
+            currentOperation: null,
+            timeline: [],
+            fileChanges: new Map(), // filepath -> {added, deleted}
+            metrics: {
+                totalDuration: 0,
+                successCount: 0,
+                errorCount: 0
+            }
+        };
+
         // Theme System
         this.themeSystem = {
             current: localStorage.getItem('theme') || 'dragon',
@@ -1199,40 +1243,73 @@ class KodCanavari {
         if (savedRoot) {
             window.__CURRENT_FOLDER__ = savedRoot;
             this.currentWorkingDirectory = savedRoot;
+            this.initialWorkspaceRoot = savedRoot;  // ✅ Set as initial root
+            this.workspaceRoot = savedRoot;
             console.log('📁 Workspace root restored:', savedRoot);
         } else {
             // Default to Desktop
             const desktopPath = require('path').join(require('os').homedir(), 'OneDrive', 'Desktop');
-            this.setWorkspaceRoot(desktopPath);
+            this.setWorkspaceRoot(desktopPath, true);  // ✅ Mark as initial
             console.log('📁 Workspace root defaulted to Desktop:', desktopPath);
         }
     }
 
-    setWorkspaceRoot(absolutePath) {
+    setWorkspaceRoot(absolutePath, isInitial = false) {
         if (!absolutePath || typeof absolutePath !== 'string') {
             console.error('❌ setWorkspaceRoot: Invalid path:', absolutePath);
             return;
+        }
+        
+        // ✅ STABILITY FIX: Track initial root separately
+        if (isInitial && !this.initialWorkspaceRoot) {
+            this.initialWorkspaceRoot = absolutePath;
+            console.log('🎯 Initial workspace root set:', absolutePath);
         }
         
         window.localStorage.setItem('currentFolder', absolutePath);
         window.__CURRENT_FOLDER__ = absolutePath;
         this.currentWorkingDirectory = absolutePath;
         this.currentFolder = absolutePath;
+        this.workspaceRoot = absolutePath;
         
         console.log('✅ Workspace root set:', absolutePath);
     }
 
-    getWorkspaceRoot() {
-        const root = window.__CURRENT_FOLDER__ || window.localStorage.getItem('currentFolder');
+    getWorkspaceRoot(useInitial = false) {
+        // ✅ STABILITY FIX: Return initial root for file operations
+        if (useInitial && this.initialWorkspaceRoot) {
+            return this.initialWorkspaceRoot;
+        }
+        
+        const root = this.workspaceRoot || window.__CURRENT_FOLDER__ || window.localStorage.getItem('currentFolder');
         
         if (!root) {
             console.warn('⚠️ getWorkspaceRoot: No workspace root set, using default Desktop');
             const desktopPath = require('path').join(require('os').homedir(), 'OneDrive', 'Desktop');
-            this.setWorkspaceRoot(desktopPath);
+            this.setWorkspaceRoot(desktopPath, true);
             return desktopPath;
         }
         
         return root;
+    }
+
+    // ✅ KAPTAN YAMASI: Merkezi path çözümleme (tüm dosya işlemleri buradan)
+    resolvePath(relativePath) {
+        const baseRoot = this.initialWorkspaceRoot || this.workspaceRoot || this.getWorkspaceRoot();
+        
+        if (!baseRoot) {
+            throw new Error('❌ No workspace root set - cannot resolve path');
+        }
+        
+        // Absolute path ise olduğu gibi dön
+        if (require('path').isAbsolute(relativePath)) {
+            return relativePath;
+        }
+        
+        // Relative path'i base root'tan çöz
+        const resolved = require('path').resolve(baseRoot, relativePath);
+        console.log(`📍 Path resolved: ${relativePath} → ${resolved}`);
+        return resolved;
     }
 
     async initializeContinueAgent() {
@@ -1273,10 +1350,17 @@ class KodCanavari {
     init() {
         console.log('🐉 KayraDeniz Kod Canavarı başlatılıyor...');
 
+        // Expose app instance for onclick handlers in terminal links
+        window.app = this;
+
         // Setup electronAPI for IPC communication (nodeIntegration enabled)
         if (typeof require !== 'undefined') {
             const { ipcRenderer } = require('electron');
             window.electronAPI = {
+                // Expose ipcRenderer for advanced usage
+                ipcRenderer: ipcRenderer,
+                
+                // File System API'leri
                 readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
                 readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
                 writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
@@ -1285,7 +1369,8 @@ class KodCanavari {
                 openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
                 openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
                 saveFileDialog: () => ipcRenderer.invoke('save-file-dialog'),
-                // MCP API'leri
+                
+                // MCP API'leri (Old - keep for compatibility)
                 mcpStatus: () => ipcRenderer.invoke('mcp-status'),
                 mcpListTools: () => ipcRenderer.invoke('mcp-list-tools'),
                 mcpTest: () => ipcRenderer.invoke('mcp-test'),
@@ -1295,6 +1380,24 @@ class KodCanavari {
                 mcpListFiles: (directoryPath) => ipcRenderer.invoke('mcp-list-files', directoryPath),
                 mcpGenerateProject: (projectName, projectType, basePath, workingDirectory) => ipcRenderer.invoke('mcp-generate-project', projectName, projectType, basePath, workingDirectory),
                 mcpCallTool: (toolName, args) => ipcRenderer.invoke('mcp-call-tool', toolName, args),
+                
+                // MCP API'leri (New - Claude Integration)
+                mcpNewListTools: () => ipcRenderer.invoke('mcp-new:list-tools'),
+                mcpNewCallTool: (toolName, args) => ipcRenderer.invoke('mcp-new:call-tool', toolName, args),
+                mcpNewGetStatus: () => ipcRenderer.invoke('mcp-new:get-status'),
+                mcpNewGetLog: () => ipcRenderer.invoke('mcp-new:get-log'),
+                mcpNewSetFileWhitelist: (rootPath) => ipcRenderer.invoke('mcp-new:set-file-whitelist', rootPath),
+                
+                // LLM API'leri (Unified OpenAI + Claude)
+                llmAsk: (provider, messages, options) => ipcRenderer.invoke('llm:ask', { provider, messages, options }),
+                llmSetApiKey: (provider, apiKey) => ipcRenderer.invoke('llm:set-api-key', { provider, apiKey }),
+                llmGetModels: (provider) => ipcRenderer.invoke('llm:get-models', { provider }),
+                llmSetModel: (provider, model) => ipcRenderer.invoke('llm:set-model', { provider, model }),
+                
+                // Claude Agent API'leri
+                claudeGetStatus: () => ipcRenderer.invoke('claude:get-status'),
+                claudeClearHistory: () => ipcRenderer.invoke('claude:clear-history'),
+                
                 // AI (GitHub Models API) API'leri
                 aiInitialize: (workspacePath) => ipcRenderer.invoke('ai-initialize', workspacePath),
                 aiChat: (message, options) => ipcRenderer.invoke('ai-chat', message, options),
@@ -1304,12 +1407,14 @@ class KodCanavari {
                 aiStatus: () => ipcRenderer.invoke('ai-status'),
                 aiSetModel: (modelName) => ipcRenderer.invoke('ai-set-model', modelName),
                 aiClearHistory: () => ipcRenderer.invoke('ai-clear-history'),
+                
                 // Continue Agent API'leri
                 continueInitialize: (workspacePath) => ipcRenderer.invoke('continue-initialize', workspacePath),
                 continueProcessPrompt: (prompt, context) => ipcRenderer.invoke('continue-process-prompt', prompt, context),
                 continueStatus: () => ipcRenderer.invoke('continue-status'),
                 continueUpdateApiKey: (apiKey) => ipcRenderer.invoke('continue-update-api-key', apiKey),
                 continueStop: () => ipcRenderer.invoke('continue-stop'),
+                
                 // Streaming Process API'leri
                 startProcess: (processId, command, cwd) => ipcRenderer.invoke('start-process', processId, command, cwd),
                 stopProcess: (processId) => ipcRenderer.invoke('stop-process', processId),
@@ -1365,8 +1470,93 @@ class KodCanavari {
         setTimeout(() => {
             this.updateLineNumbers();
         }, 100);
+        
+        // ✨ Initialize Claude UI (async, non-blocking)
+        setTimeout(async () => {
+            await this.initializeClaudeUI();
+        }, 500);
+
+        // ✅ MCP FALLBACK BANNER: Check MCP tools availability
+        setTimeout(async () => {
+            await this.checkMCPAvailability();
+        }, 1000);
 
         console.log('✅ Uygulama başarıyla başlatıldı!');
+    }
+
+    // ✅ MCP FALLBACK BANNER
+    async checkMCPAvailability() {
+        try {
+            console.log('🔍 Checking MCP tools availability...');
+            
+            // Try to fetch MCP status
+            const response = await fetch('http://localhost:7777/health', {
+                method: 'GET',
+                timeout: 2000
+            }).catch(() => null);
+            
+            if (!response || !response.ok) {
+                // MCP tools offline - show banner
+                this.showMCPFallbackBanner();
+                return;
+            }
+            
+            console.log('✅ MCP tools are online');
+        } catch (error) {
+            console.warn('⚠️ MCP tools check failed:', error);
+            this.showMCPFallbackBanner();
+        }
+    }
+
+    showMCPFallbackBanner() {
+        console.warn('⚠️ MCP tools offline - falling back to chat-only mode');
+        
+        const banner = document.createElement('div');
+        banner.id = 'mcp-fallback-banner';
+        banner.style.cssText = `
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideDown 0.3s ease;
+        `;
+        
+        banner.innerHTML = `
+            <span>⚠️</span>
+            <span>MCP Tools Offline - Chat-Only Mode Active</span>
+            <button id="mcp-banner-close" style="
+                background: rgba(255,255,255,0.2);
+                border: none;
+                color: white;
+                padding: 4px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+            ">Tamam</button>
+        `;
+        
+        document.body.appendChild(banner);
+        
+        // Close button
+        document.getElementById('mcp-banner-close')?.addEventListener('click', () => {
+            banner.remove();
+        });
+        
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+            banner.remove();
+        }, 10000);
     }
 
     debugUIElements() {
@@ -1422,6 +1612,19 @@ class KodCanavari {
 
             if (!Array.isArray(this.settings.customTemplates)) {
                 this.settings.customTemplates = [];
+            }
+            
+            // Set default economical models if not set
+            if (!this.settings.currentModel) {
+                const provider = this.settings.llmProvider || 'openai';
+                this.settings.currentModel = provider === 'anthropic' 
+                    ? 'claude-3-haiku-20240307'  // Claude Haiku (ekonomik)
+                    : 'gpt-4o-mini';              // GPT-4o Mini (ekonomik)
+            }
+            
+            // Set default model to economical for backward compatibility
+            if (!this.settings.model || this.settings.model === 'gpt-4') {
+                this.settings.model = 'gpt-4o-mini'; // Default to economical model
             }
 
             const recentFiles = localStorage.getItem('kod-canavari-recent');
@@ -1531,6 +1734,44 @@ class KodCanavari {
             console.log('🔑 Top save API key clicked');
             this.saveApiKeyFromTop();
         });
+        
+        // ===== CLAUDE AI + MCP UI EVENT LISTENERS =====
+        
+        // Claude API key save
+        document.getElementById('topSaveClaudeApiKey')?.addEventListener('click', () => {
+            console.log('🧠 Save Claude API key clicked');
+            this.saveClaudeApiKey();
+        });
+        
+        // Provider selection
+        const providerSelect = document.getElementById('llmProviderSelect');
+        if (providerSelect) {
+            providerSelect.addEventListener('change', (e) => {
+                console.log('🔄 Provider changed:', e.target.value);
+                this.onProviderChange(e.target.value);
+            });
+        }
+        
+        // Model selection
+        const modelSelect = document.getElementById('llmModelSelect');
+        if (modelSelect) {
+            modelSelect.addEventListener('change', (e) => {
+                console.log('🤖 Model changed:', e.target.value);
+                this.onModelChange(e.target.value);
+            });
+        }
+        
+        // Tools toggle
+        const toolsCheckbox = document.getElementById('toolsEnabledCheckbox');
+        if (toolsCheckbox) {
+            toolsCheckbox.addEventListener('change', (e) => {
+                console.log('🔧 Tools enabled:', e.target.checked);
+                this.settings.toolsEnabled = e.target.checked;
+                this.saveSettings();
+            });
+        }
+        
+        // ===== END CLAUDE AI + MCP UI =====
 
         // Quick action buttons
         document.getElementById('generateCode')?.addEventListener('click', () => {
@@ -2590,9 +2831,13 @@ class KodCanavari {
         }
 
         try {
-            // Check if API key is set
-            if (!this.settings.apiKey) {
-                throw new Error('OpenAI API anahtarı ayarlanmamış. Lütfen sol panelden API anahtarınızı girin.');
+            // Check if API key is set for current provider
+            const provider = this.settings.llmProvider || 'openai';
+            
+            if (provider === 'openai' && !this.settings.apiKey) {
+                throw new Error('OpenAI API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
+            } else if (provider === 'anthropic' && !this.settings.claudeApiKey) {
+                throw new Error('Claude API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
             }
 
             // Agent mode ile unified system kullan (context-aware)
@@ -2600,11 +2845,22 @@ class KodCanavari {
                 // Unified Agent System - GitHub Copilot tarzı with conversation memory
                 await this.executeUnifiedAgentTask(contextAwarePrompt);
             } else {
-                // Enhanced Ask Mode - Context-aware OpenAI API çağrısı with queue
+                // ✨ Enhanced Ask Mode - Unified LLM call (OpenAI or Claude)
                 const enhancedPrompt = this.addExecutionContext(contextAwarePrompt);
+                
+                // Convert to messages format for unified LLM interface
+                const messages = [
+                    { role: 'user', content: enhancedPrompt }
+                ];
+                
+                // Use unified LLM interface (routes to OpenAI or Claude)
                 const response = await this.queueOpenAIRequest(async () => {
-                    return await this.callOpenAI(enhancedPrompt);
+                    return await this.callLLM(messages, {
+                        temperature: 0.7,
+                        maxTokens: 4096
+                    });
                 });
+                
                 this.addContextualChatMessage('ai', response, {
                     mode: 'ask',
                     hasContext: !!conversationContext
@@ -3324,15 +3580,57 @@ Not:
         line.className = `terminal-line ${type}`;
         
         // If already HTML (from ANSI parser), use innerHTML
-        // Otherwise use textContent for safety
+        // Otherwise process for links and commands
         if (isHtml) {
             line.innerHTML = text;
         } else {
-            line.textContent = text;
+            // Make URLs clickable and commands executable
+            const processedText = this.makeTerminalLinksClickable(text);
+            line.innerHTML = processedText;
         }
 
         output.appendChild(line);
         output.scrollTop = output.scrollHeight;
+    }
+
+    makeTerminalLinksClickable(text) {
+        // At this point, text already has ANSI parsed to HTML spans
+        // We need to inject links while preserving those spans
+        
+        // URL regex pattern - capture full URL including port numbers
+        // Match: http://localhost:5179/ or https://example.com/path
+        const urlPattern = /(https?:\/\/[a-zA-Z0-9]+(:[0-9]+)?(\/[^\s<>"']*)?)/g;
+        
+        // Replace URLs with clickable links
+        let processed = text.replace(urlPattern, (url) => {
+            // Clean URL (remove trailing punctuation but keep port numbers)
+            let cleanUrl = url.replace(/[.,;!?)'"]$/, ''); // Remove trailing punctuation
+            
+            // Remove trailing slash if it's the only path
+            if (cleanUrl.endsWith('/') && cleanUrl.split('/').length === 4) {
+                cleanUrl = cleanUrl.slice(0, -1);
+            }
+            
+            return `<a href="#" class="terminal-link" onclick="event.preventDefault(); window.app.openExternalUrl('${cleanUrl}');" title="Tıklayarak tarayıcıda aç">${cleanUrl}</a>`;
+        });
+        
+        return processed;
+    }
+
+    async openExternalUrl(url) {
+        const { ipcRenderer } = require('electron');
+        try {
+            await ipcRenderer.invoke('open-external', url);
+            this.addTerminalLine(`🌐 Tarayıcıda açıldı: ${url}`, 'success');
+        } catch (error) {
+            this.addTerminalLine(`❌ URL açılamadı: ${error.message}`, 'error');
+        }
+    }
+
+    executeTerminalCommand(cmd) {
+        // Execute command programmatically
+        this.addTerminalLine(`> ${cmd}`, 'command');
+        this.handleCommand(cmd);
     }
 
     clearTerminal() {
@@ -3495,8 +3793,10 @@ Not:
             // Skip last empty line from split
             if (index === lines.length - 1 && !line) return;
             
-            // Parse ANSI escape codes and convert to HTML
-            const htmlLine = this.parseAnsiToHtml(line);
+            // IMPORTANT: Parse ANSI codes FIRST, then make links clickable
+            // This prevents ANSI spans from breaking HTML link tags
+            let htmlLine = this.parseAnsiToHtml(line);
+            htmlLine = this.makeTerminalLinksClickable(htmlLine);
             this.addTerminalLine(htmlLine, cssClass, true); // true = already HTML
         });
     }
@@ -3675,6 +3975,159 @@ Not:
             this.addChatMessage('system', '✅ OpenAI API anahtarı üst bardan kaydedildi.');
         }
     }
+    
+    // ===== CLAUDE AI + MCP INTEGRATION METHODS =====
+    
+    async saveClaudeApiKey() {
+        const claudeKeyInput = document.getElementById('topClaudeApiKey');
+        if (!claudeKeyInput) return;
+        
+        const apiKey = claudeKeyInput.value.trim();
+        
+        if (!apiKey) {
+            this.showNotification('❌ Claude API anahtarı boş olamaz', 'error');
+            return;
+        }
+        
+        try {
+            // Send API key to main process (memory-only storage)
+            const result = await window.electronAPI.ipcRenderer.invoke('llm:set-api-key', {
+                provider: 'anthropic',
+                apiKey: apiKey
+            });
+            
+            if (result.success) {
+                this.settings.claudeApiKey = apiKey;
+                this.saveSettings();
+                this.updateStatus('Claude API anahtarı kaydedildi');
+                this.addChatMessage('system', '✅ Claude API anahtarı başarıyla ayarlandı!');
+                this.showNotification('✅ Claude API key saved', 'success');
+            } else {
+                throw new Error(result.error || 'Failed to set API key');
+            }
+            
+        } catch (error) {
+            console.error('❌ Claude API key save error:', error);
+            this.showNotification(`❌ Hata: ${error.message}`, 'error');
+        }
+    }
+    
+    async onProviderChange(provider) {
+        this.settings.llmProvider = provider;
+        this.saveSettings();
+        
+        // Load models for selected provider
+        await this.loadModelsForProvider(provider);
+        
+        // Show appropriate API key reminder
+        if (provider === 'anthropic') {
+            const hasKey = !!this.settings.claudeApiKey;
+            if (!hasKey) {
+                this.showNotification('⚠️ Claude API anahtarı gerekli', 'warning');
+            }
+        } else if (provider === 'openai') {
+            const hasKey = !!this.settings.apiKey;
+            if (!hasKey) {
+                this.showNotification('⚠️ OpenAI API anahtarı gerekli', 'warning');
+            }
+        }
+        
+        this.updateStatus(`Provider değiştirildi: ${provider === 'anthropic' ? 'Claude' : 'OpenAI'}`);
+    }
+    
+    async loadModelsForProvider(provider) {
+        const modelSelect = document.getElementById('llmModelSelect');
+        if (!modelSelect) return;
+        
+        // Show/hide appropriate optgroups
+        const openaiGroups = ['openaiEconomicGroup', 'openaiProductionGroup'];
+        const claudeGroups = ['claudeEconomicGroup', 'claudeBalancedGroup', 'claudeProductionGroup'];
+        
+        if (provider === 'openai') {
+            // Show OpenAI groups, hide Claude groups
+            openaiGroups.forEach(id => {
+                const group = document.getElementById(id);
+                if (group) group.classList.remove('hidden');
+            });
+            claudeGroups.forEach(id => {
+                const group = document.getElementById(id);
+                if (group) group.classList.add('hidden');
+            });
+            
+            // Select default OpenAI model (GPT-4o Mini for economy)
+            modelSelect.value = 'gpt-4o-mini';
+            this.settings.currentModel = 'gpt-4o-mini';
+            
+        } else if (provider === 'anthropic') {
+            // Show Claude groups, hide OpenAI groups
+            openaiGroups.forEach(id => {
+                const group = document.getElementById(id);
+                if (group) group.classList.add('hidden');
+            });
+            claudeGroups.forEach(id => {
+                const group = document.getElementById(id);
+                if (group) group.classList.remove('hidden');
+            });
+            
+            // Select default Claude model (Haiku for economy)
+            modelSelect.value = 'claude-3-haiku-20240307';
+            this.settings.currentModel = 'claude-3-haiku-20240307';
+        }
+        
+        this.saveSettings();
+        this.updateStatus(`Model listesi güncellendi: ${provider === 'anthropic' ? 'Claude' : 'OpenAI'}`);
+        
+        console.log(`✅ Loaded models for ${provider}, default: ${this.settings.currentModel}`);
+    }
+    
+    async onModelChange(model) {
+        const provider = this.settings.llmProvider || 'openai';
+        this.settings.currentModel = model;
+        this.saveSettings();
+        
+        try {
+            const result = await window.electronAPI.ipcRenderer.invoke('llm:set-model', {
+                provider,
+                model
+            });
+            
+            if (result.success) {
+                console.log(`✅ Model changed to: ${model}`);
+                this.updateStatus(`Model: ${model}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ Model change error:', error);
+        }
+    }
+    
+    async initializeClaudeUI() {
+        // Initialize provider selector
+        const providerSelect = document.getElementById('llmProviderSelect');
+        if (providerSelect) {
+            providerSelect.value = this.settings.llmProvider || 'openai';
+        }
+        
+        // Initialize tools toggle
+        const toolsCheckbox = document.getElementById('toolsEnabledCheckbox');
+        if (toolsCheckbox) {
+            toolsCheckbox.checked = this.settings.toolsEnabled || false;
+        }
+        
+        // Load models for current provider
+        const currentProvider = this.settings.llmProvider || 'openai';
+        await this.loadModelsForProvider(currentProvider);
+        
+        // Set saved Claude API key if exists
+        const claudeKeyInput = document.getElementById('topClaudeApiKey');
+        if (claudeKeyInput && this.settings.claudeApiKey) {
+            claudeKeyInput.value = this.settings.claudeApiKey;
+        }
+        
+        console.log('✅ Claude UI initialized');
+    }
+    
+    // ===== END CLAUDE AI + MCP METHODS =====
 
     async refreshExplorer() {
         const folderTree = document.getElementById('folderTree');
@@ -4512,6 +4965,185 @@ Not:
             this.hideGotoLineModal();
         }
     }
+
+    // ===== UNIFIED LLM CALL (OpenAI + Claude) =====
+    
+    // ✅ RATE LIMITING GUARD
+    async checkRateLimit() {
+        const now = Date.now();
+        
+        // Remove old timestamps outside window
+        this.requestTimestamps = this.requestTimestamps.filter(
+            timestamp => now - timestamp < this.rateLimitWindow
+        );
+        
+        // Check if limit exceeded
+        if (this.requestTimestamps.length >= this.maxRequestsPerWindow) {
+            const oldestRequest = this.requestTimestamps[0];
+            const waitTime = Math.ceil((this.rateLimitWindow - (now - oldestRequest)) / 1000);
+            
+            return {
+                allowed: false,
+                message: `Too many requests. Wait ${waitTime} seconds.`
+            };
+        }
+        
+        // Add current request
+        this.requestTimestamps.push(now);
+        
+        return { allowed: true };
+    }
+
+    // ✅ TOKEN BUDGET TRACKER
+    trackTokenUsage(messages, maxTokens) {
+        // Estimate input tokens (rough: 1 token ≈ 4 chars)
+        const inputText = messages.map(m => m.content).join(' ');
+        const estimatedInputTokens = Math.ceil(inputText.length / 4);
+        const estimatedTotalTokens = estimatedInputTokens + (maxTokens || 2048);
+        
+        this.tokenBudget.used += estimatedTotalTokens;
+        
+        const percentUsed = (this.tokenBudget.used / this.tokenBudget.limit * 100).toFixed(1);
+        console.log(`💰 Token Budget: ${this.tokenBudget.used}/${this.tokenBudget.limit} (${percentUsed}%)`);
+        
+        // Warning at 80%
+        if (percentUsed >= 80 && percentUsed < 90) {
+            this.showNotification('⚠️ Token budget 80% kullanıldı', 'warning');
+        }
+        
+        // Critical at 90%
+        if (percentUsed >= 90) {
+            this.showNotification('🚨 Token budget kritik seviyede!', 'error');
+        }
+    }
+    
+    // Get maximum tokens for a model
+    getModelMaxTokens(provider, model) {
+        if (provider === 'anthropic') {
+            // Claude model token limits (output tokens)
+            if (model.includes('opus-4-1') || model.includes('opus-4-20250514')) {
+                return 16384; // Opus 4 and 4.1 support up to 16K
+            }
+            if (model.includes('opus')) {
+                return 4096; // Claude 3 Opus: 4K max output
+            }
+            if (model.includes('sonnet')) {
+                return 8192; // Claude 3/3.5 Sonnet: 8K max output
+            }
+            if (model.includes('haiku')) {
+                return 4096; // Claude 3 Haiku: 4K max output (ultra fast & cheap)
+            }
+            return 8192; // Default for Claude models
+        } else {
+            // OpenAI models
+            if (model.includes('gpt-4o')) {
+                return 16384; // GPT-4o and GPT-4o-mini: 16K max output
+            }
+            if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) {
+                return 4096; // GPT-4 Turbo: 4K max output (128K context input)
+            }
+            if (model.includes('gpt-4')) {
+                return 8192; // GPT-4 base: 8K max output
+            }
+            if (model.includes('gpt-3.5-turbo-16k')) {
+                return 4096; // GPT-3.5 16K variant
+            }
+            return 4096; // GPT-3.5 standard and others
+        }
+    }
+    
+    async callLLM(messages, options = {}) {
+        const provider = this.settings.llmProvider || 'openai';
+        const model = this.settings.currentModel;
+        const toolsEnabled = this.settings.toolsEnabled || false;
+        let { systemPrompt, maxTokens, temperature } = options;
+        
+        // ✅ RATE LIMITING GUARD
+        const rateLimitCheck = await this.checkRateLimit();
+        if (!rateLimitCheck.allowed) {
+            throw new Error(`⏱️ Rate limit: ${rateLimitCheck.message}`);
+        }
+        
+        // ✅ TOKEN BUDGET TRACKER
+        this.trackTokenUsage(messages, maxTokens);
+        
+        // Auto-adjust maxTokens based on model limits
+        const modelMaxTokens = this.getModelMaxTokens(provider, model);
+        if (!maxTokens || maxTokens > modelMaxTokens) {
+            maxTokens = modelMaxTokens;
+            console.log(`📊 Adjusted maxTokens to ${maxTokens} for model ${model}`);
+        }
+        
+        console.log(`🤖 Calling ${provider} (${model}) - Tools: ${toolsEnabled} - MaxTokens: ${maxTokens}`);
+        
+        try {
+            if (provider === 'anthropic') {
+                // Claude path - pass all options
+                return await this.callClaude(messages, { 
+                    model, 
+                    toolsEnabled, 
+                    systemPrompt,
+                    maxTokens,
+                    temperature
+                });
+            } else {
+                // OpenAI path - use existing callOpenAI
+                // callOpenAI expects messages array directly (it handles both string and array)
+                return await this.callOpenAI(messages, systemPrompt, {
+                    maxTokens,
+                    temperature,
+                    ...options
+                });
+            }
+            
+        } catch (error) {
+            console.error(`❌ ${provider} call failed:`, error);
+            throw error;
+        }
+    }
+    
+    async callClaude(messages, options = {}) {
+        if (!this.settings.claudeApiKey) {
+            throw new Error('Claude API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
+        }
+        
+        const { model, toolsEnabled, systemPrompt, maxTokens, temperature } = options;
+        
+        try {
+            const result = await window.electronAPI.ipcRenderer.invoke('llm:ask', {
+                provider: 'anthropic',
+                model: model || 'claude-sonnet-4-5-20250929',
+                messages: messages,
+                toolsEnabled: toolsEnabled || false,
+                systemPrompt: systemPrompt || null,
+                maxTokens: maxTokens || 4096,
+                temperature: temperature || 0.7
+            });
+            
+            if (result.success) {
+                console.log(`✅ Claude response received (${result.model})`);
+                return result.response;
+            } else {
+                throw new Error(result.error || 'Claude API call failed');
+            }
+            
+        } catch (error) {
+            console.error('❌ Claude call error:', error);
+            
+            // User-friendly error messages
+            if (error.message.includes('API key')) {
+                throw new Error('Claude API anahtarı geçersiz veya ayarlanmamış');
+            } else if (error.message.includes('quota')) {
+                throw new Error('Claude API kotanız dolmuş');
+            } else if (error.message.includes('rate limit')) {
+                throw new Error('Claude rate limit aşıldı. Lütfen bekleyip tekrar deneyin.');
+            }
+            
+            throw error;
+        }
+    }
+    
+    // ===== END UNIFIED LLM CALL =====
 
     async callOpenAI(message, systemPrompt = null, options = {}) {
         if (!this.settings.apiKey) {
@@ -6613,6 +7245,9 @@ Please consider the conversation context when responding. Reference previous dis
                     console.log('🔧 Forcing tool call: fs.read package.json');
 
                     // Force a safe tool call to break the pattern
+                    if (!analysis.plannedActions) {
+                        analysis.plannedActions = [];
+                    }
                     analysis.plannedActions.unshift({
                         action: 'read_file',
                         description: 'Proje yapısını kontrol et (forced by Tool-First Policy)',
@@ -6685,8 +7320,10 @@ AKILLI ÖRNEKLER:
 `;
 
         try {
+            // Use unified LLM interface for routing
             const response = await this.queueOpenAIRequest(async () => {
-                return await this.callOpenAI(routerPrompt);
+                const messages = [{ role: 'user', content: routerPrompt }];
+                return await this.callLLM(messages, { temperature: 0.7, maxTokens: 2048 });
             });
             const jsonMatch = response.match(/\{[\s\S]*\}/);
 
@@ -6695,12 +7332,13 @@ AKILLI ÖRNEKLER:
 
                 // Handle different modes
                 if (route.mode === 'chat') {
-                    // Pure chat mode - just answer with queue
+                    // Pure chat mode - just answer with unified LLM
                     const chatResponse = await this.queueOpenAIRequest(async () => {
-                        return await this.callOpenAI(
-                            `Kullanıcı sorusu: "${userText}"\n\nSoruyu samimi ve yardımsever bir dille cevapla.`,
-                            "Sen KayraDeniz Kod Canavarı'sın. Dostane, açık ve faydalı cevaplar veriyorsun."
-                        );
+                        const chatMessages = [
+                            { role: 'system', content: "Sen KayraDeniz Kod Canavarı'sın. Dostane, açık ve faydalı cevaplar veriyorsun." },
+                            { role: 'user', content: `Kullanıcı sorusu: "${userText}"\n\nSoruyu samimi ve yardımsever bir dille cevapla.` }
+                        ];
+                        return await this.callLLM(chatMessages, { temperature: 0.8, maxTokens: 2048 });
                     });
                     this.addChatMessage('ai', chatResponse);
                     return null;
@@ -6879,6 +7517,9 @@ ${recentContext}
         }
 
         const analysisPrompt = `
+🚨 CRITICAL: RESPOND WITH PURE JSON ONLY! NO GREETINGS, NO EXPLANATIONS, NO MARKDOWN!
+Start your response with { and end with }. Do NOT wrap in \`\`\`json or add any text before/after JSON.
+
 ${roleContext}
 
 Kullanıcı İsteği: "${userRequest}"
@@ -6946,10 +7587,29 @@ RED FLAGS (auto-reject):
 
 CONTENT REQUIREMENTS (per file type):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CRITICAL: Keep file content CONCISE in JSON to avoid truncation!
+- For large files (HTML/CSS/JS): Use summary + key sections, not full content
+- Example: "content": "import React from 'react';\\nexport default function Nav() { /* full navbar code */ }"
+- Better: Create outline in PLAN.md, then use separate steps for each file
+
 HTML: Min 150 lines, full navbar+hero+sections+footer
-CSS: Min 200 lines, modern design, responsive, animations
+CSS: Min 200 lines, modern design, responsive, animations  
 JS: Min 50 lines, real functions, event listeners
 README: Min 80 lines, setup, features, usage, license
+
+🔥 TOKEN LIMIT WARNING: If your JSON response exceeds ~15K characters, it will be TRUNCATED!
+Strategy: Create MORE steps with SMALLER files instead of FEW steps with HUGE files.
+
+📊 ADAPTIVE COMPLEXITY RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For SIMPLE projects (1-3 files): Full content OK
+For MEDIUM projects (4-8 files): Use concise content + comments like "/* add validation logic */"
+For COMPLEX projects (9+ files): 
+  - Step 1: Create PLAN.md with architecture overview
+  - Step 2: Create files.json with list of files to create
+  - Steps 3-N: Create core files with placeholder comments
+  - NEVER exceed 10 steps in a single response!
+  - Split large files into multiple steps if needed
 
 NIGHT ORDERS JSON SCHEMA (STRICT - NO SHORTCUTS):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -7099,15 +7759,60 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
    Response must be PURE JSON. Any text before { or after } → treated as fatal error and rejected.`;
 
         let response;
-        try {
-            response = await this.queueOpenAIRequest(async () => {
-                return await this.callOpenAI(analysisPrompt);
-            });
-        } catch (error) {
-            // ===== FALLBACK DISABLED - NO OFFLINE ANALYSIS =====
-            // If OpenAI fails, DO NOT generate local plan - report error and stop
-            console.error('❌ OpenAI API call failed:', error.message);
-            throw new Error(`OpenAI API unavailable: ${error.message}. Cannot proceed without valid JSON response.`);
+        let retryCount = 0;
+        const maxRetries = 2;
+
+        while (retryCount <= maxRetries) {
+            try {
+                // Use unified LLM interface for analysis
+                response = await this.queueOpenAIRequest(async () => {
+                    const messages = [{ role: 'user', content: analysisPrompt }];
+                    // ✅ FIX: Use MAXIMUM tokens to prevent truncation
+                    // GPT-4: 16384, GPT-3.5: 4096, Claude Opus: 16384
+                    const provider = this.settings.llmProvider || 'openai';
+                    const model = this.settings.currentModel;
+                    const modelMaxTokens = this.getModelMaxTokens(provider, model);
+                    
+                    // Request FULL output capacity
+                    return await this.callLLM(messages, { 
+                        temperature: 0.7, 
+                        maxTokens: modelMaxTokens // Use maximum available
+                    });
+                });
+
+                // ✅ CHECK: Validate JSON is complete (not truncated)
+                const openBraces = (response.match(/\{/g) || []).length;
+                const closeBraces = (response.match(/\}/g) || []).length;
+                
+                if (openBraces !== closeBraces) {
+                    console.warn(`⚠️ JSON truncation detected! Open:{${openBraces}} Close:{${closeBraces}}`);
+                    
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        console.log(`🔄 Retrying with simpler prompt (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+                        
+                        // Simplify request for retry
+                        analysisPrompt = analysisPrompt.replace('detailed analysis', 'concise analysis');
+                        continue;
+                    } else {
+                        // ✅ RECOVERY: Try to fix incomplete JSON
+                        console.warn('⚠️ Max retries reached, attempting JSON recovery...');
+                        response = this.attemptJSONRecovery(response);
+                    }
+                }
+                
+                break; // Success!
+                
+            } catch (error) {
+                retryCount++;
+                if (retryCount <= maxRetries) {
+                    console.warn(`⚠️ LLM call failed (attempt ${retryCount}/${maxRetries + 1}), retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } else {
+                    console.error('❌ LLM API call failed after retries:', error.message);
+                    throw new Error(`LLM API unavailable: ${error.message}. Cannot proceed without valid JSON response.`);
+                }
+            }
         }
 
         // Enhanced debugging for response validation
@@ -7130,30 +7835,92 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
         console.log('🔍 DEBUG - Full Response Length:', response.length);
 
         try {
-            // AGGRESSIVE JSON EXTRACTION: Remove any text before first {
+            // STEP 1: AGGRESSIVE MARKDOWN REMOVAL
             let cleanedResponse = response;
-            const firstBraceIndex = response.indexOf('{');
+            
+            // Check for markdown code blocks and extract JSON only
+            if (cleanedResponse.includes('```')) {
+                console.log('📝 Removing markdown code blocks...');
+                
+                // Strategy 1: Try to extract from ```json ... ``` (even if incomplete)
+                const codeBlockStart = cleanedResponse.indexOf('```json');
+                const codeBlockEnd = cleanedResponse.lastIndexOf('```');
+                
+                if (codeBlockStart !== -1) {
+                    if (codeBlockEnd > codeBlockStart) {
+                        // Complete markdown block found
+                        console.log('✅ Found complete ```json block');
+                        cleanedResponse = cleanedResponse.substring(codeBlockStart + 7, codeBlockEnd); // +7 for "```json"
+                    } else {
+                        // Incomplete markdown block (missing closing ```)
+                        console.log('⚠️ Found incomplete ```json block, extracting rest');
+                        cleanedResponse = cleanedResponse.substring(codeBlockStart + 7);
+                    }
+                    cleanedResponse = cleanedResponse.trim();
+                } else {
+                    // No ```json, just remove all ``` markers
+                    console.log('⚠️ No ```json found, removing all ``` markers');
+                    cleanedResponse = cleanedResponse.replace(/```/g, '');
+                }
+            }
+            
+            // STEP 2: AGGRESSIVE JSON EXTRACTION: Remove any text before first {
+            const firstBraceIndex = cleanedResponse.indexOf('{');
             if (firstBraceIndex > 0) {
                 console.log('⚠️ Found text before JSON, removing...');
-                cleanedResponse = response.substring(firstBraceIndex);
+                cleanedResponse = cleanedResponse.substring(firstBraceIndex);
             }
 
-            // Parse JSON response with enhanced error handling
-            const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                console.log('✅ DEBUG - JSON Match Found');
-
-                // Enhanced JSON sanitization for OpenAI responses
-                let jsonText = jsonMatch[0];
-
-                // AGGRESSIVE: Cut off any text after last closing brace
-                const lastBraceIndex = jsonText.lastIndexOf('}');
-                if (lastBraceIndex < jsonText.length - 1) {
-                    console.log('⚠️ Found text after JSON, removing...');
-                    jsonText = jsonText.substring(0, lastBraceIndex + 1);
+            // STEP 3: Find the OUTERMOST valid JSON object
+            // Use a STRING-AWARE bracket counter to find matching closing brace
+            let braceCount = 0;
+            let jsonStartIndex = -1;
+            let jsonEndIndex = -1;
+            let inString = false;
+            let escapeNext = false;
+            
+            for (let i = 0; i < cleanedResponse.length; i++) {
+                const char = cleanedResponse[i];
+                
+                // Handle escape sequences
+                if (escapeNext) {
+                    escapeNext = false;
+                    continue;
                 }
+                
+                if (char === '\\') {
+                    escapeNext = true;
+                    continue;
+                }
+                
+                // Track string boundaries (ignore braces inside strings)
+                if (char === '"') {
+                    inString = !inString;
+                    continue;
+                }
+                
+                // Only count braces outside of strings
+                if (!inString) {
+                    if (char === '{') {
+                        if (braceCount === 0) {
+                            jsonStartIndex = i;
+                        }
+                        braceCount++;
+                    } else if (char === '}') {
+                        braceCount--;
+                        if (braceCount === 0 && jsonStartIndex !== -1) {
+                            jsonEndIndex = i;
+                            break; // Found complete JSON object
+                        }
+                    }
+                }
+            }
+            
+            if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+                console.log('✅ DEBUG - Found complete JSON object');
+                let jsonText = cleanedResponse.substring(jsonStartIndex, jsonEndIndex + 1);
 
-                // Fix common JSON issues in OpenAI responses
+                // Fix common JSON issues
                 jsonText = this.sanitizeJsonResponse(jsonText);
 
                 const analysis = JSON.parse(jsonText);
@@ -7215,12 +7982,27 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                 }
 
                 analysis.route = route; // Attach route info
+                
+                // ✅ STRICT JSON-ONLY MODE: Validate response format
+                const validation = this.validateJSONOnlyResponse(response);
+                if (!validation.valid) {
+                    console.warn('⚠️ Response format violation:', validation.reason);
+                    
+                    // Auto-repair: Ask LLM to return pure JSON
+                    const repairedResponse = await this.repairJSONResponse(userMessage, response, validation.reason);
+                    if (repairedResponse) {
+                        // Retry parsing with repaired response
+                        return this.parseOpenAIResponse(repairedResponse, route);
+                    }
+                }
+                
                 return analysis;
             } else {
                 // ===== NO JSON FOUND - FATAL ERROR =====
-                console.error('❌ FATAL: No valid JSON found in OpenAI response');
+                console.error('❌ FATAL: No valid JSON found in LLM response');
                 console.error('📄 Response preview:', response.substring(0, 300));
-                throw new Error('OpenAI response contains no valid JSON. Response must start with { and end with }.');
+                console.error('🔍 Brace counts - Open: {', (response.match(/\{/g) || []).length, ', Close: }', (response.match(/\}/g) || []).length);
+                throw new Error('LLM response contains no valid JSON or unclosed braces. Response must have matching { and }.');
             }
         } catch (e) {
             // ===== JSON PARSE FAILED - FATAL ERROR =====
@@ -7230,44 +8012,235 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
         }
     }
 
-    // Enhanced JSON sanitization for OpenAI responses
+    // ✅ STRICT JSON-ONLY MODE: Validate response format
+    validateJSONOnlyResponse(response) {
+        const trimmed = response.trim();
+        
+        // Check 1: Must start with {
+        if (!trimmed.startsWith('{')) {
+            return {
+                valid: false,
+                reason: 'Response does not start with JSON object (starts with: ' + trimmed.substring(0, 20) + ')'
+            };
+        }
+        
+        // Check 2: Must end with }
+        if (!trimmed.endsWith('}')) {
+            return {
+                valid: false,
+                reason: 'Response does not end with JSON object (ends with: ' + trimmed.substring(trimmed.length - 20) + ')'
+            };
+        }
+        
+        // Check 3: No text before first {
+        const firstBrace = trimmed.indexOf('{');
+        if (firstBrace > 0) {
+            const textBefore = trimmed.substring(0, firstBrace).trim();
+            if (textBefore.length > 0 && !textBefore.startsWith('```')) {
+                return {
+                    valid: false,
+                    reason: 'Extra text before JSON: ' + textBefore.substring(0, 50)
+                };
+            }
+        }
+        
+        return { valid: true };
+    }
+
+    // ✅ AUTO-REPAIR PROMPT: Fix format violations
+    async repairJSONResponse(originalPrompt, brokenResponse, reason) {
+        console.log('🔧 Attempting auto-repair for format violation...');
+        
+        const repairPrompt = `⚠️ FORMAT ERROR DETECTED
+
+Your previous response had a format violation: ${reason}
+
+ORIGINAL PROMPT:
+${originalPrompt.substring(0, 500)}
+
+YOUR RESPONSE (BROKEN):
+${brokenResponse.substring(0, 300)}...
+
+STRICT RULES FOR RESPONSE:
+1. Return ONLY a pure JSON object
+2. Start with { immediately
+3. End with } immediately
+4. NO explanations before or after
+5. NO markdown code blocks (\`\`\`json)
+6. NO conversational text
+
+CORRECT FORMAT EXAMPLE:
+{
+  "requestType": "project-creation",
+  "orders": { ... }
+}
+
+Now provide the CORRECTED response (pure JSON only):`;
+
+        try {
+            const repairedResponse = await this.callLLM([
+                { role: 'user', content: repairPrompt }
+            ], {
+                temperature: 0.1, // Very low for precise formatting
+                maxTokens: 8192
+            });
+            
+            console.log('✅ Repair attempt completed');
+            return repairedResponse;
+        } catch (error) {
+            console.error('❌ Auto-repair failed:', error);
+            return null;
+        }
+    }
+
+    // Enhanced JSON sanitization for Claude/OpenAI responses
     sanitizeJsonResponse(jsonText) {
         console.log('🧹 Sanitizing JSON response...');
+        console.log('📊 Original length:', jsonText.length);
 
-        // Remove any trailing incomplete objects/arrays
         let sanitized = jsonText;
 
-        // Fix common OpenAI truncation issues
+        // Try to parse first - if it works, return as-is
+        try {
+            JSON.parse(sanitized);
+            console.log('✅ JSON already valid, no sanitization needed');
+            return sanitized;
+        } catch (e) {
+            console.log('⚠️ JSON parse failed, attempting sanitization:', e.message);
+        }
 
-        // 1. Fix incomplete array endings (missing closing brackets)
+        // Count brackets and braces (NOTE: This counts ALL occurrences, including in strings)
         const openBrackets = (sanitized.match(/\[/g) || []).length;
         const closeBrackets = (sanitized.match(/\]/g) || []).length;
-        const missingCloseBrackets = openBrackets - closeBrackets;
-
         const openBraces = (sanitized.match(/\{/g) || []).length;
         const closeBraces = (sanitized.match(/\}/g) || []).length;
-        const missingCloseBraces = openBraces - closeBraces;
 
-        // 2. Remove incomplete trailing objects/arrays at the end
-        sanitized = sanitized.replace(/,\s*$/, ''); // Remove trailing comma
-        sanitized = sanitized.replace(/,\s*\{[^}]*$/, ''); // Remove incomplete trailing object
-        sanitized = sanitized.replace(/,\s*\[[^\]]*$/, ''); // Remove incomplete trailing array
+        console.log('📊 Brackets (raw count) - Open:[', openBrackets, 'Close:]', closeBrackets);
+        console.log('📊 Braces (raw count) - Open:{', openBraces, 'Close:}', closeBraces);
 
-        // 3. Fix malformed array/object endings
-        sanitized = sanitized.replace(/,\s*\n\s*\]/g, '\n    ]'); // Fix comma before array close
-        sanitized = sanitized.replace(/,\s*\n\s*\}/g, '\n  }'); // Fix comma before object close
+        // Fix unterminated strings by finding the last valid position
+        // Strategy: If parse fails, truncate at last complete object in plannedActions array
+        
+        // First try: Just close missing brackets/braces
+        let missingCloseBrackets = openBrackets - closeBrackets;
+        let missingCloseBraces = openBraces - closeBraces;
 
-        // 4. AGGRESSIVE: Find and fix the exact culture.json issue
-        // Fix the specific pattern: "tags": ["festival","ritüel" \n      ]\n   },
-        sanitized = sanitized.replace(/("tags":\s*\[\s*"[^"]*",\s*"[^"]*"\s*\n\s*\]\s*\n\s*\}\s*,?\s*)/g,
-            match => {
-                return match.replace(/\n\s*\]\s*\n\s*\}/, '\n      ]\n    }');
-            });
+        // Remove trailing commas
+        sanitized = sanitized.replace(/,(\s*[\]}])/g, '$1');
+        
+        // Remove incomplete trailing content (after last complete structure)
+        // Find last complete object or array
+        let lastValidPos = sanitized.length;
+        
+        // If there are unterminated structures, try to truncate at last complete item
+        if (missingCloseBraces > 0 || missingCloseBrackets > 0) {
+            console.log('⚠️ Found unterminated structures, attempting to truncate...');
+            
+            // Try to find "orders.steps" array first (more common)
+            const stepsMatch = sanitized.match(/"steps":\s*\[([\s\S]*)/);
+            if (stepsMatch) {
+                console.log('🔍 Found orders.steps array, truncating...');
+                const stepsStart = sanitized.indexOf(stepsMatch[0]);
+                const stepsContent = stepsMatch[1];
+                
+                // Find complete step objects
+                let bracketDepth = 1; // We're already inside the array
+                let braceDepth = 0;
+                let lastCompleteIndex = 0;
+                let inString = false;
+                let escapeNext = false;
+                
+                for (let i = 0; i < stepsContent.length; i++) {
+                    const char = stepsContent[i];
+                    
+                    // Handle string tracking
+                    if (escapeNext) {
+                        escapeNext = false;
+                        continue;
+                    }
+                    if (char === '\\') {
+                        escapeNext = true;
+                        continue;
+                    }
+                    if (char === '"') {
+                        inString = !inString;
+                        continue;
+                    }
+                    
+                    // Count braces only outside strings
+                    if (!inString) {
+                        if (char === '{') braceDepth++;
+                        else if (char === '}') {
+                            braceDepth--;
+                            if (braceDepth === 0 && bracketDepth === 1) {
+                                // Found end of a step object
+                                lastCompleteIndex = i + 1;
+                            }
+                        } else if (char === '[') bracketDepth++;
+                        else if (char === ']') {
+                            bracketDepth--;
+                            if (bracketDepth === 0) {
+                                // Found end of steps array
+                                lastCompleteIndex = i + 1;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (lastCompleteIndex > 0 && lastCompleteIndex < stepsContent.length) {
+                    console.log(`✂️ Truncating orders.steps at last complete object (char ${lastCompleteIndex})`);
+                    sanitized = sanitized.substring(0, stepsStart + '"steps": ['.length + lastCompleteIndex);
+                    
+                    // Recalculate after truncation
+                    missingCloseBrackets = (sanitized.match(/\[/g) || []).length - (sanitized.match(/\]/g) || []).length;
+                    missingCloseBraces = (sanitized.match(/\{/g) || []).length - (sanitized.match(/\}/g) || []).length;
+                }
+            }
+            
+            // Fallback: Try plannedActions array
+            else {
+                const actionsMatch = sanitized.match(/"plannedActions":\s*\[([\s\S]*)/);
+                if (actionsMatch) {
+                    console.log('🔍 Found plannedActions array, truncating...');
+                    const actionsStart = sanitized.indexOf(actionsMatch[0]);
+                    const actionsContent = actionsMatch[1];
+                    
+                    // Same logic as above
+                    let bracketDepth = 1;
+                    let braceDepth = 0;
+                    let lastCompleteIndex = 0;
+                    
+                    for (let i = 0; i < actionsContent.length; i++) {
+                        const char = actionsContent[i];
+                        if (char === '{') braceDepth++;
+                        else if (char === '}') {
+                            braceDepth--;
+                            if (braceDepth === 0 && bracketDepth === 1) {
+                                lastCompleteIndex = i + 1;
+                            }
+                        } else if (char === '[') bracketDepth++;
+                        else if (char === ']') {
+                            bracketDepth--;
+                            if (bracketDepth === 0) {
+                                lastCompleteIndex = i + 1;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (lastCompleteIndex > 0 && lastCompleteIndex < actionsContent.length) {
+                        console.log('✂️ Truncating plannedActions at last complete object');
+                        sanitized = sanitized.substring(0, actionsStart + '"plannedActions": ['.length + lastCompleteIndex);
+                        
+                        missingCloseBrackets = (sanitized.match(/\[/g) || []).length - (sanitized.match(/\]/g) || []).length;
+                        missingCloseBraces = (sanitized.match(/\{/g) || []).length - (sanitized.match(/\}/g) || []).length;
+                    }
+                }
+            }
+        }
 
-        // 5. Fix trailing incomplete action objects
-        sanitized = sanitized.replace(/,\s*\{\s*"action":\s*"[^"]*",?\s*$/, ''); // Remove incomplete action
-
-        // 6. Add missing closing brackets if needed
+        // Add missing closing brackets/braces
         for (let i = 0; i < missingCloseBrackets; i++) {
             sanitized += ']';
         }
@@ -7275,44 +8248,16 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
             sanitized += '}';
         }
 
-        // 7. Final validation attempt
+        // Final validation
         try {
             JSON.parse(sanitized);
             console.log('✅ JSON sanitization successful');
         } catch (testError) {
-            console.log('⚠️ Sanitization test failed, applying emergency fixes...');
-            // Emergency: Just keep the main structure and truncate plannedActions if needed
-            const emergencyMatch = sanitized.match(/^(\{[^}]*"plannedActions":\s*\[)([^\]]*?)(\].*\})$/s);
-            if (emergencyMatch) {
-                // Keep only complete plannedActions objects
-                const actionsText = emergencyMatch[2];
-                const completeActions = [];
-                let braceCount = 0;
-                let currentAction = '';
-                let inAction = false;
-
-                for (let char of actionsText) {
-                    if (char === '{') {
-                        if (braceCount === 0) inAction = true;
-                        braceCount++;
-                    } else if (char === '}') {
-                        braceCount--;
-                        if (braceCount === 0 && inAction) {
-                            currentAction += char;
-                            completeActions.push(currentAction);
-                            currentAction = '';
-                            inAction = false;
-                            continue;
-                        }
-                    }
-                    if (inAction) currentAction += char;
-                }
-
-                sanitized = emergencyMatch[1] + completeActions.join(',') + emergencyMatch[3];
-            }
+            console.log('⚠️ Sanitization failed:', testError.message);
+            console.log('📄 Sanitized preview:', sanitized.substring(0, 500));
         }
 
-        console.log('🧹 JSON sanitization complete');
+        console.log('🧹 JSON sanitization complete - Final length:', sanitized.length);
         return sanitized;
     }
 
@@ -7392,9 +8337,9 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
             <p>${analysis.userFriendlyPlan}</p>
           </div>
           <div class="plan-steps">
-            <h5>📋 Planned Steps (${analysis.estimatedSteps} total):</h5>
+            <h5>📋 Planned Steps (${analysis.estimatedSteps || 0} total):</h5>
             <ul>
-              ${analysis.plannedActions.map((action, index) => `
+              ${(analysis.plannedActions || []).map((action, index) => `
                 <li class="${action.critical ? 'critical' : ''}">
                   <strong>Step ${index + 1}:</strong> ${action.description}
                   ${action.fileName ? `<code>${action.fileName}</code>` : ''}
@@ -7438,17 +8383,18 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
         // Fallback to legacy plannedActions protocol
         const progressMessage = this.addChatMessage('ai', '🚀 İşlem başladı...');
 
-        for (let i = 0; i < analysis.plannedActions.length; i++) {
-            const action = analysis.plannedActions[i];
+        const plannedActions = analysis.plannedActions || [];
+        for (let i = 0; i < plannedActions.length; i++) {
+            const action = plannedActions[i];
 
             // Update progress
-            this.updateProgressMessage(progressMessage, `⏳ Step ${i + 1}/${analysis.plannedActions.length}: ${action.description}`);
+            this.updateProgressMessage(progressMessage, `⏳ Step ${i + 1}/${plannedActions.length}: ${action.description}`);
 
             try {
                 await this.executeAction(action);
 
                 // Show success for this step
-                this.updateProgressMessage(progressMessage, `✅ Step ${i + 1}/${analysis.plannedActions.length}: ${action.description} - Tamamlandı`);
+                this.updateProgressMessage(progressMessage, `✅ Step ${i + 1}/${plannedActions.length}: ${action.description} - Tamamlandı`);
 
                 // Small delay for UX
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -7475,6 +8421,11 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
         console.log('📋 Mission:', orders.mission);
         console.log('🎯 Acceptance Criteria:', orders.acceptance);
 
+        // 🎯 START LIVE VISUALIZATION
+        this.startLiveVisualization();
+        this.updateCurrentOperation('Mission Başlatıldı', orders.mission, 'fa-rocket');
+        this.addTimelineStep(orders.mission, 'active');
+
         const progressMessage = this.addChatMessage('ai', `🧭 Mission: ${orders.mission}`);
         const verificationResults = {
             lint: 'pending',
@@ -7484,45 +8435,286 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
             detector: 'pending'
         };
 
+        // ✅ EXECUTION METRICS
+        const executionMetrics = {
+            startTime: Date.now(),
+            steps: []
+        };
+
         for (let i = 0; i < orders.steps.length; i++) {
             const step = orders.steps[i];
             this.updateProgressMessage(progressMessage, `⏳ Step ${step.id} (${i + 1}/${orders.steps.length}): ${step.tool}`);
 
-            try {
-                // Execute tool
-                await this.executeOrderStep(step);
+            // 🎯 LIVE VISUALIZATION: Update current step
+            const stepIcon = step.tool === 'write_file' || step.tool === 'fs.write' ? 'fa-pencil-alt' :
+                           step.tool === 'read_file' || step.tool === 'fs.read' ? 'fa-file-alt' :
+                           step.tool === 'run_cmd' ? 'fa-terminal' : 'fa-cog';
+            
+            const stepTarget = step.args.path || step.args.cmd || step.args.url || 'Processing...';
+            const stepOperation = step.tool === 'write_file' ? '✍️ Writing' :
+                                step.tool === 'read_file' ? '📖 Reading' :
+                                step.tool === 'run_cmd' ? '⚡ Running' : '⚙️ Working';
+            
+            this.updateCurrentOperation(`${stepOperation} (${i + 1}/${orders.steps.length})`, stepTarget, stepIcon);
+            this.addTimelineStep(`Step ${step.id}: ${step.tool}`, 'active');
 
-                // Run verifications if specified
+            // ✅ STEP RETRY MECHANISM
+            let retryCount = 0;
+            const maxRetries = 2;
+            let lastError = null;
+            const stepStartTime = Date.now();
+
+            while (retryCount <= maxRetries) {
+                try {
+                    // Execute tool
+                    await this.executeOrderStep(step);
+                    
+                    // ✅ METRICS: Record successful execution
+                    const executionTime = Date.now() - stepStartTime;
+                    executionMetrics.steps.push({
+                        id: step.id,
+                        tool: step.tool,
+                        status: 'success',
+                        executionTime,
+                        retries: retryCount
+                    });
+                    console.log(`⏱️ Step ${step.id} completed in ${executionTime}ms (retries: ${retryCount})`);
+                    
+                    // 🎯 LIVE VISUALIZATION: Mark step completed
+                    this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'completed');
+                    this.liveVisualization.metrics.successCount++;
+                    
+                    break; // Success, exit retry loop
+                    
+                } catch (error) {
+                    lastError = error;
+                    retryCount++;
+                    
+                    if (retryCount <= maxRetries) {
+                        console.warn(`⚠️ Step ${step.id} failed (attempt ${retryCount}/${maxRetries + 1}), retrying...`);
+                        this.updateProgressMessage(progressMessage, `🔄 Step ${step.id}: Retry ${retryCount}/${maxRetries + 1}...`);
+                        
+                        // 🎯 LIVE VISUALIZATION: Show retry
+                        this.updateCurrentOperation(`🔄 Retrying (${retryCount}/${maxRetries + 1})`, stepTarget, 'fa-redo');
+                        
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                    } else {
+                        // Max retries exceeded
+                        console.error(`❌ Step ${step.id} failed after ${maxRetries + 1} attempts:`, error.message);
+                        
+                        // 🎯 LIVE VISUALIZATION: Mark step failed
+                        this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'error');
+                        this.liveVisualization.metrics.errorCount++;
+                        this.updateProgressMessage(progressMessage, `❌ Step ${step.id}: ${error.message}`);
+                        
+                        // ✅ METRICS: Record failed execution
+                        const executionTime = Date.now() - stepStartTime;
+                        executionMetrics.steps.push({
+                            id: step.id,
+                            tool: step.tool,
+                            status: 'failed',
+                            executionTime,
+                            retries: retryCount - 1,
+                            error: error.message
+                        });
+                    }
+                }
+            }
+
+            // Run verifications if step succeeded
+            if (retryCount <= maxRetries) {
                 if (step.verify && Array.isArray(step.verify)) {
                     for (const checkType of step.verify) {
                         const result = await this.runVerificationCheck(checkType, step);
-                        verificationResults[checkType] = result ? 'pass' : 'fail';
                         
-                        this.updateProgressMessage(
-                            progressMessage,
-                            `✅ Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: ${result ? 'PASS' : 'FAIL'}`
-                        );
+                        // ✅ ENHANCEMENT: Handle 'skip' status
+                        if (result === 'skip') {
+                            verificationResults[checkType] = 'skip';
+                            this.updateProgressMessage(
+                                progressMessage,
+                                `⏭️ Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: SKIPPED`
+                            );
+                        } else {
+                            verificationResults[checkType] = result ? 'pass' : 'fail';
+                            this.updateProgressMessage(
+                                progressMessage,
+                                `${result ? '✅' : '❌'} Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: ${result ? 'PASS' : 'FAIL'}`
+                            );
 
-                        if (!result) {
-                            console.error(`❌ Verification failed: ${checkType}`);
+                            if (!result) {
+                                console.error(`❌ Verification failed: ${checkType}`);
+                            }
                             // Continue to next step even if verification fails (report at end)
                         }
                     }
                 }
-
-                await new Promise(resolve => setTimeout(resolve, 500));
-
-            } catch (error) {
-                console.error(`❌ Step ${step.id} failed:`, error.message);
-                this.updateProgressMessage(progressMessage, `❌ Step ${step.id}: ${error.message}`);
             }
+
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
+
+        // 🎯 LIVE VISUALIZATION: Stop and finalize
+        this.stopLiveVisualization();
+        this.updateCurrentOperation('✅ Mission Tamamlandı', orders.mission, 'fa-check-circle');
+        this.addTimelineStep('Mission Completed', 'completed');
+
+        // ✅ METRICS: Calculate total execution time
+        const totalExecutionTime = Date.now() - executionMetrics.startTime;
+        const successCount = executionMetrics.steps.filter(s => s.status === 'success').length;
+        const failCount = executionMetrics.steps.filter(s => s.status === 'failed').length;
+        
+        console.log(`⏱️ EXECUTION METRICS:`);
+        console.log(`   Total Time: ${(totalExecutionTime / 1000).toFixed(2)}s`);
+        console.log(`   Success: ${successCount}, Failed: ${failCount}`);
+        console.log(`   Steps:`, executionMetrics.steps);
+        
+        // Add metrics to chat
+        this.addChatMessage('ai', `
+⏱️ **EXECUTION METRICS**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Total Time: ${(totalExecutionTime / 1000).toFixed(2)}s
+Success: ${successCount} | Failed: ${failCount}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        `);
 
         // Generate verification matrix report
         const matrixReport = this.generateVerificationMatrix(verificationResults, orders.acceptance);
         this.addChatMessage('ai', matrixReport);
         
+        // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
+        await this.sendFeedbackToLLM(orders, verificationResults);
+        
         this.refreshExplorer();
+    }
+    
+    async sendFeedbackToLLM(orders, verificationResults) {
+        console.log('🔄 Sending feedback to LLM for analysis...');
+        
+        try {
+            // Read created files to analyze content quality
+            const createdFiles = [];
+            for (const step of orders.steps) {
+                if ((step.tool === 'write_file' || step.tool === 'fs.write') && step.args?.path) {
+                    try {
+                        const result = await this.readFileWithAgent(step.args.path);
+                        // readFileWithAgent returns { success: true, content: "..." }
+                        const content = result.content || result;
+                        createdFiles.push({
+                            path: step.args.path,
+                            content: content,
+                            length: content.length,
+                            hasPlaceholder: /TODO|lorem|example|placeholder/gi.test(content),
+                            isEmpty: content.trim().length < 50
+                        });
+                    } catch (e) {
+                        console.warn(`⚠️ Could not read file for analysis: ${step.args.path}`, e.message);
+                    }
+                }
+            }
+            
+            // ✅ ENHANCED ANALYSIS: Calculate detailed statistics
+            const totalFiles = createdFiles.length;
+            const avgLength = totalFiles > 0 
+                ? Math.round(createdFiles.reduce((sum, f) => sum + f.length, 0) / totalFiles)
+                : 0;
+            const placeholderFiles = createdFiles.filter(f => f.hasPlaceholder);
+            const emptyFiles = createdFiles.filter(f => f.isEmpty);
+            
+            // Group files by type
+            const byType = {
+                tsx: createdFiles.filter(f => f.path.endsWith('.tsx')),
+                jsx: createdFiles.filter(f => f.path.endsWith('.jsx')),
+                ts: createdFiles.filter(f => f.path.endsWith('.ts')),
+                js: createdFiles.filter(f => f.path.endsWith('.js')),
+                css: createdFiles.filter(f => f.path.endsWith('.css')),
+                json: createdFiles.filter(f => f.path.endsWith('.json')),
+                html: createdFiles.filter(f => f.path.endsWith('.html')),
+                md: createdFiles.filter(f => f.path.endsWith('.md'))
+            };
+            
+            // Determine BUILD fail reason
+            let buildFailReason = 'Unknown';
+            if (verificationResults.build === 'fail') {
+                const hasPackageJson = await this.checkFileExists('package.json');
+                buildFailReason = hasPackageJson 
+                    ? 'Build script failed (check dependencies/syntax)' 
+                    : 'No package.json found (expected for initial setup)';
+            } else if (verificationResults.build === 'skip') {
+                buildFailReason = 'Skipped: No package.json (normal for file-only projects)';
+            }
+            
+            // Build feedback report
+            const feedbackPrompt = `
+🔄 AGENT FEEDBACK LOOP - POST-EXECUTION ANALYSIS
+
+📋 MISSION: ${orders.mission}
+
+🎯 ACCEPTANCE CRITERIA:
+${orders.acceptance.map(c => `- ${c}`).join('\n')}
+
+✅ VERIFICATION RESULTS:
+${Object.entries(verificationResults).map(([check, status]) => {
+    const icon = status === 'pass' ? '✅' : status === 'fail' ? '❌' : status === 'skip' ? '⏭️' : '⏳';
+    return `${icon} ${check.toUpperCase()}: ${status.toUpperCase()}`;
+}).join('\n')}
+${verificationResults.build === 'fail' || verificationResults.build === 'skip' ? `\n📌 BUILD Status: ${buildFailReason}` : ''}
+
+� FILES STATISTICS:
+- Total Files: ${totalFiles}
+- Average Length: ${avgLength} chars
+- Files with Placeholders: ${placeholderFiles.length} ❌
+- Empty/Short Files: ${emptyFiles.length} ❌
+
+📁 FILES BY TYPE:
+${Object.entries(byType)
+    .filter(([type, files]) => files.length > 0)
+    .map(([type, files]) => {
+        const avgTypeLength = Math.round(files.reduce((sum, f) => sum + f.length, 0) / files.length);
+        return `- ${type.toUpperCase()}: ${files.length} files (avg: ${avgTypeLength} chars)`;
+    })
+    .join('\n')}
+
+📁 DETAILED FILE ANALYSIS:
+${createdFiles.map(f => {
+    const status = f.isEmpty ? '❌ TOO SHORT' : f.hasPlaceholder ? '⚠️ PLACEHOLDER' : '✅ OK';
+    return `- ${f.path} [${status}]
+  - Length: ${f.length} chars
+  - Preview: ${f.content.substring(0, 150).replace(/\n/g, ' ')}${f.content.length > 150 ? '...' : ''}`;
+}).join('\n')}
+
+🔍 YOUR TASK:
+Analyze the execution results and provide:
+1. ✅ What was done correctly?
+2. ❌ What issues/errors were found? (Be SPECIFIC with file names and line numbers)
+3. ⚠️ What is missing or incomplete? (List missing files, incomplete implementations)
+4. 🔧 What needs to be fixed or improved? (Provide CODE SUGGESTIONS)
+5. 📋 Specific action items to make this production-ready (Priority order)
+
+Format your response as a structured report with clear sections. BE SPECIFIC AND ACTIONABLE!
+`;
+
+            // Send feedback to LLM
+            const response = await this.callLLM([
+                { role: 'user', content: feedbackPrompt }
+            ], { 
+                temperature: 0.3, // Lower temperature for analytical task
+                maxTokens: 4096 
+            });
+            
+            // Display LLM's analysis
+            this.addChatMessage('ai', `
+📊 **POST-EXECUTION ANALYSIS**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${response}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`);
+            
+        } catch (error) {
+            console.error('❌ Failed to send feedback to LLM:', error);
+            // Don't fail the whole process if feedback fails
+        }
     }
 
     // ===== TOOL CONTRACT GUARD (Fail-Fast) =====
@@ -7541,9 +8733,17 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
             if (!step.args?.path) {
                 throw new Error(`${step.tool} requires args.path`);
             }
-            if (typeof step.args.content !== 'string') {
-                throw new Error(`${step.tool} requires args.content (string)`);
+            
+            // Convert object/array content to JSON string
+            if (typeof step.args.content === 'object' && step.args.content !== null) {
+                console.log('📦 Converting object content to JSON string for:', step.args.path);
+                step.args.content = JSON.stringify(step.args.content, null, 2);
             }
+            
+            if (typeof step.args.content !== 'string') {
+                throw new Error(`${step.tool} requires args.content (string or object)`);
+            }
+            
             // Strict placeholder detection for file content
             const placeholderPatterns = [
                 /<[A-ZÜĞİŞÇÖ_]+>/,       // <GÜNCELLE>, <TAM_İÇERİK>
@@ -7575,6 +8775,56 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
         // ===== TOOL CONTRACT GUARD (Fail-Fast) =====
         this.assertToolArgs(step);
 
+        // ✅ SMART CONTEXT AWARENESS: Check file context before creating
+        if (step.tool === 'write_file' || step.tool === 'fs.write') {
+            const contextWarnings = await this.checkFileContext(step.args.path, step.args.content);
+            
+            if (contextWarnings.length > 0) {
+                const highSeverity = contextWarnings.filter(w => w.severity === 'high');
+                
+                if (highSeverity.length > 0) {
+                    // Log warnings to console
+                    console.warn('⚠️ CONTEXT WARNINGS for:', step.args.path);
+                    highSeverity.forEach(w => {
+                        console.warn(`  ${w.message}`);
+                        console.warn(`  Details: ${w.details}`);
+                        console.warn(`  Suggestion: ${w.suggestion}`);
+                    });
+                    
+                    // Add warning message to chat
+                    const warningMessage = highSeverity.map(w => 
+                        `${w.message}\n  📝 ${w.details}\n  💡 ${w.suggestion}`
+                    ).join('\n\n');
+                    
+                    this.addChatMessage('ai', `
+⚠️ **UYARI**: \`${step.args.path}\` oluşturulmadan önce:
+
+${warningMessage}
+
+ℹ️ Dosya yine de oluşturulacak ama bu duruma dikkat et!
+                    `);
+                }
+            }
+        }
+
+        // ✅ SAFETY CONFIRMATION: Check for dangerous commands
+        if (step.tool === 'run_cmd' || step.tool === 'terminal.exec') {
+            const isDangerous = this.isDangerousCommand(step.args.cmd);
+            if (isDangerous.dangerous) {
+                const confirmed = confirm(`⚠️ TEHLIKELI KOMUT TESPIT EDİLDİ
+
+Komut: ${step.args.cmd}
+
+Tehlike: ${isDangerous.reason}
+
+Bu komutu çalıştırmak istediğinizden emin misiniz?`);
+                
+                if (!confirmed) {
+                    throw new Error('User cancelled dangerous command execution');
+                }
+            }
+        }
+
         // ===== WORKSPACE ROOT ENFORCEMENT =====
         // Ensure cwd is set for all operations
         const workspaceRoot = this.getWorkspaceRoot();
@@ -7586,6 +8836,321 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
         // 🛡️ PRE-EXECUTION VALIDATION
         if (!step.args || typeof step.args !== 'object') {
             throw new Error(`Step ${step.id}: args object is required`);
+        }
+    }
+
+    /**
+     * Attempt to recover truncated JSON by closing unclosed braces
+     */
+    attemptJSONRecovery(truncatedJSON) {
+        console.log('🔧 Attempting JSON recovery...');
+        
+        let result = truncatedJSON.trim();
+        
+        // Count braces
+        const openBraces = (result.match(/\{/g) || []).length;
+        const closeBraces = (result.match(/\}/g) || []).length;
+        const openBrackets = (result.match(/\[/g) || []).length;
+        const closeBrackets = (result.match(/\]/g) || []).length;
+        
+        console.log(`📊 Brace analysis: {${openBraces} }${closeBraces} [${openBrackets} ]${closeBrackets}`);
+        
+        // Remove incomplete last element (likely cut off)
+        // Find last complete comma before truncation
+        const lastComma = result.lastIndexOf(',');
+        if (lastComma > 0) {
+            result = result.substring(0, lastComma);
+            console.log('✂️ Removed incomplete element after last comma');
+        }
+        
+        // Close arrays
+        const arrayDeficit = openBrackets - closeBrackets;
+        for (let i = 0; i < arrayDeficit; i++) {
+            result += '\n]';
+        }
+        
+        // Close objects
+        const braceDeficit = openBraces - closeBraces;
+        for (let i = 0; i < braceDeficit; i++) {
+            result += '\n}';
+        }
+        
+        console.log('✅ JSON recovery complete');
+        console.log('🔍 Recovered JSON preview:', result.substring(0, 500));
+        
+        return result;
+    }
+
+    // ✅ SAFETY CONFIRMATION: Detect dangerous commands
+    isDangerousCommand(cmd) {
+        const dangerousPatterns = [
+            { pattern: /rm\s+-rf\s+\//, reason: 'Root dizin silme (/)' },
+            { pattern: /rm\s+-rf\s+\*/, reason: 'Tüm dosyaları silme' },
+            { pattern: /del\s+\/[sf]/i, reason: 'Windows zorla silme' },
+            { pattern: /format\s+[a-z]:/i, reason: 'Disk formatlama' },
+            { pattern: /dd\s+if=.*of=\/dev\//, reason: 'Disk yazma (tehlikeli)' },
+            { pattern: /chmod\s+-R\s+777/, reason: 'Tüm dosyalara tam yetki' },
+            { pattern: /curl.*\|\s*bash/, reason: 'Remote script execution' },
+            { pattern: /wget.*\|\s*sh/, reason: 'Remote script execution' },
+            { pattern: />.*\/etc\//, reason: '/etc dizinine yazma' }
+        ];
+        
+        for (const { pattern, reason } of dangerousPatterns) {
+            if (pattern.test(cmd)) {
+                return { dangerous: true, reason };
+            }
+        }
+        
+        return { dangerous: false };
+    }
+
+    // 🎯 ===== REAL-TIME VISUALIZATION METHODS ===== 🎯
+
+    /**
+     * Start live visualization
+     */
+    startLiveVisualization() {
+        this.liveVisualization.isActive = true;
+        this.liveVisualization.startTime = Date.now();
+        this.liveVisualization.timeline = [{
+            step: 'Başlatıldı',
+            time: 0,
+            status: 'completed'
+        }];
+        this.liveVisualization.fileChanges.clear();
+        this.liveVisualization.metrics = {
+            totalDuration: 0,
+            successCount: 0,
+            errorCount: 0
+        };
+
+        // Show live view panel
+        const liveView = document.getElementById('agentLiveView');
+        if (liveView) {
+            liveView.classList.remove('hidden');
+        }
+
+        this.updateLiveView();
+    }
+
+    /**
+     * Update current operation display
+     */
+    updateCurrentOperation(operationType, target, icon = 'fa-spinner') {
+        this.liveVisualization.currentOperation = { operationType, target, icon };
+
+        const operationEl = document.getElementById('currentOperation');
+        if (operationEl) {
+            const iconEl = operationEl.querySelector('.operation-icon i');
+            const typeEl = operationEl.querySelector('.operation-type');
+            const targetEl = operationEl.querySelector('.operation-target');
+
+            if (iconEl) {
+                iconEl.className = `fas ${icon}`;
+                if (icon === 'fa-spinner') {
+                    iconEl.classList.add('fa-spin');
+                }
+            }
+            if (typeEl) typeEl.textContent = operationType;
+            if (targetEl) targetEl.textContent = target;
+        }
+    }
+
+    /**
+     * Add step to timeline
+     */
+    addTimelineStep(stepName, status = 'active') {
+        const elapsed = Date.now() - this.liveVisualization.startTime;
+        const timeInSeconds = (elapsed / 1000).toFixed(1);
+
+        this.liveVisualization.timeline.push({
+            step: stepName,
+            time: timeInSeconds,
+            status
+        });
+
+        this.updateTimeline();
+    }
+
+    /**
+     * Update timeline status
+     */
+    updateTimelineStatus(index, status) {
+        if (this.liveVisualization.timeline[index]) {
+            this.liveVisualization.timeline[index].status = status;
+            this.updateTimeline();
+        }
+    }
+
+    /**
+     * Render timeline
+     */
+    updateTimeline() {
+        const timelineEl = document.getElementById('progressTimeline');
+        if (!timelineEl) return;
+
+        timelineEl.innerHTML = this.liveVisualization.timeline.map(item => `
+            <div class="timeline-item ${item.status}">
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <span class="timeline-step">${item.step}</span>
+                    <span class="timeline-time">${item.time}s</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    /**
+     * Track file changes (reading/writing)
+     */
+    trackFileChange(filepath, operation, linesDiff = null) {
+        if (!this.liveVisualization.fileChanges.has(filepath)) {
+            this.liveVisualization.fileChanges.set(filepath, {
+                added: 0,
+                deleted: 0,
+                operations: []
+            });
+        }
+
+        const fileData = this.liveVisualization.fileChanges.get(filepath);
+        fileData.operations.push(operation);
+
+        if (linesDiff) {
+            fileData.added += linesDiff.added || 0;
+            fileData.deleted += linesDiff.deleted || 0;
+        }
+
+        this.updateFileChanges();
+    }
+
+    /**
+     * Calculate diff between old and new content
+     */
+    calculateDiff(oldContent, newContent) {
+        const oldLines = (oldContent || '').split('\n');
+        const newLines = (newContent || '').split('\n');
+
+        // Simple diff: count added/removed lines
+        const maxLen = Math.max(oldLines.length, newLines.length);
+        let added = 0;
+        let deleted = 0;
+
+        if (newLines.length > oldLines.length) {
+            added = newLines.length - oldLines.length;
+        } else if (newLines.length < oldLines.length) {
+            deleted = oldLines.length - newLines.length;
+        }
+
+        // Check modified lines
+        const minLen = Math.min(oldLines.length, newLines.length);
+        for (let i = 0; i < minLen; i++) {
+            if (oldLines[i] !== newLines[i]) {
+                added++;
+                deleted++;
+            }
+        }
+
+        return { added, deleted };
+    }
+
+    /**
+     * Update file changes display
+     */
+    updateFileChanges() {
+        const filesContentEl = document.getElementById('filesContent');
+        const linesAddedEl = document.getElementById('linesAdded');
+        const linesDeletedEl = document.getElementById('linesDeleted');
+        const filesChangedEl = document.getElementById('filesChanged');
+
+        if (!filesContentEl) return;
+
+        let totalAdded = 0;
+        let totalDeleted = 0;
+
+        if (this.liveVisualization.fileChanges.size === 0) {
+            filesContentEl.innerHTML = '<div class="empty-files">Henüz dosya değişikliği yok</div>';
+        } else {
+            const fileItems = Array.from(this.liveVisualization.fileChanges.entries()).map(([filepath, data]) => {
+                totalAdded += data.added;
+                totalDeleted += data.deleted;
+
+                const filename = require('path').basename(filepath);
+                return `
+                    <div class="file-change-item">
+                        <span class="file-change-name" title="${filepath}">${filename}</span>
+                        <div class="file-change-diff">
+                            <span class="diff-added">+${data.added}</span>
+                            <span class="diff-removed">-${data.deleted}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            filesContentEl.innerHTML = fileItems;
+        }
+
+        if (linesAddedEl) linesAddedEl.textContent = `+${totalAdded}`;
+        if (linesDeletedEl) linesDeletedEl.textContent = `-${totalDeleted}`;
+        if (filesChangedEl) filesChangedEl.textContent = this.liveVisualization.fileChanges.size;
+    }
+
+    /**
+     * Update execution metrics
+     */
+    updateExecutionMetrics() {
+        const elapsed = Date.now() - this.liveVisualization.startTime;
+        this.liveVisualization.metrics.totalDuration = (elapsed / 1000).toFixed(1);
+
+        const durationEl = document.getElementById('totalDuration');
+        const successEl = document.getElementById('successCount');
+        const errorEl = document.getElementById('errorCount');
+
+        if (durationEl) durationEl.textContent = `${this.liveVisualization.metrics.totalDuration}s`;
+        if (successEl) successEl.textContent = this.liveVisualization.metrics.successCount;
+        if (errorEl) errorEl.textContent = this.liveVisualization.metrics.errorCount;
+    }
+
+    /**
+     * Main update loop for live view
+     */
+    updateLiveView() {
+        if (!this.liveVisualization.isActive) return;
+
+        this.updateExecutionMetrics();
+
+        // Continue updating while active
+        setTimeout(() => this.updateLiveView(), 500);
+    }
+
+    /**
+     * Stop live visualization
+     */
+    stopLiveVisualization() {
+        this.liveVisualization.isActive = false;
+        
+        // Final update
+        this.updateExecutionMetrics();
+    }
+
+    // 🎯 ===== END REAL-TIME VISUALIZATION ===== 🎯
+
+    async executeOrderStep(step) {
+        console.log(`📝 Executing step ${step.id}: ${step.tool}`, step.args);
+
+        // ⚠️ SAFETY CHECK: Dangerous command confirmation
+        if (step.tool === 'run_cmd' || step.tool === 'terminal.exec') {
+            const isDangerous = this.isDangerousCommand(step.args.cmd);
+            if (isDangerous.dangerous) {
+                const confirmed = confirm(
+                    `⚠️ TEHLIKELI KOMUT DETECTED!\n\n` +
+                    `Komut: ${step.args.cmd}\n` +
+                    `Tehlike: ${isDangerous.reason}\n\n` +
+                    `Bu komutu çalıştırmak istediğinizden emin misiniz?`
+                );
+                if (!confirmed) {
+                    throw new Error('User cancelled dangerous command execution');
+                }
+            }
         }
 
         switch (step.tool) {
@@ -7609,7 +9174,7 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                     throw new Error(`${step.tool} requires non-empty cmd string`);
                 }
                 // Use cwd from step or workspace root
-                const cwd = step.args.cwd || workspaceRoot;
+                const cwd = step.args.cwd || this.workspaceRoot;
                 return await this.runCommandWithAgent(step.args.cmd, cwd);
 
             case 'http.get':
@@ -7629,11 +9194,57 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
 
         switch (checkType) {
             case 'build':
-                // Try to run build command
+                // ✅ PRE-CHECK: Verify package.json exists before running build
                 try {
+                    const hasPackageJson = await this.checkFileExists('package.json');
+                    if (!hasPackageJson) {
+                        console.log('⏭️ BUILD skipped: package.json not found (normal for initial files)');
+                        return 'skip'; // Return special status instead of false
+                    }
+                    
                     const buildResult = await this.runCommandWithAgent('npm run build');
-                    return !buildResult.includes('error') && !buildResult.includes('failed');
-                } catch {
+                    
+                    // ✅ FIX: runCommandWithAgent returns object, not string
+                    if (!buildResult || typeof buildResult !== 'object') {
+                        console.warn('❌ BUILD failed: Invalid result format');
+                        return false;
+                    }
+                    
+                    const output = (buildResult.stdout || '') + (buildResult.stderr || '');
+                    const success = buildResult.success && !output.includes('error') && !output.includes('failed');
+                    console.log(`🔍 BUILD check: success=${buildResult.success}, hasErrors=${output.includes('error')}`);
+                    return success;
+                } catch (error) {
+                    console.warn('❌ BUILD failed:', error.message);
+                    return false;
+                }
+
+            case 'run':
+                // ✅ PRE-CHECK: Verify entry point exists before running
+                try {
+                    const hasIndexHtml = await this.checkFileExists('index.html');
+                    const hasPackageJson = await this.checkFileExists('package.json');
+                    
+                    if (!hasIndexHtml && !hasPackageJson) {
+                        console.log('⏭️ RUN skipped: No entry point (index.html/package.json) found');
+                        return 'skip';
+                    }
+                    
+                    // Try to run the project
+                    const runResult = await this.runCommandWithAgent('npm start');
+                    
+                    // ✅ FIX: runCommandWithAgent returns object, not string
+                    if (!runResult || typeof runResult !== 'object') {
+                        console.warn('❌ RUN failed: Invalid result format');
+                        return false;
+                    }
+                    
+                    const output = (runResult.stdout || '') + (runResult.stderr || '');
+                    const success = runResult.success && !output.includes('error');
+                    console.log(`🔍 RUN check: success=${runResult.success}, hasErrors=${output.includes('error')}`);
+                    return success;
+                } catch (error) {
+                    console.warn('❌ RUN failed:', error.message);
                     return false;
                 }
 
@@ -7673,34 +9284,131 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
     generateVerificationMatrix(results, acceptanceCriteria) {
         const matrix = Object.entries(results)
             .map(([check, status]) => {
-                const icon = status === 'pass' ? '✅' : status === 'fail' ? '❌' : '⏳';
+                // ✅ ENHANCEMENT: Add 'skip' status support
+                const icon = status === 'pass' ? '✅' : 
+                            status === 'fail' ? '❌' : 
+                            status === 'skip' ? '⏭️' : '⏳';
                 return `${icon} ${check.toUpperCase()}: ${status.toUpperCase()}`;
             })
             .join('\n');
 
         const passCount = Object.values(results).filter(v => v === 'pass').length;
         const failCount = Object.values(results).filter(v => v === 'fail').length;
+        const skipCount = Object.values(results).filter(v => v === 'skip').length;
+
+        const resultSummary = skipCount > 0 
+            ? `${passCount} PASS / ${failCount} FAIL / ${skipCount} SKIP`
+            : `${passCount} PASS / ${failCount} FAIL`;
 
         return `
 🧭 **VERIFICATION MATRIX**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${matrix}
 
-📊 **RESULTS**: ${passCount} PASS / ${failCount} FAIL
+📊 **RESULTS**: ${resultSummary}
 🎯 **ACCEPTANCE**: ${acceptanceCriteria ? acceptanceCriteria.join(', ') : 'N/A'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     }
 
     async checkFileExists(filePath) {
         try {
+            // ✅ KAPTAN YAMASI: Merkezi path çözümleme
+            const fullPath = this.resolvePath(filePath);
+            
             if (typeof electronAPI !== 'undefined' && electronAPI.readFile) {
-                await electronAPI.readFile(filePath);
+                await electronAPI.readFile(fullPath);
                 return true;
             }
             return false;
         } catch {
             return false;
         }
+    }
+
+    // ✅ KAPTAN YAMASI: Helper - package.json içinde dependency kontrolü
+    async containsInPackage(packageName) {
+        try {
+            const hasPackageJson = await this.checkFileExists('package.json');
+            if (!hasPackageJson) return false;
+            
+            const result = await this.readFileWithAgent('package.json');
+            const packageData = JSON.parse(result.content || result);
+            
+            return !!(packageData.dependencies?.[packageName] || 
+                     packageData.devDependencies?.[packageName]);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // ✅ SMART CONTEXT AWARENESS
+    async checkFileContext(filePath, content = null) {
+        const warnings = [];
+        const fileName = filePath.split('/').pop();
+
+        // Check 1: Next.js + index.html conflict (ENHANCED)
+        if (fileName === 'index.html') {
+            const hasNextConfig = await this.checkFileExists('next.config.js') || 
+                                  await this.checkFileExists('next.config.ts');
+            const hasNextInPackage = await this.containsInPackage('next');
+            const hasAppDir = await this.checkFileExists('app/layout.tsx') ||
+                             await this.checkFileExists('app/layout.js');
+            
+            if (hasNextConfig || hasNextInPackage || hasAppDir) {
+                warnings.push({
+                    severity: 'high',
+                    message: '⚠️ Next.js projelerinde index.html GEREKMEZ ve sorun çıkarabilir!',
+                    details: 'Next.js, app/ veya pages/ klasörlerini kullanır. index.html eklenmemeli.',
+                    suggestion: 'Bu dosya yerine app/page.tsx veya pages/index.tsx kullan.'
+                });
+            }
+        }
+
+        // Check 2: React + jQuery conflict
+        if (content && /jquery|jQuery|\$\(/.test(content)) {
+            const hasReact = await this.checkFileExists('package.json');
+            if (hasReact) {
+                try {
+                    const packageJsonResult = await this.readFileWithAgent('package.json');
+                    const packageData = JSON.parse(packageJsonResult.content || packageJsonResult);
+                    if (packageData.dependencies?.react || packageData.devDependencies?.react) {
+                        warnings.push({
+                            severity: 'medium',
+                            message: '⚠️ React projesinde jQuery kullanımı önerilmez',
+                            details: 'React ve jQuery farklı DOM yönetim paradigmaları kullanır.',
+                            suggestion: 'jQuery yerine React hooks ve state management kullan.'
+                        });
+                    }
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            }
+        }
+
+        // Check 3: TypeScript + .js file in src/
+        if (filePath.startsWith('src/') && fileName.endsWith('.js')) {
+            const hasTsConfig = await this.checkFileExists('tsconfig.json');
+            if (hasTsConfig) {
+                warnings.push({
+                    severity: 'low',
+                    message: '💡 TypeScript projesinde .js yerine .ts/.tsx kullan',
+                    details: 'Proje TypeScript kullanıyor ama .js dosyası ekleniyor.',
+                    suggestion: `${fileName} yerine ${fileName.replace('.js', '.ts')} kullan.`
+                });
+            }
+        }
+
+        // Check 4: Empty or placeholder content
+        if (content && content.trim().length < 50) {
+            warnings.push({
+                severity: 'high',
+                message: '❌ Dosya içeriği çok kısa veya placeholder',
+                details: `Dosya sadece ${content.trim().length} karakter içeriyor.`,
+                suggestion: 'Tam işlevsel kod ekle, placeholder bırakma.'
+            });
+        }
+
+        return warnings;
     }
 
     async executeAction(action) {
@@ -7872,6 +9580,19 @@ ${matrix}
             throw new Error('Dosya adı belirtilmedi');
         }
 
+        // 🎯 LIVE VISUALIZATION: Track file read for diff
+        const fullPath = this.resolvePath(fileName);
+        let oldContent = '';
+        try {
+            if (this.toolsSystem) {
+                const result = await this.toolsSystem.executeToolWithExceptionHandling('readFile', { filePath: fullPath });
+                oldContent = result.content || '';
+            }
+        } catch (e) {
+            // File doesn't exist yet, that's ok
+            oldContent = '';
+        }
+
         // ✅ NIGHT ORDERS FIX: Only validate truly invalid content, not short valid code
         // CRITICAL: console.log(), require(), etc. are valid even if short!
         const isTrulyInvalid = !content || 
@@ -7900,6 +9621,12 @@ ${matrix}
             console.log('✅ Content validated as real code (length:', content.length, ')');
         }
 
+        // 🎯 LIVE VISUALIZATION: Calculate diff
+        const diff = this.calculateDiff(oldContent, content);
+        if (this.liveVisualization.isActive) {
+            this.trackFileChange(fullPath, 'write', diff);
+        }
+
         try {
             // Use the new tool system for reliable file operations
             if (this.toolsSystem) {
@@ -7918,18 +9645,10 @@ ${matrix}
 
             // Fallback to electron API
             if (window.electronAPI && window.electronAPI.writeFile) {
-                // ✅ WORKSPACE ROOT FIX: Use getWorkspaceRoot() for consistency
-                const targetFolder = this.getWorkspaceRoot();
-                
-                if (!targetFolder) {
-                    throw new Error('❌ Workspace root not set. Cannot write file.');
-                }
-                
-                console.log('📁 Using workspace root for file:', targetFolder);
-
-                const filePath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
-                console.log('💾 Writing file with electronAPI:', filePath, 'content length:', content?.length || 0);
-                const result = await window.electronAPI.writeFile(filePath, content);
+                // ✅ KAPTAN YAMASI: Merkezi path çözümleme
+                const fullPath = this.resolvePath(fileName);
+                console.log('💾 Writing file with electronAPI:', fullPath, 'content length:', content?.length || 0);
+                const result = await window.electronAPI.writeFile(fullPath, content);
 
                 if (result.success) {
                     this.showNotification(`✅ ${fileName} dosyası oluşturuldu`, 'success');
@@ -9583,14 +11302,20 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
             throw new Error('Dosya adı belirtilmedi');
         }
 
+        // 🎯 LIVE VISUALIZATION: Track file read
+        const fullPath = this.resolvePath(fileName);
+        if (this.liveVisualization.isActive) {
+            this.trackFileChange(fullPath, 'read', null);
+        }
+
         try {
             // Use electron API if available
             if (window.electronAPI && window.electronAPI.readFile) {
-                const filePath = this.currentFolder ? `${this.currentFolder}/${fileName}` : fileName;
-                const result = await window.electronAPI.readFile(filePath);
+                // ✅ KAPTAN YAMASI: Merkezi path çözümleme
+                const result = await window.electronAPI.readFile(fullPath);
 
                 if (result.success) {
-                    return { success: true, content: result.content };
+                    return { success: true, content: result.content, path: fullPath };
                 } else {
                     throw new Error(result.error);
                 }
@@ -9613,17 +11338,87 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
             throw new Error('Komut belirtilmedi');
         }
 
-        // Use provided cwd or get workspace root
-        const workingDirectory = cwd || this.getWorkspaceRoot();
+        // ✅ KAPTAN YAMASI: Working directory her zaman initialWorkspaceRoot
+        const workingDirectory = cwd || this.initialWorkspaceRoot || this.getWorkspaceRoot();
         
         if (!workingDirectory) {
             throw new Error('Çalışma klasörü seçilmedi (cwd=null). Lütfen klasör seçin.');
         }
+        
+        console.log(`🔧 Command CWD: ${workingDirectory}`);
 
         try {
-            // Use electron API if available
+            // 🚀 PRIORITY 1: Try MCP server first (300s timeout vs 30s IPC)
+            // Check if MCP is available by trying to connect
+            let mcpAvailable = false;
+            try {
+                const healthCheck = await fetch('http://127.0.0.1:7777/health', {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(2000) // 2s timeout for health check
+                });
+                mcpAvailable = healthCheck.ok;
+            } catch (e) {
+                mcpAvailable = false;
+            }
+            
+            if (mcpAvailable) {
+                console.log(`🌐 Running command via MCP (5min timeout): ${command}`);
+                
+                try {
+                    // Parse command into cmd + args
+                    const parts = command.trim().split(/\s+/);
+                    const cmd = parts[0];
+                    const args = parts.slice(1);
+                    
+                    const mcpResult = await fetch('http://127.0.0.1:7777/shell/run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            cmd: cmd,           // First word (e.g., "npm")
+                            args: args,         // Rest as array (e.g., ["run", "build"])
+                            cwd: workingDirectory,
+                            timeout: 300000     // 5 minutes
+                        })
+                    });
+                    
+                    if (mcpResult.ok) {
+                        const data = await mcpResult.json();
+                        // MCP returns 'code' field, not 'exitCode'
+                        const exitCode = data.code !== undefined ? data.code : (data.exitCode || -1);
+                        console.log(`✅ MCP command completed: exitCode=${exitCode}, ok=${data.ok}`);
+                        
+                        // 📺 Display output in terminal widget if available
+                        if (typeof this.addTerminalLine === 'function') {
+                            if (data.stdout) {
+                                this.addTerminalLine(data.stdout.trim(), 'output');
+                            }
+                            if (data.stderr) {
+                                this.addTerminalLine(data.stderr.trim(), 'error');
+                            }
+                            const status = exitCode === 0 ? 'success' : 'error';
+                            this.addTerminalLine(`Exit code: ${exitCode}`, status);
+                        }
+                        
+                        return {
+                            success: data.ok && exitCode === 0,
+                            stdout: data.stdout || '',
+                            stderr: data.stderr || '',
+                            exitCode: exitCode
+                        };
+                    } else {
+                        const errorData = await mcpResult.json();
+                        console.warn('⚠️ MCP request failed:', errorData.error || 'Unknown error');
+                    }
+                } catch (mcpError) {
+                    console.warn('⚠️ MCP error, falling back to IPC:', mcpError.message);
+                }
+            } else {
+                console.warn('⚠️ MCP server not available (port 7777), using IPC');
+            }
+            
+            // 🔄 FALLBACK: Use Electron IPC (30s timeout)
             if (window.electronAPI && window.electronAPI.runCommand) {
-                console.log(`🔧 Running command in ${workingDirectory}:`, command);
+                console.log(`🔧 Running command via IPC (30s timeout): ${command}`);
                 const result = await window.electronAPI.runCommand(command, workingDirectory);
 
                 // ✅ ENHANCED ERROR HANDLING: Check for null/undefined result
@@ -9862,13 +11657,18 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
         const agentRoles = {
             analyzer: `
 Sen KayraDeniz Kod Analiz Uzmanısın. Proje kodlarını analiz et ve raporla.
-Araçlar: read_file, glob, list_dir
+Araçlar: read_file, glob, list_dir, run_cmd
 
 ÖNEMLİ KURALLAR:
 - Az konuş, çok yap! Direkt tool çağrısı yap.
 - Uzun açıklama yok, kısa sonuç ver.
 - Tool calling formatı: assistant(tool_calls) → tool → assistant
 - Gereksiz plan açıklaması yapma, direkt işe koyul!
+
+TERMINAL KULLANIMI:
+- run_cmd ile terminal komutları çalıştır (npm, git, node, echo, dir vs)
+- Komut sonuçları otomatik olarak terminalde gösterilir
+- Örnek: {"cmd": "npm --version"} veya {"cmd": "echo", "args": ["Merhaba"]}
 `,
             generator: `
 Sen KayraDeniz Kod Üretim Uzmanısın. Kod yaz, dosya oluştur, projeleri implement et.
@@ -9880,16 +11680,26 @@ Araçlar: write_file, read_file, run_cmd
 - Tool calling formatı: assistant(tool_calls) → tool → assistant
 - Gereksiz plan açıklaması yapma, direkt işe koyul!
 - Kullanıcı "yaz" dediğinde hemen write_file ile oluştur!
+
+TERMINAL KULLANIMI:
+- run_cmd ile build/test/install komutları çalıştır
+- npm install, npm run build, npm test gibi komutlar destekleniyor
+- Komut sonuçları otomatik olarak terminalde gösterilir
+- Örnek: {"cmd": "npm install express"} veya {"cmd": "npm run build"}
 `,
             documentation: `
 Sen KayraDeniz Dokümantasyon Uzmanısın. README, döküman, açıklama yaz.
-Araçlar: write_file, read_file, glob
+Araçlar: write_file, read_file, glob, run_cmd
 
 ÖNEMLİ KURALLAR:
 - Az konuş, çok yap! Direkt tool çağrısı yap.
 - Uzun açıklama yok, kısa sonuç ver.
 - Tool calling formatı: assistant(tool_calls) → tool → assistant
 - Gereksiz plan açıklaması yapma, direkt işe koyul!
+
+TERMINAL KULLANIMI:
+- Gerekirse run_cmd ile proje bilgisi topla (npm list, git status vs)
+- Örnek: {"cmd": "npm list --depth=0"}
 `,
             coordinator: `
 Sen KayraDeniz Proje Koordinatörüsün. Karmaşık görevleri organize et ve yürüt.
@@ -9900,6 +11710,14 @@ Araçlar: Tüm araçlar (list_dir, glob, read_file, write_file, run_cmd)
 - Uzun açıklama yok, kısa sonuç ver.
 - Tool calling formatı: assistant(tool_calls) → tool → assistant
 - Gereksiz plan açıklaması yapma, direkt işe koyul!
+
+TERMINAL KULLANIMI:
+- run_cmd ile tüm terminal komutları çalıştırılabilir
+- npm, npx, node, powershell, cmd, git, echo, dir, ls - hepsi destekleniyor
+- Komutlar MCP server üzerinden çalışır (5 dakika timeout)
+- Sonuçlar otomatik olarak terminal widget'ta gösterilir
+- Windows'ta echo gibi built-in komutlar için: {"cmd": "powershell", "args": ["-Command", "echo Merhaba"]}
+- Örnek: {"cmd": "npm", "args": ["run", "build"]}
 `
         };
 
@@ -10628,19 +12446,24 @@ Format:
         }
 
         try {
-            // Terminal komutunu çalıştır
-            const result = await window.electronAPI.runCommand(step.command);
+            // 🚀 Use runCommandWithAgent for MCP support (300s timeout + terminal display)
+            console.log(`🤖 Agent running terminal command: ${step.command}`);
+            const result = await this.runCommandWithAgent(step.command);
 
-            // Terminal output'unu göster
-            this.addTerminalOutput(`> ${step.command}`, 'command');
+            // Terminal output is already displayed by runCommandWithAgent via addTerminalLine
+            // Just show notification
             if (result.success) {
-                this.addTerminalOutput(result.output, 'output');
                 this.showNotification(`✅ Komut çalıştırıldı: ${step.command}`, 'success');
             } else {
-                this.addTerminalOutput(result.error, 'error');
-                throw new Error(`Komut hatası: ${result.error}`);
+                throw new Error(`Komut hatası: ${result.stderr || 'Unknown error'}`);
             }
+            
+            return result;
         } catch (error) {
+            // Display error in terminal if available
+            if (typeof this.addTerminalLine === 'function') {
+                this.addTerminalLine(`❌ Error: ${error.message}`, 'error');
+            }
             throw new Error(`Terminal komutu çalıştırılamadı: ${error.message}`);
         }
     }
@@ -11101,8 +12924,9 @@ Router Agent sizin için otomatik karar verir.
         this.currentFolder = folderPath;
         this.setWorkingDirectory(folderPath);
         
-        // Persist workspace root
-        this.setWorkspaceRoot(folderPath);
+        // ✅ STABILITY FIX: Don't change workspace root during navigation
+        // Only update navigation-related properties
+        // this.setWorkspaceRoot(folderPath);  // REMOVED
         
         this.refreshExplorer();
     }
@@ -11201,25 +13025,35 @@ Router Agent sizin için otomatik karar verir.
         // Create preview modal
         const modal = document.createElement('div');
         modal.className = 'file-preview-modal modal';
+        modal.id = 'filePreviewModal';
+        modal.dataset.filePath = filePath;
+        modal.dataset.originalContent = content;
+        
         modal.innerHTML = `
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 80%; max-height: 85vh;">
         <div class="modal-header">
           <h3><i class="fas fa-file-alt"></i> ${fileName}</h3>
-          <button class="modal-close-btn" onclick="this.closest('.file-preview-modal').remove()">
+          <button class="modal-close-btn" onclick="kodCanavari.closeFilePreview()">
             <i class="fas fa-times"></i>
           </button>
         </div>
-        <div class="modal-body">
-          <div class="file-preview-content">
+        <div class="modal-body" style="overflow-y: auto; max-height: calc(85vh - 120px);">
+          <div class="file-preview-content" id="filePreviewContent">
             <pre><code class="language-${this.getLanguageFromExtension(fileExtension)}">${this.escapeHtml(content)}</code></pre>
+          </div>
+          <div class="file-edit-content" id="fileEditContent" style="display: none;">
+            <textarea id="fileEditTextarea" style="width: 100%; min-height: 400px; font-family: 'Consolas', 'Monaco', monospace; font-size: 14px; padding: 10px; border: 1px solid #444; background: #1e1e1e; color: #d4d4d4; border-radius: 4px;">${this.escapeHtml(content)}</textarea>
           </div>
         </div>
         <div class="modal-footer">
-          <button onclick="kodCanavari.openFile('${filePath.replace(/\\/g, '\\\\')}')" class="open-file-btn">
+          <button id="editModeBtn" onclick="kodCanavari.toggleEditMode()" class="open-file-btn">
             <i class="fas fa-edit"></i> Düzenle
           </button>
-          <button onclick="this.closest('.file-preview-modal').remove()" class="close-btn">
-            Kapat
+          <button id="saveFileBtn" onclick="kodCanavari.saveFileFromPreview()" class="save-btn" style="display: none;">
+            <i class="fas fa-save"></i> Kaydet
+          </button>
+          <button onclick="kodCanavari.closeFilePreview()" class="close-btn">
+            <i class="fas fa-times"></i> Kapat
           </button>
         </div>
       </div>
@@ -11230,6 +13064,118 @@ Router Agent sizin için otomatik karar verir.
         // Apply syntax highlighting if Prism is available
         if (window.Prism) {
             window.Prism.highlightAllUnder(modal);
+        }
+        
+        // Store modal reference
+        this.currentPreviewModal = modal;
+    }
+    
+    toggleEditMode() {
+        const modal = document.getElementById('filePreviewModal');
+        if (!modal) return;
+        
+        const previewContent = document.getElementById('filePreviewContent');
+        const editContent = document.getElementById('fileEditContent');
+        const editModeBtn = document.getElementById('editModeBtn');
+        const saveFileBtn = document.getElementById('saveFileBtn');
+        
+        const isEditing = editContent.style.display !== 'none';
+        
+        if (isEditing) {
+            // Switch to preview mode
+            previewContent.style.display = 'block';
+            editContent.style.display = 'none';
+            editModeBtn.innerHTML = '<i class="fas fa-edit"></i> Düzenle';
+            saveFileBtn.style.display = 'none';
+        } else {
+            // Switch to edit mode
+            previewContent.style.display = 'none';
+            editContent.style.display = 'block';
+            editModeBtn.innerHTML = '<i class="fas fa-eye"></i> Önizleme';
+            saveFileBtn.style.display = 'inline-block';
+            
+            // Focus on textarea
+            const textarea = document.getElementById('fileEditTextarea');
+            if (textarea) {
+                textarea.focus();
+            }
+        }
+    }
+    
+    async saveFileFromPreview() {
+        const modal = document.getElementById('filePreviewModal');
+        if (!modal) return;
+        
+        const filePath = modal.dataset.filePath;
+        const textarea = document.getElementById('fileEditTextarea');
+        const newContent = textarea.value;
+        
+        try {
+            this.showLoading('Dosya kaydediliyor...');
+            
+            const result = await this.ipc.invoke('write-file', filePath, newContent);
+            
+            if (result.success) {
+                this.showNotification('Dosya başarıyla kaydedildi', 'success');
+                
+                // Update modal's original content
+                modal.dataset.originalContent = newContent;
+                
+                // Update preview display
+                const path = require('path');
+                const fileExtension = path.extname(filePath).toLowerCase();
+                const previewContent = document.getElementById('filePreviewContent');
+                previewContent.innerHTML = `<pre><code class="language-${this.getLanguageFromExtension(fileExtension)}">${this.escapeHtml(newContent)}</code></pre>`;
+                
+                // Re-apply syntax highlighting
+                if (window.Prism) {
+                    window.Prism.highlightAllUnder(previewContent);
+                }
+                
+                // Switch back to preview mode
+                this.toggleEditMode();
+                
+                // If file is open in a tab, update it
+                const existingTab = this.findTabByFilePath(filePath);
+                if (existingTab) {
+                    const tabData = this.tabs.get(existingTab);
+                    if (tabData && tabData.editor) {
+                        tabData.editor.setValue(newContent);
+                    }
+                }
+                
+            } else {
+                this.showNotification('Dosya kaydedilemedi: ' + result.error, 'error');
+            }
+            
+            this.hideLoading();
+            
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification('Kaydetme hatası: ' + error.message, 'error');
+        }
+    }
+    
+    closeFilePreview() {
+        const modal = document.getElementById('filePreviewModal');
+        if (modal) {
+            const textarea = document.getElementById('fileEditTextarea');
+            const editContent = document.getElementById('fileEditContent');
+            
+            // Check if in edit mode and has unsaved changes
+            if (editContent && editContent.style.display !== 'none' && textarea) {
+                const originalContent = modal.dataset.originalContent;
+                const currentContent = textarea.value;
+                
+                if (originalContent !== currentContent) {
+                    if (!confirm('Kaydedilmemiş değişiklikler var. Yine de kapatmak istiyor musunuz?')) {
+                        return;
+                    }
+                }
+            }
+            
+            modal.remove();
+            this.currentPreviewModal = null;
         }
     }
 
@@ -12073,6 +14019,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
             window.kodCanavari.toggleTheme();
+        });
+    }
+
+    // 🎯 LIVE VISUALIZATION: Minimize button
+    const minimizeLiveBtn = document.getElementById('minimizeLiveBtn');
+    if (minimizeLiveBtn) {
+        minimizeLiveBtn.addEventListener('click', () => {
+            const liveView = document.getElementById('agentLiveView');
+            if (liveView) {
+                liveView.classList.toggle('hidden');
+                minimizeLiveBtn.querySelector('i').classList.toggle('fa-minus');
+                minimizeLiveBtn.querySelector('i').classList.toggle('fa-eye');
+            }
         });
     }
 });

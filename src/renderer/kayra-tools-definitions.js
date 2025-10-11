@@ -234,7 +234,9 @@ export const listDirectoryToolImpl = async (args, extras) => {
     
     try {
         // Bu implementation'ı terminal komutu ile yapalım
-        const isWindows = process.platform === 'win32';
+        // Safe OS detection - works in both Electron and browser contexts
+        const isWindows = (typeof process !== 'undefined' && process.platform === 'win32') ||
+                          navigator.userAgent.toLowerCase().includes('win');
         const command = isWindows ? `dir "${targetPath}"` : `ls -la "${targetPath}"`;
         
         const output = await extras.terminal.execute(command);

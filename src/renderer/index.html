@@ -34,10 +34,20 @@
 
                 <!-- Top AI Controls (API Key, Model, Temperature) -->
                 <div class="top-ai-controls" id="topAiControls">
+                    <!-- ✨ OpenAI API Key -->
                     <div class="top-ai-item">
                         <input type="password" id="topApiKey" placeholder="OpenAI Key sk-..." class="top-api-input"
                             title="OpenAI API Key" aria-label="OpenAI API Key">
-                        <button class="save-btn" id="topSaveApiKey" title="Kaydet">
+                        <button class="save-btn" id="topSaveApiKey" title="Kaydet OpenAI Key">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- ✨ Claude API Key -->
+                    <div class="top-ai-item">
+                        <input type="password" id="topClaudeApiKey" placeholder="Claude Key sk-ant-..." class="top-api-input"
+                            title="Claude API Key" aria-label="Claude API Key">
+                        <button class="save-btn" id="topSaveClaudeApiKey" title="Kaydet Claude Key">
                             <i class="fas fa-save"></i>
                         </button>
                     </div>
@@ -45,9 +55,18 @@
                     <div class="top-ai-item">
                         <select id="topModelSelect" class="config-select" aria-label="OpenAI modeli seç"
                             title="OpenAI modeli seç">
-                            <option value="gpt-4">GPT-4</option>
-                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                            <option value="gpt-4-1106-preview">GPT-4 Turbo</option>
+                            <!-- 💰 Ekonomik Modeller (Test & Development) -->
+                            <optgroup label="💰 Ekonomik - Test/Geliştirme">
+                                <option value="gpt-4o-mini">GPT-4o Mini ⚡ (Çok Ucuz)</option>
+                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo 💰 (Ekonomik)</option>
+                            </optgroup>
+                            
+                            <!-- 🚀 Production Modeller -->
+                            <optgroup label="🚀 Production - Güçlü Modeller">
+                                <option value="gpt-4o">GPT-4o (Hızlı & Güçlü)</option>
+                                <option value="gpt-4-turbo">GPT-4 Turbo (Dengeli)</option>
+                                <option value="gpt-4">GPT-4 (Klasik)</option>
+                            </optgroup>
                         </select>
                     </div>
 
@@ -151,6 +170,85 @@
                             </button>
                         </div>
                         <div class="progress-steps" id="agentSteps"></div>
+                    </div>
+
+                    <!-- 🎯 REAL-TIME AGENT VISUALIZATION -->
+                    <div class="agent-live-view hidden" id="agentLiveView">
+                        <div class="live-view-header">
+                            <h5><i class="fas fa-eye"></i> Canlı İzleme</h5>
+                            <button class="minimize-live-btn" id="minimizeLiveBtn" title="Küçült">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+
+                        <!-- Current Operation Display -->
+                        <div class="current-operation" id="currentOperation">
+                            <div class="operation-icon">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                            <div class="operation-details">
+                                <div class="operation-type">Bekliyor...</div>
+                                <div class="operation-target">-</div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Timeline -->
+                        <div class="progress-timeline" id="progressTimeline">
+                            <div class="timeline-item completed">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-content">
+                                    <span class="timeline-step">Başlatıldı</span>
+                                    <span class="timeline-time">0.0s</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- File Changes Stats -->
+                        <div class="file-changes-stats" id="fileChangesStats">
+                            <div class="stats-header">
+                                <i class="fas fa-code"></i> Dosya Değişiklikleri
+                            </div>
+                            <div class="stats-content">
+                                <div class="stat-item">
+                                    <span class="stat-label">Eklenen:</span>
+                                    <span class="stat-value additions" id="linesAdded">+0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Silinen:</span>
+                                    <span class="stat-value deletions" id="linesDeleted">-0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Dosya:</span>
+                                    <span class="stat-value" id="filesChanged">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modified Files List -->
+                        <div class="modified-files-list" id="modifiedFilesList">
+                            <div class="files-header">
+                                <i class="fas fa-folder-open"></i> Değiştirilen Dosyalar
+                            </div>
+                            <div class="files-content" id="filesContent">
+                                <div class="empty-files">Henüz dosya değişikliği yok</div>
+                            </div>
+                        </div>
+
+                        <!-- Execution Metrics -->
+                        <div class="execution-metrics" id="executionMetrics">
+                            <div class="metric-row">
+                                <span class="metric-label"><i class="fas fa-clock"></i> Toplam Süre:</span>
+                                <span class="metric-value" id="totalDuration">0.0s</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label"><i class="fas fa-check-circle"></i> Başarılı:</span>
+                                <span class="metric-value success" id="successCount">0</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label"><i class="fas fa-times-circle"></i> Hatalı:</span>
+                                <span class="metric-value error" id="errorCount">0</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -338,6 +436,50 @@
 
                         <div class="chat-input-container">
                             <div class="chat-input-left">
+                                <!-- ✨ Provider Selection (OpenAI / Claude) -->
+                                <div class="provider-dropdown">
+                                    <select id="llmProviderSelect" title="AI Provider">
+                                        <option value="openai">🤖 OpenAI</option>
+                                        <option value="anthropic">🧠 Claude</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- ✨ Model Selection -->
+                                <div class="model-dropdown">
+                                    <select id="llmModelSelect" title="Model">
+                                        <!-- OpenAI Models -->
+                                        <optgroup label="🤖 OpenAI - Ekonomik" id="openaiEconomicGroup">
+                                            <option value="gpt-4o-mini">GPT-4o Mini ⚡</option>
+                                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo 💰</option>
+                                        </optgroup>
+                                        <optgroup label="🤖 OpenAI - Production" id="openaiProductionGroup">
+                                            <option value="gpt-4o">GPT-4o</option>
+                                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                            <option value="gpt-4">GPT-4</option>
+                                        </optgroup>
+                                        
+                                        <!-- Claude Models -->
+                                        <optgroup label="🧠 Claude - Ekonomik" id="claudeEconomicGroup" class="hidden">
+                                            <option value="claude-3-haiku-20240307">Claude 3 Haiku ⚡</option>
+                                        </optgroup>
+                                        <optgroup label="🧠 Claude - Dengeli" id="claudeBalancedGroup" class="hidden">
+                                            <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet 🎯</option>
+                                            <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                                        </optgroup>
+                                        <optgroup label="🧠 Claude - Production" id="claudeProductionGroup" class="hidden">
+                                            <option value="claude-3-opus-20240229">Claude 3 Opus 🚀</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                
+                                <!-- ✨ Tools Toggle -->
+                                <div class="tools-toggle">
+                                    <label title="Enable MCP Tools (File, Shell, Git)">
+                                        <input type="checkbox" id="toolsEnabledCheckbox" />
+                                        <span class="toggle-label">🔧 Tools</span>
+                                    </label>
+                                </div>
+                                
                                 <!-- AI Mode Dropdown (moved into chat area) -->
                                 <div class="ai-mode-dropdown">
                                     <select id="chatAiModeSelect" title="AI Modu">
@@ -646,6 +788,10 @@
     <script src="continue-agent-ui.js"></script>
     <!-- MCP Tools Manager -->
     <script src="mcp-tools-manager.js"></script>
+    <!-- Kayra Tools System (ES Modules) -->
+    <script type="module" src="kayra-tools-architecture.js"></script>
+    <script type="module" src="kayra-tools-definitions.js"></script>
+    <script type="module" src="kayra-tools-integration.js"></script>
     <!-- Main Application -->
     <script src="app.js"></script>
 </body>
