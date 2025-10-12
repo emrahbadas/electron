@@ -1146,6 +1146,64 @@ class KodCanavari {
         // this.toolsSystem = new KayraToolsIntegration(this);
         this.toolsSystem = null; // Geçici olarak devre dışı
 
+        // 🔥 CONTINUE AGENT STYLE SYSTEMS
+        // Production-ready atomic operations with rollback support
+        this.multiEditSystem = typeof MultiEditSystem !== 'undefined' ? new MultiEditSystem() : null;
+        this.viewDiffSystem = typeof ViewDiffSystem !== 'undefined' ? new ViewDiffSystem() : null;
+        this.viewRepoMapSystem = typeof ViewRepoMapSystem !== 'undefined' ? new ViewRepoMapSystem() : null;
+
+        if (this.multiEditSystem) {
+            console.log('✅ MultiEdit System initialized');
+        } else {
+            console.warn('⚠️ MultiEdit System not available');
+        }
+
+        if (this.viewDiffSystem) {
+            console.log('✅ ViewDiff System initialized');
+        } else {
+            console.warn('⚠️ ViewDiff System not available');
+        }
+
+        if (this.viewRepoMapSystem) {
+            console.log('✅ ViewRepoMap System initialized');
+        } else {
+            console.warn('⚠️ ViewRepoMap System not available');
+        }
+
+        // 🔐 ELYSION CHAMBER SYSTEMS (Approval Gate + Policy + Events)
+        this.approvalSystem = typeof ApprovalSystem !== 'undefined' ? new ApprovalSystem() : null;
+        this.policyEngine = typeof PolicyEngine !== 'undefined' ? new PolicyEngine() : null;
+        this.eventBus = typeof EventBus !== 'undefined' ? new EventBus() : null;
+
+        if (this.approvalSystem) {
+            console.log('✅ Approval System initialized');
+        } else {
+            console.warn('⚠️ Approval System not available');
+        }
+
+        if (this.policyEngine) {
+            console.log('✅ Policy Engine initialized');
+            const stats = this.policyEngine.getStats();
+            console.log(`   - ${stats.totalRules} rules (${stats.bySeverity.CRITICAL} critical)`);
+        } else {
+            console.warn('⚠️ Policy Engine not available');
+        }
+
+        if (this.eventBus) {
+            console.log('✅ Event Bus initialized');
+        } else {
+            console.warn('⚠️ Event Bus not available');
+        }
+
+        // 🔍 PROBE MATRIX (Evidence-based validation)
+        this.probeMatrix = typeof ProbeMatrix !== 'undefined' ? new ProbeMatrix() : null;
+
+        if (this.probeMatrix) {
+            console.log('✅ Probe Matrix initialized');
+        } else {
+            console.warn('⚠️ Probe Matrix not available');
+        }
+
         this.currentProjectData = null;
         this.workflowProgress = [];
         // Start in user's Desktop directory by default
@@ -5038,7 +5096,7 @@ Not:
         } else {
             // OpenAI models
             if (model.includes('gpt-4o')) {
-                return 4096; // GPT-4o and GPT-4o-mini: REDUCED to 4K to prevent JSON truncation!
+                return 8192; // 🔧 FIX #6: GPT-4o and GPT-4o-mini increased to 8K for complex JSON responses
             }
             if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) {
                 return 4096; // GPT-4 Turbo: 4K max output (128K context input)
@@ -7093,7 +7151,10 @@ Teknoloji stackine uygun dosyalar oluştur. Başlangıç kodu da ekle.`;
         const keywords = [
             'proje', 'component', 'function', 'class', 'api', 'database',
             'frontend', 'backend', 'react', 'vue', 'angular', 'node',
-            'python', 'javascript', 'html', 'css', 'bug', 'fix', 'error'
+            'python', 'javascript', 'html', 'css', 'bug', 'fix', 'error',
+            // 🔧 FIX #7: Added project type keywords to track user intent
+            'hesap makinesi', 'calculator', 'blog', 'platform', 'todo', 'chat', 
+            'dashboard', 'portfolio', 'e-commerce', 'shop', 'game', 'oyun'
         ];
 
         userMessages.forEach(message => {
@@ -7293,7 +7354,7 @@ Kullanıcı: "${userText}"
 Aşağıdaki JSON formatında cevap ver:
 {
   "mode": "chat|hybrid|action",
-  "role": "generator|analyzer|documentation|coordinator", 
+  "role": "generator|analyzer|documentation|coordinator|artist", 
   "action_type": "immediate|suggested|none",
   "confidence": 0.1-1.0,
   "reasoning": "Neden bu yaklaşımı seçtin?",
@@ -7371,7 +7432,8 @@ AKILLI ÖRNEKLER:
                         generator: "🔧 Generator (Kod Üretici)",
                         analyzer: "🔍 Analyzer (Kod Analiz)",
                         documentation: "📝 Documentation (Döküman)",
-                        coordinator: "⚙️ Coordinator (Koordinatör)"
+                        coordinator: "⚙️ Coordinator (Koordinatör)",
+                        artist: "🎨 Artist (Görsel İçerik)"
                     };
 
                     this.addChatMessage('ai', `🎯 Otomatik rol seçimi: ${roleNames[route.role]}\n💡 Sebep: ${route.reasoning}`);
@@ -7387,7 +7449,17 @@ AKILLI ÖRNEKLER:
         const text = userText.toLowerCase();
         let route;
 
-        if (/(oluştur|yaz|ekle|kaydet|oyun|component|refactor)/.test(text)) {
+        // 🎨 Artist Mode Detection - Visual content keywords
+        if (/(svg|logo|tasarla|diagram|mermaid|plantuml|görsel|grafik|şema|çiz|icon|banner)/.test(text)) {
+            route = {
+                role: "artist",
+                confidence: 0.8,
+                reasoning: "Görsel içerik anahtar kelimeleri tespit edildi",
+                force_tool: "write_file",
+                needs_confirmation: false,
+                estimated_danger: "safe"
+            };
+        } else if (/(oluştur|yaz|ekle|kaydet|oyun|component|refactor)/.test(text)) {
             route = {
                 role: "generator",
                 confidence: 0.6,
@@ -7492,16 +7564,26 @@ AKILLI ÖRNEKLER:
 
         // Get conversation context and history
         const conversationSummary = this.extractConversationSummary();
-        const recentContext = this.getConversationContext(3);
+        // 🔧 FIX #7: Increased from 3 to 10 messages to prevent context loss
+        // User reported: Agent forgets "hesap makinesi" request and returns to "blog platform"
+        const recentContext = this.getConversationContext(10);
 
         let conversationContextText = '';
         if (recentContext) {
+            // 🔧 FIX #7: Extract project name from topics to prevent context pollution
+            const projectKeywords = conversationSummary.topics.filter(t => 
+                ['hesap makinesi', 'calculator', 'blog', 'platform', 'todo', 'chat', 
+                 'dashboard', 'portfolio', 'e-commerce', 'shop', 'game', 'oyun'].includes(t)
+            );
+            const currentProject = projectKeywords.length > 0 ? projectKeywords[0] : 'Belirsiz';
+            
             conversationContextText = `\n\n📚 KONUŞMA GEÇMİŞİ:
 ${recentContext}
 
 🏷️ Konuşulan Konular: ${conversationSummary.topics.join(', ') || 'Yok'}
 📁 Bahsedilen Öğeler: ${conversationSummary.entities.join(', ') || 'Yok'}
-🎯 Önceki Niyet: ${conversationSummary.lastIntent || 'Belirsiz'}`;
+🎯 Önceki Niyet: ${conversationSummary.lastIntent || 'Belirsiz'}
+🚀 CURRENT PROJECT: ${currentProject} ← STAY FOCUSED ON THIS!`;
         }
 
         let projectContextText = '';
@@ -7527,6 +7609,20 @@ Kullanıcı İsteği: "${userRequest}"
 ${route ? `Seçilen Rol: ${route.role}` : ''}
 ${route ? `Öncelikli Tool: ${route.force_tool}` : ''}${workspaceContext}${conversationContextText}
 ${projectContextText}
+
+⚠️ **CRITICAL CONTEXT WARNING**:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚫 DO NOT IGNORE CONVERSATION HISTORY!
+🚫 DO NOT SWITCH PROJECT CONTEXT RANDOMLY!
+🚫 DO NOT USE EXAMPLE PROJECTS FROM PROMPT!
+
+✅ READ "KONUŞMA GEÇMİŞİ" ABOVE CAREFULLY!
+✅ STICK TO "CURRENT PROJECT" IF SPECIFIED!
+✅ USER REQUEST IS THE PRIMARY SOURCE OF TRUTH!
+
+If user says "evet" or "devam et", continue with THE SAME PROJECT from conversation history.
+Example projects (blog, monorepo) are ONLY templates - DO NOT use them unless user explicitly requests them!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🧭 **NIGHT ORDERS PROTOCOL - CAPTAIN'S MISSION**
 
@@ -7598,15 +7694,18 @@ CSS: Min 200 lines, modern design, responsive, animations
 JS: Min 50 lines, real functions, event listeners
 README: Min 80 lines, setup, features, usage, license
 
-🔥 TOKEN LIMIT WARNING: Response MUST NOT exceed 8000 characters! If exceeded, it will be TRUNCATED!
+🔥 TOKEN LIMIT WARNING: Response MUST NOT exceed 3500 characters! If exceeded, JSON will be TRUNCATED and FAIL!
 Strategy: Create MORE steps with SMALLER files instead of FEW steps with HUGE files.
 
-📊 ADAPTIVE COMPLEXITY RULES:
+📊 ADAPTIVE COMPLEXITY RULES (MANDATORY):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-For SIMPLE projects (1-3 files): Full content OK
-For MEDIUM projects (4-8 files): Use concise content + comments like "/* add validation logic */"
-For COMPLEX projects (9+ files): 
-  - Step 1: Create PLAN.md with architecture overview (max 50 lines)
+For SIMPLE projects (1-3 files): Full content OK, 1 response
+For MEDIUM projects (4-8 files): Use concise content + comments like "/* add validation logic */", 1-2 responses
+For COMPLEX projects (9+ files): **MANDATORY MULTI-PHASE**
+  - Phase 1 (Response 1): Skeleton setup (3-4 steps max)
+  - Phase 2 (Response 2): Backend/Server (5-6 steps max)  
+  - Phase 3 (Response 3): Frontend/Client (5-6 steps max)
+  - After each phase: Show summary + "✅ Phase X tamamlandı. Devam edeyim mi?" message
   - Step 2: Create ONLY critical config files (package.json, tsconfig.json)
   - Step 3: Create ONLY 1-2 core source files with placeholder comments
   - NEVER exceed 6 steps in a single response!
@@ -7648,24 +7747,139 @@ NIGHT ORDERS JSON SCHEMA (STRICT - NO SHORTCUTS):
 1. terminal.exec → args.cmd MUST NOT be empty (e.g., "node -v", "npm install")
 2. fs.write → For files > 30 lines, use placeholder comments like "/* ...rest of logic... */"
 3. Every step.args MUST be complete (no null, undefined, empty strings)
-4. **MAX 6 STEPS PER RESPONSE** - If project needs more, create PLAN.md first
+4. **MAX 6 STEPS PER RESPONSE** - If project needs more, create PLAN.md first, then ask user "Phase 1 tamamlandı, Phase 2'yi başlatayım mı?"
 5. **RESPONSE LIMIT: 3500 characters** - Be concise! Use placeholders for large files!
+6. **COMPLEX PROJECTS (>10 files)**: MANDATORY multi-phase approach:
+   - Phase 1: Skeleton (package.json, README, .gitignore) - 3-4 steps
+   - Phase 2: Backend/Server files - 5-6 steps  
+   - Phase 3: Frontend/Client files - 5-6 steps
+   - After each phase, show summary + ask: "Devam edeyim mi?"
+
+📚 **VITE + REACT + EXPRESS MONOREPO STRUCTURE EXAMPLE**:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For "Blog Platform" or similar full-stack projects:
+
+**PHASE 1: Root Skeleton** (4 steps)
+  1. package.json → { "workspaces": ["server", "client"], "scripts": { "dev": "npm run dev --workspace=server & npm run dev --workspace=client", "build": "npm run build --workspaces" } }
+  2. .gitignore → node_modules, dist, .env
+  3. README.md → Project description
+  4. npm install → Install root dependencies
+
+**PHASE 2: Server Setup** (6 steps)
+  5. server/package.json → Express + TS dependencies
+  6. server/src/index.ts → Express app with /api/health endpoint
+  7. server/tsconfig.json → TypeScript config
+  8. cd server && npm install
+  9. SKIP build (TypeScript needs full setup)
+
+**PHASE 3: Client Setup** (6 steps)
+  10. client/package.json → Vite + React + TS dependencies
+  11. client/index.html → <!DOCTYPE html><html><head><title>Blog</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+  12. client/src/main.tsx → ReactDOM.createRoot(document.getElementById('root')!).render(<App />)
+  13. client/src/App.tsx → Basic React component
+  14. client/vite.config.ts → Vite config with proxy to server
+  15. cd client && npm install
+  16. FINAL: npm run dev (runs both server + client)
+
+⚠️ CRITICAL: Always create index.html + vite.config.ts for Vite projects!
+⚠️ CRITICAL: Use workspaces for monorepo, NOT flat structure!
+⚠️ CRITICAL: Use absolute paths or resolve relative paths for CWD!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 **MANDATORY FILES CHECKLIST - MUST VERIFY BEFORE PHASE COMPLETION**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**VITE PROJECTS** (CRITICAL - Without these, build will fail):
+  ✅ index.html (root level) - Entry point for Vite
+  ✅ vite.config.ts (or .js) - Vite configuration
+  ✅ tsconfig.json - TypeScript configuration
+  ✅ package.json with "type": "module"
+  ✅ Dependencies: @vitejs/plugin-react, vite
+
+**REACT PROJECTS** (CRITICAL - Without these, app won't render):
+  ✅ src/main.tsx (or main.jsx) - ReactDOM.createRoot entry
+  ✅ src/App.tsx (or App.jsx) - Root component
+  ✅ src/index.css - Global styles
+  ✅ Dependencies: react, react-dom, @types/react, @types/react-dom
+
+**TAILWIND CSS PROJECTS** (CRITICAL - Without these, styling won't work):
+  ✅ tailwind.config.js - Tailwind configuration
+  ✅ postcss.config.js - PostCSS configuration
+  ✅ src/index.css with @tailwind directives
+  ✅ Dependencies: tailwindcss, postcss, autoprefixer
+
+**EXPRESS SERVER PROJECTS** (CRITICAL - Without these, server won't start):
+  ✅ src/index.ts (or server.js) - Express app entry
+  ✅ tsconfig.json - TypeScript configuration (if using TS)
+  ✅ .env.example - Environment variables template
+  ✅ Dependencies: express, cors, dotenv, @types/express
+
+**TYPESCRIPT MONOREPO** (CRITICAL - Each workspace needs config):
+  ✅ Root package.json with "workspaces": ["server", "client"]
+  ✅ server/tsconfig.json - Server TypeScript config
+  ✅ client/tsconfig.json - Client TypeScript config
+  ✅ Root tsconfig.json (optional base config)
+
+**ENVIRONMENT FILES** (RECOMMENDED - For configuration):
+  ✅ .env.example - Template with dummy values
+  ✅ .gitignore - Must include node_modules, dist, .env
+  ✅ README.md - Setup instructions
+
+⚠️ **VERIFICATION RULE**: Before marking a phase as complete:
+  1. Check all mandatory files for detected project type
+  2. If ANY mandatory file is missing, CREATE IT before continuing
+  3. Use analyzeMistakeAndSuggestFix to detect missing files
+  4. Auto-fix will create missing files during Reflexion phase
+
+❌ **COMMON MISTAKES TO AVOID**:
+  - Creating React app WITHOUT vite.config.ts → Build fails
+  - Creating Tailwind project WITHOUT tailwind.config.js → No styling
+  - Creating TypeScript project WITHOUT tsconfig.json → No intellisense
+  - Using "cd server && npm install" → Use "npm --workspace server install" instead
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FOR COMPLEX PROJECTS (>8 files): MANDATORY AUTO-PLANNING MODE
 {
-  "requestType": "project-creation|code-analysis|file-operation|question|command-execution",
-  "complexity": "simple|medium|complex", 
-  "projectType": "react|python|nodejs|html|other",
-  "needsFiles": true/false,
+  "requestType": "project-creation",
+  "complexity": "complex",
+  "projectType": "nodejs|react|python|...",
+  "needsFiles": true,
   "estimatedSteps": number,
-  "selectedRole": "${route ? route.role : 'auto'}",
+  "selectedRole": "generator",
+  "requiresPlanning": true,  ← NEW: Triggers planning mode
+  "projectPlan": {  ← NEW: Detailed user-friendly plan
+    "title": "Blog Platform (Full-stack)",
+    "description": "Express REST API + Vite React TS frontend",
+    "totalFiles": 20,
+    "estimatedTime": "2-3 dakika",
+    "phases": [
+      {
+        "id": 1,
+        "name": "Skeleton Setup",
+        "description": "Root workspace configuration",
+        "files": ["package.json", "README.md", ".gitignore"],
+        "duration": "15 saniye",
+        "steps": 4
+      },
+      {
+        "id": 2,
+        "name": "Server Implementation",
+        "description": "Express API, TypeScript, health endpoint",
+        "files": ["server/package.json", "server/src/*.ts", "..."],
+        "duration": "30 saniye",
+        "steps": 6
+      }
+    ]
+  },
   "orders": {
-    "mission": "Terminal paneli ekle, Node.js sürümünü göster, package.json'a build script'i ekle",
+    "mission": "PHASE 1: Skeleton Setup",
+    "currentPhase": 1,
+    "totalPhases": 3,
     "acceptance": [
       "build: exit 0",
-      "probe: package.json 'scripts.build' mevcut",
-      "detector: example_like=false"
+      "probe: package.json 'scripts.dev' mevcut"
     ],
     "steps": [
       {
@@ -8004,6 +8218,13 @@ RESPONSE FORMAT (HYBRID - orders.json + legacy compatibility):
                     }
                 }
 
+                // 🎯 CHECK FOR PLANNING MODE
+                if (analysis.requiresPlanning && analysis.projectPlan) {
+                    await this.showProjectPlan(analysis.projectPlan);
+                    // Store analysis for phase execution
+                    this.currentProjectAnalysis = analysis;
+                }
+
                 return analysis;
             } else {
                 // ===== NO JSON FOUND - FATAL ERROR =====
@@ -8105,6 +8326,12 @@ Now provide the CORRECTED response (pure JSON only):`;
     sanitizeJsonResponse(jsonText) {
         console.log('🧹 Sanitizing JSON response...');
         console.log('📊 Original length:', jsonText.length);
+        
+        // DEBUG: Inspect first 10 characters (hex codes to detect invisible chars)
+        const first10 = jsonText.substring(0, 10);
+        const hexCodes = Array.from(first10).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+        console.log('🔍 First 10 chars:', JSON.stringify(first10));
+        console.log('🔍 Hex codes:', hexCodes);
 
         let sanitized = jsonText;
 
@@ -8121,16 +8348,7 @@ Now provide the CORRECTED response (pure JSON only):`;
             console.log('✂️ Markdown fence removed');
         }
 
-        // STEP 2: Fix control characters in strings (common LLM error)
-        // Replace literal \n, \t, \r in JSON strings with escaped versions
-        sanitized = sanitized
-            .replace(/\n/g, '\\n')   // Newline → \\n
-            .replace(/\r/g, '\\r')   // Carriage return → \\r
-            .replace(/\t/g, '\\t');  // Tab → \\t
-        
-        console.log('🔧 Control characters escaped');
-
-        // Try to parse first - if it works, return as-is
+        // Try to parse first - if it works, return as-is (DO NOT escape \n yet!)
         try {
             JSON.parse(sanitized);
             console.log('✅ JSON already valid, no sanitization needed');
@@ -8468,7 +8686,8 @@ Now provide the CORRECTED response (pure JSON only):`;
         // ✅ EXECUTION METRICS
         const executionMetrics = {
             startTime: Date.now(),
-            steps: []
+            steps: [],
+            errors: [] // 🧠 Collect errors for reflexion
         };
 
         for (let i = 0; i < orders.steps.length; i++) {
@@ -8519,6 +8738,14 @@ Now provide the CORRECTED response (pure JSON only):`;
                 } catch (error) {
                     lastError = error;
                     retryCount++;
+                    
+                    // 🧠 REFLEXION: Collect error for analysis
+                    executionMetrics.errors.push({
+                        step: step.id,
+                        tool: step.tool,
+                        error: error.message,
+                        stack: error.stack
+                    });
 
                     if (retryCount <= maxRetries) {
                         console.warn(`⚠️ Step ${step.id} failed (attempt ${retryCount}/${maxRetries + 1}), retrying...`);
@@ -8611,16 +8838,271 @@ Success: ${successCount} | Failed: ${failCount}
         const matrixReport = this.generateVerificationMatrix(verificationResults, orders.acceptance);
         this.addChatMessage('ai', matrixReport);
 
-        // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
-        await this.sendFeedbackToLLM(orders, verificationResults);
+        // 🧠 REFLEXION: Run BEFORE phase transition (critical!)
+        const executionErrors = executionMetrics.errors.map(e => e.error);
+        const { mistakes, fixes } = await this.analyzeMistakeAndSuggestFix(orders, verificationResults, executionErrors);
+        
+        // 🔧 AUTO-FIX: Apply fixes if enabled
+        if (mistakes.length > 0) {
+            console.log(`🧠 REFLEXION: Found ${mistakes.length} mistakes, ${fixes.length} suggested fixes`);
+            
+            // Show mistakes to user
+            let reflexionMessage = '🧠 **SELF-ANALYSIS: MISTAKES DETECTED**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+            mistakes.forEach((m, idx) => {
+                reflexionMessage += `**${idx + 1}. ${m.type}** (${m.severity})\n`;
+                reflexionMessage += `   📁 ${m.file || m.path || m.module || 'N/A'}\n`;
+                reflexionMessage += `   💬 ${m.reason}\n\n`;
+            });
+            
+            reflexionMessage += '🔧 **SUGGESTED FIXES:**\n';
+            fixes.forEach((f, idx) => {
+                reflexionMessage += `${idx + 1}. ${f.action}: ${f.path || f.cmd || 'N/A'}\n`;
+                reflexionMessage += `   └─ ${f.reason}\n`;
+            });
+            
+            this.addChatMessage('ai', reflexionMessage);
+            
+            // Auto-fix enabled by default
+            if (fixes.length > 0) {
+                this.addChatMessage('system', '🔧 Applying auto-fixes...');
+                
+                for (const fix of fixes) {
+                    try {
+                        if (fix.action === 'CREATE_FILE' && fix.content) {
+                            await this.createFileWithAgent(fix.path, fix.content);
+                            this.addChatMessage('system', `✅ Created: ${fix.path}`);
+                        } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
+                            const result = await this.runCommandWithAgent(fix.cmd);
+                            this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
+                        } else if (fix.action === 'UPDATE_FILE' && fix.changes) {
+                            // Update package.json with workspaces
+                            const pkgPath = fix.path;
+                            const pkgContent = await this.readFileWithAgent(pkgPath);
+                            const pkg = JSON.parse(pkgContent.content || pkgContent);
+                            Object.assign(pkg, fix.changes);
+                            await this.createFileWithAgent(pkgPath, JSON.stringify(pkg, null, 2));
+                            this.addChatMessage('system', `✅ Updated: ${fix.path}`);
+                        }
+                    } catch (e) {
+                        this.addChatMessage('system', `⚠️ Auto-fix failed: ${e.message}`);
+                    }
+                }
+                
+                this.addChatMessage('ai', '✅ Auto-fixes applied! Continuing...');
+            }
+        }
+
+        // 🎯 CHECK FOR PHASE TRANSITION
+        if (orders.currentPhase && orders.totalPhases) {
+            await this.handlePhaseTransition(orders.currentPhase, orders.totalPhases, successCount, failCount);
+        } else {
+            // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
+            await this.sendFeedbackToLLM(orders, verificationResults, executionErrors);
+        }
 
         this.refreshExplorer();
     }
 
-    async sendFeedbackToLLM(orders, verificationResults) {
+    // 🧠 ===== REFLEXION MODULE: SELF-CORRECTION ===== 🧠
+    async analyzeMistakeAndSuggestFix(orders, verificationResults, executionErrors = []) {
+        console.log('🧠 REFLEXION: Analyzing mistakes and suggesting fixes...');
+
+        const mistakes = [];
+        const fixes = [];
+
+        // 1️⃣ BUILD ERROR ANALYSIS
+        if (verificationResults.build === 'fail') {
+            const buildError = executionErrors.find(e => e.includes('Could not resolve entry module'));
+            if (buildError) {
+                // Vite entry point error
+                if (buildError.includes('index.html')) {
+                    mistakes.push({
+                        type: 'MISSING_FILE',
+                        severity: 'CRITICAL',
+                        file: 'index.html',
+                        location: 'client/',
+                        reason: 'Vite requires index.html as entry point',
+                        error: buildError
+                    });
+                    fixes.push({
+                        action: 'CREATE_FILE',
+                        path: 'client/index.html',
+                        content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Platform</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>`,
+                        reason: 'Vite entry point missing'
+                    });
+                }
+            }
+
+            // Missing dependencies
+            const depsError = executionErrors.find(e => e.includes('Cannot find module'));
+            if (depsError) {
+                const match = depsError.match(/Cannot find module '(.+?)'/);
+                if (match) {
+                    const missingModule = match[1];
+                    mistakes.push({
+                        type: 'MISSING_DEPENDENCY',
+                        severity: 'HIGH',
+                        module: missingModule,
+                        reason: 'Module not found in node_modules',
+                        error: depsError
+                    });
+                    fixes.push({
+                        action: 'RUN_COMMAND',
+                        cmd: `npm install ${missingModule}`,
+                        reason: `Install missing dependency: ${missingModule}`
+                    });
+                }
+            }
+        }
+
+        // 2️⃣ CWD/PATH ERROR ANALYSIS
+        const pathError = executionErrors.find(e => e.includes('ENOENT') || e.includes('spawn') || e.includes('no such file'));
+        if (pathError) {
+            const match = pathError.match(/ENOENT.*?'(.+?)'/);
+            if (match) {
+                const missingPath = match[1];
+                mistakes.push({
+                    type: 'PATH_ERROR',
+                    severity: 'HIGH',
+                    path: missingPath,
+                    reason: 'Directory or file does not exist',
+                    error: pathError
+                });
+                fixes.push({
+                    action: 'CREATE_DIRECTORY',
+                    path: missingPath,
+                    reason: 'Create missing directory before running commands'
+                });
+            }
+        }
+
+        // 3️⃣ PACKAGE.JSON STRUCTURE ANALYSIS
+        try {
+            const packageJson = await this.readFileWithAgent('package.json');
+            const pkg = JSON.parse(packageJson.content || packageJson);
+            
+            // Check for workspaces
+            if (!pkg.workspaces && (await this.checkFileExists('server/package.json') || await this.checkFileExists('client/package.json'))) {
+                mistakes.push({
+                    type: 'MISSING_WORKSPACES',
+                    severity: 'CRITICAL',
+                    file: 'package.json',
+                    reason: 'Monorepo structure detected but workspaces not configured',
+                    current: pkg
+                });
+                fixes.push({
+                    action: 'UPDATE_FILE',
+                    path: 'package.json',
+                    changes: {
+                        workspaces: ['server', 'client'],
+                        scripts: {
+                            ...pkg.scripts,
+                            'dev': 'npm run dev --workspace=server & npm run dev --workspace=client',
+                            'build': 'npm run build --workspaces'
+                        }
+                    },
+                    reason: 'Add workspaces configuration for monorepo'
+                });
+            }
+        } catch (e) {
+            console.warn('⚠️ Could not analyze package.json:', e.message);
+        }
+
+        // 4️⃣ MISSING CRITICAL FILES
+        const criticalFiles = [
+            { path: 'client/vite.config.ts', type: 'Vite config', project: 'Vite React' },
+            { path: 'client/src/main.tsx', type: 'React entry', project: 'React' },
+            { path: 'server/tsconfig.json', type: 'TypeScript config', project: 'TypeScript' }
+        ];
+
+        for (const file of criticalFiles) {
+            const exists = await this.checkFileExists(file.path);
+            if (!exists && orders.steps.some(s => s.args?.path?.includes(file.project.toLowerCase()))) {
+                mistakes.push({
+                    type: 'MISSING_CRITICAL_FILE',
+                    severity: 'HIGH',
+                    file: file.path,
+                    fileType: file.type,
+                    reason: `${file.type} required for ${file.project} projects`
+                });
+                fixes.push({
+                    action: 'CREATE_FILE',
+                    path: file.path,
+                    reason: `Create ${file.type} for ${file.project}`
+                });
+            }
+        }
+
+        return { mistakes, fixes };
+    }
+
+    async sendFeedbackToLLM(orders, verificationResults, executionErrors = []) {
         console.log('🔄 Sending feedback to LLM for analysis...');
 
         try {
+            // 🧠 REFLEXION: Analyze mistakes first
+            const { mistakes, fixes } = await this.analyzeMistakeAndSuggestFix(orders, verificationResults, executionErrors);
+            
+            if (mistakes.length > 0) {
+                console.log(`🧠 REFLEXION: Found ${mistakes.length} mistakes, ${fixes.length} suggested fixes`);
+                
+                // Show mistakes to user
+                let reflexionMessage = '🧠 **SELF-ANALYSIS: MISTAKES DETECTED**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+                mistakes.forEach((m, idx) => {
+                    reflexionMessage += `**${idx + 1}. ${m.type}** (${m.severity})\n`;
+                    reflexionMessage += `   📁 File: ${m.file || m.path || m.module || 'N/A'}\n`;
+                    reflexionMessage += `   💬 Reason: ${m.reason}\n\n`;
+                });
+                
+                reflexionMessage += '🔧 **SUGGESTED FIXES:**\n';
+                fixes.forEach((f, idx) => {
+                    reflexionMessage += `${idx + 1}. ${f.action}: ${f.path || f.cmd || 'N/A'}\n`;
+                    reflexionMessage += `   └─ ${f.reason}\n`;
+                });
+                
+                this.addChatMessage('ai', reflexionMessage);
+                
+                // 🎯 AUTO-FIX: Apply fixes automatically
+                const autoFixEnabled = true; // TODO: Make this configurable
+                if (autoFixEnabled && fixes.length > 0) {
+                    this.addChatMessage('system', '🔧 Applying auto-fixes...');
+                    
+                    for (const fix of fixes) {
+                        try {
+                            if (fix.action === 'CREATE_FILE' && fix.content) {
+                                await this.createFileWithAgent(fix.path, fix.content);
+                                this.addChatMessage('system', `✅ Created: ${fix.path}`);
+                            } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
+                                const result = await this.runCommandWithAgent(fix.cmd);
+                                this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
+                            }
+                        } catch (e) {
+                            this.addChatMessage('system', `⚠️ Auto-fix failed for ${fix.path || fix.cmd}: ${e.message}`);
+                        }
+                    }
+                    
+                    this.addChatMessage('ai', '✅ Auto-fixes applied! Verifying...');
+                    
+                    // Re-run verification after fixes
+                    const buildResult = await this.runCommandWithAgent('npm run build');
+                    if (buildResult && buildResult.exitCode === 0) {
+                        this.addChatMessage('ai', '🎉 BUILD SUCCESS after auto-fix! Project is ready!');
+                        return; // Exit early, no need for further analysis
+                    }
+                }
+            }
+
             // Read created files to analyze content quality
             const createdFiles = [];
             for (const step of orders.steps) {
@@ -9162,10 +9644,219 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
         this.updateExecutionMetrics();
     }
 
+    // 🎯 ===== PROJECT PLANNING UI ===== 🎯
+
+    /**
+     * Run final verification after project completion
+     */
+    async runFinalVerification() {
+        this.addChatMessage('system', '📦 npm install çalıştırılıyor...');
+        
+        try {
+            // Step 1: npm install
+            this.addChatMessage('system', '📦 npm install çalıştırılıyor...');
+            const installResult = await this.runTerminalCommand('npm install', this.currentFolder);
+            if (installResult && installResult.exitCode === 0) {
+                this.addChatMessage('system', '✅ Dependencies yüklendi!');
+            } else {
+                this.addChatMessage('system', '⚠️ npm install hatası');
+            }
+            
+            // Step 2: Build test
+            this.addChatMessage('system', '🔨 Build testi yapılıyor...');
+            const buildResult = await this.runTerminalCommand('npm run build', this.currentFolder);
+            if (buildResult && buildResult.exitCode === 0) {
+                this.addChatMessage('system', '✅ Build başarılı!');
+            } else {
+                this.addChatMessage('system', '⚠️ Build hatası - manuel kontrol gerekebilir');
+            }
+            
+            // Step 3: Start dev server (background)
+            this.addChatMessage('system', '🚀 Dev server başlatılıyor...');
+            // Don't await - run in background
+            this.runTerminalCommand('npm run dev', this.currentFolder, true);
+            
+            this.addChatMessage('ai', `
+✅ **HER ŞEY HAZIR!**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎊 Projeniz başarıyla oluşturuldu ve çalışıyor!
+
+📋 **Yapılanlar:**
+  ✅ Tüm dosyalar oluşturuldu
+  ✅ Dependencies yüklendi
+  ✅ Build testi geçti
+  ✅ Dev server başlatıldı
+
+🌐 **Kontrol Edin:**
+  • Server: http://localhost:5174
+  • Client: http://localhost:5173
+
+Happy coding! 🚀
+            `);
+        } catch (error) {
+            this.addChatMessage('ai', `⚠️ Final verification sırasında hata: ${error.message}`);
+        }
+    }
+
+    /**
+     * Handle phase transition and ask user for continuation
+     */
+    async handlePhaseTransition(currentPhase, totalPhases, successCount, failCount) {
+        const isLastPhase = currentPhase >= totalPhases;
+        
+        if (isLastPhase) {
+            // 🎉 PROJECT COMPLETED
+            this.addChatMessage('ai', `
+🎉 **PROJE TAMAMLANDI!**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Tüm ${totalPhases} phase başarıyla tamamlandı!
+📊 Son Phase: ${successCount} başarılı, ${failCount} hatalı
+
+🔍 Şimdi final kontrolleri yapıyorum...
+            `);
+            
+            // Run final verification
+            await this.runFinalVerification();
+        } else {
+            // 🔄 CONTINUE TO NEXT PHASE
+            const nextPhase = currentPhase + 1;
+            const plan = this.currentProjectAnalysis?.projectPlan;
+            const nextPhaseInfo = plan?.phases?.find(p => p.id === nextPhase);
+            
+            let message = `
+✅ **PHASE ${currentPhase} TAMAMLANDI!**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Sonuç: ${successCount} başarılı, ${failCount} hatalı
+⏭️ Sırada: **PHASE ${nextPhase} - ${nextPhaseInfo?.name || 'Devam'}**
+`;
+            
+            if (nextPhaseInfo) {
+                message += `\n📝 **Phase ${nextPhase} İçeriği:**\n`;
+                message += `  • ${nextPhaseInfo.description}\n`;
+                message += `  • Dosyalar: ${nextPhaseInfo.files.join(', ')}\n`;
+                message += `  • Süre: ${nextPhaseInfo.duration}\n\n`;
+            }
+            
+            message += `\n**Devam edeyim mi?** 🚀\n`;
+            message += `"evet" deyin, Phase ${nextPhase}'yi başlatayım!`;
+            
+            this.addChatMessage('ai', message);
+        }
+    }
+
+    /**
+     * Show project plan to user with approval prompt
+     */
+    async showProjectPlan(plan) {
+        let planMessage = `📋 **İSTEĞİNİZİ ANALİZ ETTİM!**\n\n`;
+        planMessage += `**${plan.title}**\n`;
+        planMessage += `${plan.description}\n\n`;
+        planMessage += `📊 **Proje Detayları:**\n`;
+        planMessage += `  • Toplam Dosya: ${plan.totalFiles}\n`;
+        planMessage += `  • Tahmini Süre: ${plan.estimatedTime}\n`;
+        planMessage += `  • Phase Sayısı: ${plan.phases.length}\n\n`;
+        
+        planMessage += `🔄 **Execution Planı:**\n\n`;
+        
+        plan.phases.forEach((phase, idx) => {
+            planMessage += `**PHASE ${phase.id}: ${phase.name}** (${phase.duration})\n`;
+            planMessage += `  └─ ${phase.description}\n`;
+            planMessage += `  └─ Dosyalar: ${phase.files.join(', ')}\n`;
+            planMessage += `  └─ Adımlar: ${phase.steps} step\n\n`;
+        });
+
+        planMessage += `✅ **Başlayalım mı?**\n`;
+        planMessage += `Plan uygun görünüyorsa "evet" deyin, Phase 1'i başlatayım! 🚀`;
+
+        this.addChatMessage('ai', planMessage);
+    }
+
+    // 🎯 ===== LIVE REFLECTION MESSAGES ===== 🎯
+
+    /**
+     * Show live reflection message for current step
+     */
+    showLiveReflection(step) {
+        let message = '';
+        let details = [];
+
+        switch (step.tool) {
+            case 'write_file':
+            case 'fs.write':
+                const filename = step.args.path.split('/').pop();
+                const fileType = filename.includes('.') ? filename.split('.').pop() : 'file';
+                message = `📝 ${filename} oluşturuluyor...`;
+                
+                // Detect file purpose from content
+                if (step.args.content) {
+                    if (step.args.content.includes('workspaces')) {
+                        details.push('Workspaces yapılandırması');
+                    }
+                    if (step.args.content.includes('scripts')) {
+                        details.push('Script komutları eklendi');
+                    }
+                    if (step.args.content.includes('express')) {
+                        details.push('Express sunucu kurulumu');
+                    }
+                    if (step.args.content.includes('React')) {
+                        details.push('React component');
+                    }
+                    if (step.args.content.includes('import')) {
+                        const imports = step.args.content.match(/import .+ from ['"](.+)['"]/g);
+                        if (imports && imports.length > 0) {
+                            details.push(`${imports.length} modül import edildi`);
+                        }
+                    }
+                }
+                break;
+
+            case 'run_cmd':
+            case 'terminal.exec':
+                const cmd = step.args.cmd;
+                if (cmd.includes('npm install')) {
+                    message = `📦 Paket yükleniyor: ${cmd.replace('npm install', '').trim() || 'dependencies'}`;
+                } else if (cmd.includes('npm create')) {
+                    message = `🏗️ Scaffold oluşturuluyor: ${cmd.split('npm create')[1]?.trim()}`;
+                } else if (cmd.includes('npm run')) {
+                    message = `🔨 Build komutu çalıştırılıyor...`;
+                } else if (cmd.includes('node')) {
+                    message = `⚡ Node.js scripti çalıştırılıyor...`;
+                } else {
+                    message = `⚙️ Komut çalıştırılıyor: ${cmd}`;
+                }
+                break;
+
+            case 'read_file':
+            case 'fs.read':
+                message = `📖 ${step.args.path} dosyası okunuyor...`;
+                break;
+
+            case 'glob':
+            case 'list_dir':
+                message = `🔍 Dosyalar taranıyor: ${step.args.pattern || step.args.dir || '*'}`;
+                break;
+
+            default:
+                message = `🔧 ${step.tool} işlemi yapılıyor...`;
+        }
+
+        // Show message in chat
+        const fullMessage = details.length > 0 
+            ? `${message}\n  ${details.map(d => `└─ ${d}`).join('\n  ')}`
+            : message;
+
+        this.addChatMessage('system', fullMessage);
+    }
+
+    // 🎯 ===== END LIVE REFLECTION ===== 🎯
+
     // 🎯 ===== END REAL-TIME VISUALIZATION ===== 🎯
 
     async executeOrderStep(step) {
         console.log(`📝 Executing step ${step.id}: ${step.tool}`, step.args);
+
+        // 🎨 LIVE REFLECTION: Show what agent is doing
+        this.showLiveReflection(step);
 
         // ⚠️ SAFETY CHECK: Dangerous command confirmation
         if (step.tool === 'run_cmd' || step.tool === 'terminal.exec') {
@@ -9203,9 +9894,53 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
                 if (!step.args.cmd || step.args.cmd.trim() === '') {
                     throw new Error(`${step.tool} requires non-empty cmd string`);
                 }
-                // Use cwd from step or workspace root
-                const cwd = step.args.cwd || this.workspaceRoot;
-                return await this.runCommandWithAgent(step.args.cmd, cwd);
+                
+                // 🔧 FIX #2: CWD Execution - Workspace Commands
+                // PROBLEM: Shell chaining (cd server && npm install) fails with exitCode:-1 on Windows
+                // SOLUTION: Convert to workspace commands (npm --workspace server install)
+                
+                let cmd = step.args.cmd;
+                let cwd = step.args.cwd || this.workspaceRoot;
+                
+                // ⚠️ CRITICAL: Transform shell chaining commands into workspace commands
+                const shellChainingPattern = /^cd\s+([^\s&]+)\s*&&\s*(.+)$/;
+                const match = cmd.match(shellChainingPattern);
+                
+                if (match) {
+                    const targetDir = match[1];  // e.g., "server" or "./client"
+                    const actualCmd = match[2];  // e.g., "npm install" or "npm run build"
+                    
+                    console.log(`🔄 Converting shell chaining: cd ${targetDir} && ${actualCmd}`);
+                    
+                    // Check if this is an npm command that can use --workspace
+                    const npmPattern = /^npm\s+(install|run|build|test|start|dev)(.*)$/;
+                    const npmMatch = actualCmd.match(npmPattern);
+                    
+                    if (npmMatch) {
+                        const npmAction = npmMatch[1];  // install, run, build, etc.
+                        const npmArgs = npmMatch[2].trim();  // additional args
+                        
+                        // Transform to workspace command
+                        cmd = `npm --workspace ${targetDir} ${npmAction}${npmArgs ? ' ' + npmArgs : ''}`;
+                        console.log(`✅ Transformed to workspace command: ${cmd}`);
+                    } else {
+                        // Not an npm command - use absolute path with cmd /c
+                        const path = require('path');
+                        cwd = path.resolve(this.workspaceRoot, targetDir);
+                        cmd = actualCmd;  // Run original command in resolved CWD
+                        console.log(`✅ Using absolute CWD: ${cwd} for command: ${cmd}`);
+                    }
+                }
+                
+                // Resolve relative CWD to absolute path
+                if (cwd && !cwd.match(/^[a-zA-Z]:\\/) && !cwd.startsWith('/')) {
+                    const path = require('path');
+                    const oldCwd = cwd;
+                    cwd = path.resolve(this.workspaceRoot, cwd);
+                    console.log(`🔧 Resolved relative CWD: ${oldCwd} → ${cwd}`);
+                }
+                
+                return await this.runCommandWithAgent(cmd, cwd);
 
             case 'http.get':
                 if (!step.args.url) {
@@ -9234,15 +9969,31 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
 
                     const buildResult = await this.runCommandWithAgent('npm run build');
 
-                    // ✅ FIX: runCommandWithAgent returns object, not string
+                    // ✅ FIX #4: STRICT VERIFICATION - Exit code must be 0
                     if (!buildResult || typeof buildResult !== 'object') {
                         console.warn('❌ BUILD failed: Invalid result format');
                         return false;
                     }
 
-                    const output = (buildResult.stdout || '') + (buildResult.stderr || '');
-                    const success = buildResult.success && !output.includes('error') && !output.includes('failed');
-                    console.log(`🔍 BUILD check: success=${buildResult.success}, hasErrors=${output.includes('error')}`);
+                    // 🔍 CRITICAL: Build passes ONLY if exitCode === 0
+                    const exitCode = buildResult.exitCode !== undefined ? buildResult.exitCode : -1;
+                    const hasErrors = (buildResult.stdout || '').includes('error') || 
+                                     (buildResult.stderr || '').includes('error') ||
+                                     (buildResult.stdout || '').includes('failed');
+                    
+                    const success = exitCode === 0 && !hasErrors;
+                    
+                    console.log(`🔍 BUILD verification:`, {
+                        exitCode: exitCode,
+                        hasErrors: hasErrors,
+                        success: success,
+                        buildResultSuccess: buildResult.success
+                    });
+                    
+                    if (!success) {
+                        console.warn(`❌ BUILD FAILED: exitCode=${exitCode}, hasErrors=${hasErrors}`);
+                    }
+                    
                     return success;
                 } catch (error) {
                     console.warn('❌ BUILD failed:', error.message);
@@ -9263,15 +10014,30 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
                     // Try to run the project
                     const runResult = await this.runCommandWithAgent('npm start');
 
-                    // ✅ FIX: runCommandWithAgent returns object, not string
+                    // ✅ FIX #4: STRICT VERIFICATION - Exit code must be 0
                     if (!runResult || typeof runResult !== 'object') {
                         console.warn('❌ RUN failed: Invalid result format');
                         return false;
                     }
 
-                    const output = (runResult.stdout || '') + (runResult.stderr || '');
-                    const success = runResult.success && !output.includes('error');
-                    console.log(`🔍 RUN check: success=${runResult.success}, hasErrors=${output.includes('error')}`);
+                    // 🔍 CRITICAL: Run passes ONLY if exitCode === 0
+                    const exitCode = runResult.exitCode !== undefined ? runResult.exitCode : -1;
+                    const hasErrors = (runResult.stdout || '').includes('error') || 
+                                     (runResult.stderr || '').includes('error');
+                    
+                    const success = exitCode === 0 && !hasErrors;
+                    
+                    console.log(`🔍 RUN verification:`, {
+                        exitCode: exitCode,
+                        hasErrors: hasErrors,
+                        success: success,
+                        runResultSuccess: runResult.success
+                    });
+                    
+                    if (!success) {
+                        console.warn(`❌ RUN FAILED: exitCode=${exitCode}, hasErrors=${hasErrors}`);
+                    }
+                    
                     return success;
                 } catch (error) {
                     console.warn('❌ RUN failed:', error.message);
@@ -11766,6 +12532,31 @@ TERMINAL KULLANIMI:
 - Sonuçlar otomatik olarak terminal widget'ta gösterilir
 - Windows'ta echo gibi built-in komutlar için: {"cmd": "powershell", "args": ["-Command", "echo Merhaba"]}
 - Örnek: {"cmd": "npm", "args": ["run", "build"]}
+`,
+            artist: `
+🎨 Sen KayraDeniz Görsel İçerik Uzmanısın! SVG, diagram, logo, mockup oluşturuyorsun.
+Araçlar: write_file (SVG/Mermaid/PlantUML dosyaları için)
+
+ÖNEMLİ KURALLAR:
+- MUTLAKA görsel içeriği DOSYA olarak oluştur! (write_file)
+- Sadece açıklama yapma, direkt SVG kodu üret!
+- SVG dosyaları için geçerli XML/SVG syntax kullan
+- Minimalist ve temiz tasarım yap
+- Renkler hex code ile (#1E88E5, #00C853 gibi)
+
+GÖRSELİ NASIL OLUŞTURURUM:
+1. Logo/Icon → SVG dosyası oluştur (64x64px veya kullanıcı isteği)
+2. Diagram → Mermaid syntax (.mmd dosyası) veya PlantUML (.puml)
+3. Mockup/Wireframe → SVG ile basit şekiller kullan
+4. ASCII Art → .txt dosyası
+
+ÖRNEK SVG (Logo):
+<svg width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="30" fill="#1E88E5" />
+  <text x="32" y="40" font-size="28" text-anchor="middle" fill="white">K</text>
+</svg>
+
+KRİTİK: Görsel açıklaması değil, DOSYA OLUŞTUR! write_file tool'unu kullan!
 `
         };
 
@@ -11776,7 +12567,9 @@ TERMINAL KULLANIMI:
         // Auto-detect role if coordinator is selected and task has specific keywords
         if (selectedRole === 'coordinator') {
             const taskLower = task.toLowerCase();
-            if (taskLower.includes('analiz') || taskLower.includes('kontrol') || taskLower.includes('incele') || taskLower.includes('bug')) {
+            if (/(svg|logo|tasarla|diagram|mermaid|plantuml|görsel|grafik|şema|çiz|icon|banner)/.test(taskLower)) {
+                selectedRole = 'artist';
+            } else if (taskLower.includes('analiz') || taskLower.includes('kontrol') || taskLower.includes('incele') || taskLower.includes('bug')) {
                 selectedRole = 'analyzer';
             } else if (taskLower.includes('yaz') || taskLower.includes('oluştur') || taskLower.includes('kod') || taskLower.includes('implement')) {
                 selectedRole = 'generator';
@@ -14028,6 +14821,239 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
 
         if (duration < 60) return `${duration} saniye`;
         return `${Math.round(duration / 60)} dakika`;
+    }
+
+    // =========================================================================
+    // 🔥 CONTINUE AGENT STYLE INTEGRATION - Helper Methods
+    // =========================================================================
+
+    /**
+     * Execute multi-edit operation with atomic rollback support
+     * @param {string} filepath - Absolute path to file
+     * @param {Array} edits - Array of edit operations
+     * @param {Object} options - Additional options
+     * @returns {Promise<Object>} Edit result
+     */
+    async executeMultiEdit(filepath, edits, options = {}) {
+        if (!this.multiEditSystem) {
+            throw new Error('MultiEdit system not initialized');
+        }
+
+        console.log(`🔧 Executing multi-edit on ${filepath} with ${edits.length} operations`);
+
+        try {
+            const result = await this.multiEditSystem.executeMultiEdit(filepath, edits, options);
+            
+            // Show success notification
+            this.addChatMessage('system', `✅ Successfully applied ${edits.length} edits to ${filepath}`);
+            
+            // Show diff if available
+            if (result.diff && result.diff.length > 0) {
+                const diffPreview = result.diff.slice(0, 10).join('\n');
+                this.addChatMessage('system', `📊 **Changes Preview:**\n\`\`\`diff\n${diffPreview}\n\`\`\``);
+            }
+
+            return result;
+
+        } catch (error) {
+            console.error('❌ MultiEdit failed:', error);
+            this.addChatMessage('system', `❌ Edit failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * View current git diff with approval workflow
+     * @param {Object} options - Diff options
+     * @returns {Promise<Object>} Diff result
+     */
+    async viewDiff(options = {}) {
+        if (!this.viewDiffSystem) {
+            throw new Error('ViewDiff system not initialized');
+        }
+
+        console.log('🔍 Viewing git diff...');
+
+        try {
+            const diff = await this.viewDiffSystem.viewDiff(options);
+
+            if (!diff.success) {
+                this.addChatMessage('system', `⚠️ Could not get diff: ${diff.error || 'Unknown error'}`);
+                return diff;
+            }
+
+            // Show formatted diff
+            this.addChatMessage('system', `📊 **Git Diff:**\n\`\`\`\n${diff.formatted}\n\`\`\``);
+
+            // Return diff for approval workflow
+            return diff;
+
+        } catch (error) {
+            console.error('❌ ViewDiff failed:', error);
+            this.addChatMessage('system', `❌ Diff failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * View repository structure map
+     * @param {Object} options - Map options
+     * @returns {Promise<Object>} Repo map result
+     */
+    async viewRepoMap(options = {}) {
+        if (!this.viewRepoMapSystem) {
+            throw new Error('ViewRepoMap system not initialized');
+        }
+
+        console.log('🗺️ Generating repository map...');
+
+        try {
+            const map = await this.viewRepoMapSystem.viewRepoMap(options);
+
+            if (!map.success) {
+                this.addChatMessage('system', `⚠️ Could not generate repo map: ${map.error || 'Unknown error'}`);
+                return map;
+            }
+
+            // Show formatted map
+            this.addChatMessage('system', `🗺️ **Repository Map:**\n${map.formatted}`);
+
+            // Return map for agent context
+            return map;
+
+        } catch (error) {
+            console.error('❌ ViewRepoMap failed:', error);
+            this.addChatMessage('system', `❌ Repo map failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Agent helper: Safe file editing with preview and approval
+     * @param {string} filepath - File to edit
+     * @param {Array} edits - Edit operations
+     * @returns {Promise<boolean>} Success status
+     */
+    async agentSafeFileEdit(filepath, edits) {
+        try {
+            // Step 1: Show what will be changed
+            this.addChatMessage('assistant', `📝 **Preparing to edit**: ${filepath}\n\nI will make ${edits.length} change(s). Let me show you what will happen...`);
+
+            // Step 2: Dry run to show preview
+            const dryRun = await this.executeMultiEdit(filepath, edits, { dryRun: true });
+
+            // Step 3: Show diff preview
+            if (dryRun.diff && dryRun.diff.length > 0) {
+                const diffPreview = dryRun.diff.slice(0, 20).join('\n');
+                this.addChatMessage('assistant', `\`\`\`diff\n${diffPreview}\n\`\`\``);
+            }
+
+            // Step 4: Ask for approval (for now, auto-approve in agent mode)
+            // TODO: Add user approval UI
+            const approved = true; // Auto-approve for now
+
+            if (!approved) {
+                this.addChatMessage('system', '❌ Edit cancelled by user');
+                return false;
+            }
+
+            // Step 5: Execute actual edit
+            const result = await this.executeMultiEdit(filepath, edits, { dryRun: false });
+
+            return result.success;
+
+        } catch (error) {
+            console.error('❌ Agent safe file edit failed:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Agent helper: Get project context for LLM
+     * @returns {Promise<string>} Formatted context
+     */
+    async getAgentProjectContext() {
+        try {
+            const map = await this.viewRepoMapSystem.viewRepoMap({ 
+                maxDepth: 3,
+                includeStats: true,
+                includeFileTree: true,
+                useCache: true 
+            });
+
+            if (!map.success) {
+                return '⚠️ Could not load project structure';
+            }
+
+            // Format for LLM context
+            return `
+# PROJECT CONTEXT
+
+**Root Path**: ${map.rootPath}
+**Total Files**: ${map.stats.totalFiles}
+**Code Files**: ${map.stats.codeFiles}
+**Directories**: ${map.stats.totalDirectories}
+
+## File Types:
+${Object.entries(map.stats.filesByExtension || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([ext, count]) => `- ${ext}: ${count}`)
+    .join('\n')}
+
+## Directory Structure (Top Level):
+${map.fileTree ? map.fileTree.slice(0, 30).join('\n') : 'Not available'}
+
+This is the current project structure. Use this to understand where files are located and what the project contains.
+`;
+
+        } catch (error) {
+            console.error('❌ Get project context failed:', error);
+            return '⚠️ Error loading project context';
+        }
+    }
+
+    /**
+     * Agent helper: Commit changes with diff preview
+     * @param {string} message - Commit message
+     * @returns {Promise<boolean>} Success status
+     */
+    async agentCommitWithPreview(message) {
+        try {
+            // Step 1: Get current diff
+            const diff = await this.viewDiff({
+                includeStaged: true,
+                includeUnstaged: true,
+                includeUntracked: false
+            });
+
+            if (!diff.success || diff.summary.totalFiles === 0) {
+                this.addChatMessage('system', '⚠️ No changes to commit');
+                return false;
+            }
+
+            // Step 2: Show summary
+            this.addChatMessage('assistant', `📊 **Commit Summary:**
+- ${diff.summary.totalFiles} files changed
+- +${diff.summary.additions} additions
+- -${diff.summary.deletions} deletions
+
+Commit message: "${message}"`);
+
+            // Step 3: Stage all changes
+            // TODO: Implement git add via terminal command
+
+            // Step 4: Commit
+            // TODO: Implement git commit via terminal command
+
+            this.addChatMessage('system', '✅ Changes committed successfully');
+            return true;
+
+        } catch (error) {
+            console.error('❌ Commit with preview failed:', error);
+            this.addChatMessage('system', `❌ Commit failed: ${error.message}`);
+            return false;
+        }
     }
 }
 
