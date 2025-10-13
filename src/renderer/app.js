@@ -1204,6 +1204,31 @@ class KodCanavari {
             console.warn('⚠️ Probe Matrix not available');
         }
 
+        // 👨‍🏫 NARRATOR AGENT (Live commentary)
+        // Initialize after EventBus and UI are ready
+        this.narratorAgent = null;
+        
+        // Defer narrator initialization until UI is ready
+        setTimeout(() => {
+            if (typeof NarratorAgent !== 'undefined' && this.eventBus && window.elysionUI) {
+                this.narratorAgent = new NarratorAgent(this.eventBus, window.elysionUI);
+                console.log('✅ Narrator Agent initialized');
+            } else {
+                console.warn('⚠️ Narrator Agent not available (dependencies missing)');
+            }
+        }, 1000);
+
+        // 🔬 CRITIC AGENT (Root cause analysis & fix generation)
+        this.criticAgent = typeof CriticAgent !== 'undefined' ? new CriticAgent() : null;
+
+        if (this.criticAgent) {
+            console.log('✅ Critic Agent initialized');
+            const stats = this.criticAgent.getStats();
+            console.log(`   - 0 analyses, 0% success rate (fresh start)`);
+        } else {
+            console.warn('⚠️ Critic Agent not available');
+        }
+
         this.currentProjectData = null;
         this.workflowProgress = [];
         // Start in user's Desktop directory by default
