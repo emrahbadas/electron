@@ -12,17 +12,41 @@ import {
     createProjectToolDefinition, createProjectToolImpl
 } from './kayra-tools-definitions.js';
 
-// Tool name aliases mapping - camelCase to snake_case
+// Tool name aliases mapping - camelCase to snake_case (expanded)
 const TOOL_NAME_ALIASES = {
+    // File operations
     writeFile: 'write_file',
     readFile: 'read_file',
     createFile: 'create_file',
-    runCommand: 'run_cmd',
+    deleteFile: 'delete_file',
+    renameFile: 'rename_file',
+    copyFile: 'copy_file',
+    
+    // Directory operations
     listDirectory: 'list_dir',
+    listDir: 'list_dir',
+    createDirectory: 'create_dir',
+    createDir: 'create_dir',
+    
+    // Terminal
+    runCommand: 'run_cmd',
+    executeCommand: 'run_cmd',
+    shellCommand: 'run_cmd',
+    
+    // Code operations
     analyzeCode: 'analyze_code',
     searchFiles: 'search_files',
+    findInFiles: 'search_files',
+    
+    // Project
     createProject: 'create_project',
-    gitOperations: 'git_ops'
+    initProject: 'create_project',
+    scaffoldProject: 'create_project',
+    
+    // Git (future)
+    gitOperations: 'git_ops',
+    gitCommit: 'git_commit',
+    gitPush: 'git_push'
 };
 
 export class KayraToolsIntegration {
@@ -34,27 +58,77 @@ export class KayraToolsIntegration {
         // Mini MCP client configuration
         this.mcpBaseUrl = 'http://127.0.0.1:3001/mcp';
         this.mcpHealthy = false;
+        this.mcpLastCheck = 0;
+        this.mcpCheckInterval = 30000; // 30s cache
         
         this.initializeTools();
         this.checkMcpHealth();
+        
+        // Otomatik periyodik health check (her dakika)
+        this.healthCheckTimer = setInterval(() => {
+            this.checkMcpHealth();
+        }, 60000); // 60s
     }
     
     /**
-     * Mini MCP health check
+     * Mini MCP health check (with cache + timeout + retry)
      */
-    async checkMcpHealth() {
+    async checkMcpHealth(forceCheck = false) {
+        const now = Date.now();
+        
+        // Cache kontrolü - son 30s içinde check yapıldıysa tekrar yapma
+        if (!forceCheck && now - this.mcpLastCheck < this.mcpCheckInterval) {
+            return this.mcpHealthy;
+        }
+        
         try {
-            const response = await fetch(`${this.mcpBaseUrl}/health`);
+            // Timeout mekanizması (3 saniye)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            
+            const response = await fetch(`${this.mcpBaseUrl}/health`, {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
             if (response.ok) {
                 const data = await response.json();
                 this.mcpHealthy = data.ok === true;
-                console.log('🔧 Mini MCP:', this.mcpHealthy ? 'Çevrimiçi' : 'Çevrimdışı');
+                this.mcpLastCheck = now;
+                
+                if (this.mcpHealthy) {
+                    console.log('✅ Mini MCP: Çevrimiçi');
+                } else {
+                    console.warn('⚠️ Mini MCP: Unhealthy response');
+                }
             } else {
                 this.mcpHealthy = false;
+                this.mcpLastCheck = now;
+                console.warn('⚠️ Mini MCP: HTTP', response.status);
             }
         } catch (error) {
             this.mcpHealthy = false;
-            console.warn('⚠️ Mini MCP kullanılamıyor, fallback mode aktif');
+            this.mcpLastCheck = now;
+            
+            // AbortError için sessiz log (timeout normal bir durum)
+            if (error.name === 'AbortError') {
+                console.warn('⚠️ Mini MCP: Timeout (3s)');
+            } else {
+                console.warn('⚠️ Mini MCP kullanılamıyor, fallback mode aktif:', error.message);
+            }
+        }
+        
+        return this.mcpHealthy;
+    }
+    
+    /**
+     * Cleanup function - timer'ı temizle
+     */
+    destroy() {
+        if (this.healthCheckTimer) {
+            clearInterval(this.healthCheckTimer);
+            this.healthCheckTimer = null;
         }
     }
     
@@ -179,38 +253,58 @@ export class KayraToolsIntegration {
             
             terminal: {
                 execute: async (command) => {
-                    // Try tool server first
+                    const errors = [];
+                    
+                    // 1️⃣ Try Tool Server first (with timeout)
                     const toolServerUrl = 'http://127.0.0.1:7777';
                     
                     try {
+                        // Timeout: 30 seconds
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 30000);
+                        
                         const response = await fetch(`${toolServerUrl}/run_cmd`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ command })
+                            body: JSON.stringify({ command }),
+                            signal: controller.signal
                         });
+                        
+                        clearTimeout(timeoutId);
                         
                         if (response.ok) {
                             const result = await response.json();
                             return result.output || result.stdout || '';
-                        } else {
-                            throw new Error(`Command failed: ${response.statusText}`);
                         }
+                        
+                        errors.push(`Tool Server: ${response.status} ${response.statusText}`);
                     } catch (fetchError) {
-                        // Fallback to Electron IPC if tool server is unavailable
-                        if (window.electronAPI && window.electronAPI.runCommand) {
-                            try {
-                                const result = await window.electronAPI.runCommand(command);
-                                if (result.success) {
-                                    return result.output || result.stdout || '';
-                                } else {
-                                    throw new Error(result.error || 'Command execution failed');
-                                }
-                            } catch (ipcError) {
-                                throw new Error(`Terminal execution failed (both tool server and IPC): ${ipcError.message}`);
-                            }
+                        if (fetchError.name === 'AbortError') {
+                            errors.push('Tool Server: Timeout (30s exceeded)');
+                        } else {
+                            errors.push(`Tool Server: ${fetchError.message}`);
                         }
-                        throw new Error(`Terminal execution failed: ${fetchError.message}`);
                     }
+                    
+                    // 2️⃣ Fallback to Electron IPC
+                    if (window.electronAPI && window.electronAPI.runCommand) {
+                        try {
+                            const result = await window.electronAPI.runCommand(command);
+                            if (result.success) {
+                                return result.output || result.stdout || '';
+                            }
+                            errors.push(`Electron IPC: ${result.error || 'Command failed'}`);
+                        } catch (ipcError) {
+                            errors.push(`Electron IPC: ${ipcError.message}`);
+                        }
+                    } else {
+                        errors.push('Electron IPC: Not available');
+                    }
+                    
+                    // 3️⃣ All methods failed - throw detailed error
+                    throw new Error(
+                        `Terminal execution failed:\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`
+                    );
                 }
             },
             

@@ -203,23 +203,53 @@ export const writeFileToolImpl = async (args, extras) => {
 export const runCommandToolImpl = async (args, extras) => {
     const { command, workingDir } = args;
     
-    try {
-        // Working directory ayarla
-        if (workingDir) {
-            extras.workingDirectory = workingDir;
+    // ⚠️ GÜVENLIK: Tehlikeli komutları engelle
+    const dangerousPatterns = [
+        { regex: /rm\s+-rf\s+\//, message: 'Root directory deletion blocked' },
+        { regex: /rm\s+-rf\s+\*/, message: 'Wildcard deletion blocked' },
+        { regex: />\s*\/dev\/(sda|hda|nvme)/, message: 'Direct disk write blocked' },
+        { regex: /mkfs\./, message: 'Disk formatting blocked' },
+        { regex: /dd\s+if=/, message: 'Disk copy operation blocked' },
+        { regex: /:\(\)\s*\{\s*:\|\:&\s*\}\s*;\s*:/, message: 'Fork bomb blocked' },
+        { regex: /curl.*\|\s*(bash|sh)/, message: 'Pipe to shell blocked' },
+        { regex: /wget.*\|\s*(bash|sh)/, message: 'Pipe to shell blocked' },
+        { regex: /eval\s*\(/, message: 'Eval command blocked' },
+        { regex: /chmod\s+777/, message: 'Unsafe permission change blocked' }
+    ];
+    
+    for (const pattern of dangerousPatterns) {
+        if (pattern.regex.test(command)) {
+            throw new Error(`⛔ GÜVENLİK: ${pattern.message} - Bu komut çalıştırılamaz`);
+        }
+    }
+    
+    // Working directory güvenlik kontrolü
+    if (workingDir) {
+        const projectRoot = extras.workingDirectory;
+        const normalizedWorkingDir = workingDir.replace(/\\/g, '/');
+        const normalizedProjectRoot = projectRoot.replace(/\\/g, '/');
+        
+        // Working directory proje içinde olmalı
+        if (!normalizedWorkingDir.startsWith(normalizedProjectRoot)) {
+            throw new Error(`⛔ GÜVENLİK: Working directory proje dışına çıkamaz (${workingDir})`);
         }
         
+        extras.workingDirectory = workingDir;
+    }
+    
+    try {
         const output = await extras.terminal.execute(command);
         
         return [{
             name: `Komut: ${command}`,
-            description: `Terminal komutu çalıştırıldı`,
+            description: `Terminal komutu güvenli şekilde çalıştırıldı`,
             content: output,
             type: "command",
             metadata: { 
                 command,
                 workingDir: workingDir || extras.workingDirectory,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                safe: true
             }
         }];
         
@@ -233,11 +263,24 @@ export const listDirectoryToolImpl = async (args, extras) => {
     const targetPath = path || extras.workingDirectory;
     
     try {
-        // Bu implementation'ı terminal komutu ile yapalım
-        // Safe OS detection - works in both Electron and browser contexts
-        const isWindows = (typeof process !== 'undefined' && process.platform === 'win32') ||
-                          navigator.userAgent.toLowerCase().includes('win');
-        const command = isWindows ? `dir "${targetPath}"` : `ls -la "${targetPath}"`;
+        // Güvenli platform detection - Electron IPC üzerinden
+        let isWindows = false;
+        
+        if (window.electronAPI && window.electronAPI.getPlatform) {
+            try {
+                const platform = await window.electronAPI.getPlatform();
+                isWindows = platform === 'win32';
+            } catch (ipcError) {
+                // Fallback to user agent
+                console.warn('Platform detection IPC failed, using fallback:', ipcError);
+                isWindows = navigator.userAgent.toLowerCase().includes('win');
+            }
+        } else {
+            // Fallback if electronAPI not available
+            isWindows = navigator.userAgent.toLowerCase().includes('win');
+        }
+        
+        const command = isWindows ? `dir "${targetPath}" /B` : `ls -la "${targetPath}"`;
         
         const output = await extras.terminal.execute(command);
         
@@ -245,10 +288,12 @@ export const listDirectoryToolImpl = async (args, extras) => {
             name: `Dizin: ${targetPath}`,
             description: `${targetPath} dizinin içeriği`,
             content: output,
-            type: "file",
+            type: "directory",
             metadata: { 
                 path: targetPath,
-                operation: "list"
+                operation: "list",
+                platform: isWindows ? 'windows' : 'unix',
+                safe: true
             }
         }];
         

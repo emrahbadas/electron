@@ -319,6 +319,12 @@ function createTray() {
 }
 
 // IPC handlers for file operations
+
+// Platform detection (for safe cross-platform operations)
+ipcMain.handle('get-platform', async () => {
+  return process.platform; // 'win32', 'darwin', 'linux', etc.
+});
+
 ipcMain.handle('open-external', async (event, url) => {
   try {
     await shell.openExternal(url);

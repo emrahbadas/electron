@@ -1444,6 +1444,9 @@ class KodCanavari {
                 // Expose ipcRenderer for advanced usage
                 ipcRenderer: ipcRenderer,
 
+                // Platform Detection API
+                getPlatform: () => ipcRenderer.invoke('get-platform'),
+
                 // File System API'leri
                 readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
                 readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
