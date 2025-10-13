@@ -22,8 +22,8 @@ class ApprovalSystem {
         
         // Configuration
         this.config = {
-            tokenExpiration: 60000, // 60 seconds
-            autoCleanupInterval: 30000 // 30 seconds
+            tokenExpiration: 600000, // 600 seconds (10 minutes) - Extended for stability
+            autoCleanupInterval: 300000 // 5 minutes
         };
         
         // Start cleanup worker
