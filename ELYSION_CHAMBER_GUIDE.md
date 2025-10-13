@@ -43,10 +43,13 @@
 
 ## 🏗️ Architecture
 
+> **📌 NOT:** Aşağıdaki diyagram "Python hesap makinesi yap" örneğini kullanıyor, ancak sistem **HER TÜRLÜ İSTEK** için aynı şekilde çalışır (blog platformu, todo app, API, oyun, vs.). "Hesap makinesi" sadece akışı göstermek için örnek bir senaryodur.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    USER REQUEST                              │
-│              "Python hesap makinesi yap"                     │
+│          "Python hesap makinesi yap" (ÖRNEK)                 │
+│     (Herhangi bir istek olabilir: blog, todo, API, vs.)     │
 └───────────────────────────┬─────────────────────────────────┘
                             │
                             ▼
@@ -518,6 +521,8 @@ console.log('Mission complete!');
 
 ## 📚 Usage Examples
 
+> **🌟 ÖNEMLI:** Elysion Chamber sistemi **tüm istekler** için çalışır! Aşağıdaki örnekler farklı senaryoları göstermektedir.
+
 ### Example 1: Safe File Creation
 
 ```javascript
@@ -595,6 +600,124 @@ This operation is blocked by security policy.
 [12:00:08] ✅ Otomatik düzeltme başarılı!
 [12:00:09] ⚙️ Komutu çalıştırıyorum: python calculator.py (retry)
 [12:00:10] 🎉 'Create calculator' başarıyla tamamlandı!
+```
+
+---
+
+### Example 4: Blog Platform with React
+
+```javascript
+// User request
+"React ile blog platformu yap, admin panelli"
+
+// Flow:
+// 1. Policy check → PASS (safe operation)
+// 2. Approval granted → Token generated
+// 3. Execute: Create React components ✅
+// 4. Execute: Setup routing ✅
+// 5. Execute: Create admin panel ✅
+// 6. Execute: npm install dependencies ✅
+// 7. Probes: FILE_EXISTS checks for all components ✅
+// 8. Probes: HTTP_ENDPOINT check for dev server ✅
+// 9. Success! 🎉
+```
+
+**Narrator Output:**
+```
+[13:00:00] 🎯 Şimdi 'Setup React blog platform' adımına başlıyorum.
+[13:00:01] 📝 src/App.jsx dosyasını yazıyorum.
+[13:00:02] 📝 src/components/BlogPost.jsx dosyasını yazıyorum.
+[13:00:03] 📝 src/components/AdminPanel.jsx dosyasını yazıyorum.
+[13:00:05] ⚙️ Komutu çalıştırıyorum: npm install react-router-dom
+[13:00:12] ✅ Bağımlılıklar başarıyla yüklendi!
+[13:00:13] ⚙️ Komutu çalıştırıyorum: npm run dev
+[13:00:15] ✅ Dev server başlatıldı: http://localhost:5173
+[13:00:16] 🎉 'Setup React blog platform' başarıyla tamamlandı!
+```
+
+---
+
+### Example 5: Todo App with Database
+
+```javascript
+// User request
+"Node.js Todo API yap, MongoDB ile"
+
+// Flow:
+// 1. Policy check → PASS
+// 2. Approval granted → Token generated
+// 3. Execute: Create server.js ✅
+// 4. Execute: Create Todo model ✅
+// 5. Execute: Create API routes ✅
+// 6. Execute: npm install express mongoose ✅
+// 7. Execute: Start server ❌ (Port 3000 already in use)
+// 8. CriticAgent analyzes → Pattern: PORT_IN_USE
+// 9. Fix plan: Kill process on port 3000 → Retry
+// 10. Auto-fix applied ✅
+// 11. Retry: Start server ✅
+// 12. Probes: PORT_LISTENING check ✅
+// 13. Success! 🎉
+```
+
+**Narrator Output:**
+```
+[14:00:00] 🎯 Şimdi 'Create Todo API' adımına başlıyorum.
+[14:00:01] 📝 server.js dosyasını yazıyorum.
+[14:00:02] 📝 models/Todo.js dosyasını yazıyorum.
+[14:00:03] 📝 routes/todos.js dosyasını yazıyorum.
+[14:00:05] ⚙️ Komutu çalıştırıyorum: npm install express mongoose
+[14:00:12] ✅ Bağımlılıklar yüklendi!
+[14:00:13] ⚙️ Komutu çalıştırıyorum: node server.js
+[14:00:14] ❌ Hata: Port 3000 already in use. Çözüm arıyorum...
+[14:00:15] 🔧 Critic Agent: Port 3000'deki process sonlandırılıyor...
+[14:00:16] ✅ Otomatik düzeltme başarılı!
+[14:00:17] ⚙️ Komutu çalıştırıyorum: node server.js (retry)
+[14:00:18] ✅ Server started on port 3000
+[14:00:19] 🎉 'Create Todo API' başarıyla tamamlandı!
+```
+
+---
+
+### Example 6: E-Commerce Dashboard (Complex Multi-Step)
+
+```javascript
+// User request
+"Full-stack e-commerce dashboard: Next.js frontend + Express backend + PostgreSQL"
+
+// Flow:
+// 1. Policy check → PASS
+// 2. Approval granted → Token generated
+// 3. Execute: Setup monorepo structure ✅
+// 4. Execute: Create Next.js frontend (20 files) ✅
+// 5. Execute: Create Express backend (15 files) ✅
+// 6. Execute: Create PostgreSQL schema ✅
+// 7. Execute: npm install all dependencies ✅
+// 8. Execute: Start frontend dev server ✅
+// 9. Execute: Start backend server ✅
+// 10. Probes: HTTP_ENDPOINT checks (frontend + backend) ✅
+// 11. Probes: FILE_EXISTS checks for critical files ✅
+// 12. Success! 🎉
+```
+
+**Narrator Output:**
+```
+[15:00:00] 🎯 Şimdi 'Setup E-Commerce Dashboard' adımına başlıyorum.
+[15:00:01] 📁 Monorepo klasör yapısı oluşturuluyor...
+[15:00:03] 📝 frontend/pages/index.js dosyasını yazıyorum.
+[15:00:04] 📝 frontend/components/ProductCard.js dosyasını yazıyorum.
+[15:00:05] 📝 backend/server.js dosyasını yazıyorum.
+[15:00:06] 📝 backend/models/Product.js dosyasını yazıyorum.
+[15:00:08] ⚙️ Komutu çalıştırıyorum: npm install (frontend)
+[15:00:18] ✅ Frontend dependencies yüklendi!
+[15:00:19] ⚙️ Komutu çalıştırıyorum: npm install (backend)
+[15:00:28] ✅ Backend dependencies yüklendi!
+[15:00:29] ⚙️ Frontend dev server başlatılıyor: npm run dev
+[15:00:35] ✅ Frontend ready: http://localhost:3000
+[15:00:36] ⚙️ Backend server başlatılıyor: node server.js
+[15:00:38] ✅ Backend ready: http://localhost:5000/api
+[15:00:40] ✅ HTTP endpoint kontrolü: Frontend PASS
+[15:00:41] ✅ HTTP endpoint kontrolü: Backend PASS
+[15:00:42] 🎉 'Setup E-Commerce Dashboard' başarıyla tamamlandı!
 ```
 
 ---
