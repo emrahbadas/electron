@@ -318,6 +318,36 @@ function createTray() {
   }
 }
 
+// ===== SINGLE SOURCE OF TRUTH (SSOT) FOR WORKSPACE ROOT =====
+// 🔑 Main process owns the working directory reference
+let cwdRef = null;
+
+// Set workspace root (called from renderer)
+ipcMain.handle('cwd:set', async (event, absolutePath) => {
+  if (!absolutePath || typeof absolutePath !== 'string') {
+    throw new Error('❌ Invalid CWD: Path must be a non-empty string');
+  }
+  
+  const normalized = path.resolve(path.normalize(absolutePath));
+  cwdRef = normalized;
+  
+  console.log('✅ CWD set in main process:', normalized);
+  return { ok: true, cwd: normalized };
+});
+
+// Get workspace root (called from renderer)
+ipcMain.handle('cwd:get', async () => {
+  return { cwd: cwdRef };
+});
+
+// Helper function for spawn operations (fail-fast if no CWD)
+function getCwdOrThrow() {
+  if (!cwdRef) {
+    throw new Error('❌ CWD not set. User must select workspace folder via "Klasör Seç" button.');
+  }
+  return cwdRef;
+}
+
 // IPC handlers for file operations
 
 // Platform detection (for safe cross-platform operations)
@@ -441,8 +471,25 @@ ipcMain.handle('run-command', async (event, command, cwd) => {
   return new Promise((resolve) => {
     const isWindows = process.platform === 'win32';
 
-    // Set working directory
-    const workingDir = cwd || process.cwd();
+    // 🔑 SSOT: Use main process cwdRef (single source of truth)
+    // Fallback chain: explicit cwd param → cwdRef → process.cwd()
+    let workingDir;
+    try {
+      workingDir = cwd || getCwdOrThrow();
+    } catch (error) {
+      // If no CWD set, reject immediately (fail-fast)
+      resolve({
+        success: false,
+        stdout: '',
+        stderr: error.message,
+        exitCode: -1,
+        error: 'NO_WORKSPACE_SELECTED'
+      });
+      return;
+    }
+    
+    // Normalize path (Windows/OneDrive spaces)
+    workingDir = path.resolve(path.normalize(workingDir));
 
     // Enhanced environment with proper PATH
     const env = {

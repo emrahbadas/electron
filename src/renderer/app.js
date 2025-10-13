@@ -1324,11 +1324,21 @@ class KodCanavari {
         // Initialize workspace root from localStorage ONLY (no default to Desktop!)
         const savedRoot = window.localStorage.getItem('currentFolder');
         if (savedRoot) {
-            window.__CURRENT_FOLDER__ = savedRoot;
-            this.currentWorkingDirectory = savedRoot;
-            this.initialWorkspaceRoot = savedRoot;  // ✅ Set as initial root
-            this.workspaceRoot = savedRoot;
-            console.log('📁 Workspace root restored:', savedRoot);
+            const normalized = this.path.normalize(savedRoot);
+            
+            window.__CURRENT_FOLDER__ = normalized;
+            this.currentWorkingDirectory = normalized;
+            this.initialWorkspaceRoot = normalized;  // Only for telemetry/reporting
+            this.workspaceRoot = normalized;
+            
+            // 🔑 CRITICAL: Sync with main process (SSOT)
+            if (window.electronAPI && window.electronAPI.setCwd) {
+                window.electronAPI.setCwd(normalized)
+                    .then(() => console.log('✅ Workspace root restored & synced to main:', normalized))
+                    .catch(err => console.error('❌ Failed to sync CWD to main:', err));
+            } else {
+                console.log('📁 Workspace root restored (main sync not available):', normalized);
+            }
         } else {
             // ⚠️ NO DEFAULT! User MUST select folder via "Klasör Seç" button
             console.warn('⚠️ Workspace root not set! User must select folder via "Klasör Seç" button.');
@@ -1344,34 +1354,51 @@ class KodCanavari {
             return;
         }
 
-        // ✅ STABILITY FIX: Track initial root separately
+        // Normalize path (Windows/OneDrive spaces, forward/backward slashes)
+        const normalized = this.path.normalize(absolutePath);
+
+        // Track initial root separately (only for telemetry/reporting, NOT for operations)
         if (isInitial && !this.initialWorkspaceRoot) {
-            this.initialWorkspaceRoot = absolutePath;
-            console.log('🎯 Initial workspace root set:', absolutePath);
+            this.initialWorkspaceRoot = normalized;
+            console.log('🎯 Initial workspace root set (telemetry only):', normalized);
         }
 
-        window.localStorage.setItem('currentFolder', absolutePath);
-        window.__CURRENT_FOLDER__ = absolutePath;
-        this.currentWorkingDirectory = absolutePath;
-        this.currentFolder = absolutePath;
-        this.workspaceRoot = absolutePath;
+        // Update all renderer state
+        window.localStorage.setItem('currentFolder', normalized);
+        window.__CURRENT_FOLDER__ = normalized;
+        this.currentWorkingDirectory = normalized;
+        this.currentFolder = normalized;
+        this.workspaceRoot = normalized;
 
-        console.log('✅ Workspace root set:', absolutePath);
+        // 🔑 CRITICAL: Sync with main process (SSOT)
+        if (window.electronAPI && window.electronAPI.setCwd) {
+            window.electronAPI.setCwd(normalized)
+                .then(() => console.log('✅ Workspace root set & synced to main:', normalized))
+                .catch(err => console.error('❌ Failed to sync CWD to main:', err));
+        } else {
+            console.log('✅ Workspace root set (main sync not available):', normalized);
+        }
     }
 
-    getWorkspaceRoot(useInitial = false) {
-        // ✅ STABILITY FIX: Return initial root for file operations
-        if (useInitial && this.initialWorkspaceRoot) {
-            return this.initialWorkspaceRoot;
+    /**
+     * Get workspace root directory
+     * @param {Object} options - Options object
+     * @param {"active"|"initial"} options.mode - "active" for current working dir, "initial" for telemetry only
+     * @returns {string|null} Workspace root path or null if not set
+     */
+    getWorkspaceRoot({ mode = "active" } = {}) {
+        // "initial" mode: Return initial root (only for telemetry/reporting, NOT for file operations)
+        if (mode === "initial") {
+            return this.initialWorkspaceRoot || null;
         }
 
+        // "active" mode: Return current active root (for all file/command operations)
         const root = this.workspaceRoot || window.__CURRENT_FOLDER__ || window.localStorage.getItem('currentFolder');
 
         if (!root) {
-            console.warn('⚠️ getWorkspaceRoot: No workspace root set, using default Desktop');
-            const desktopPath = require('path').join(require('os').homedir(), 'OneDrive', 'Desktop');
-            this.setWorkspaceRoot(desktopPath, true);
-            return desktopPath;
+            // ❌ NO FALLBACK TO DESKTOP! Return null and let UI show "Klasör Seç" button
+            console.warn('⚠️ getWorkspaceRoot: No workspace root set. User must select folder.');
+            return null;
         }
 
         return root;
@@ -1379,7 +1406,12 @@ class KodCanavari {
 
     // ✅ KAPTAN YAMASI: Merkezi path çözümleme (tüm dosya işlemleri buradan)
     resolvePath(relativePath) {
-        const baseRoot = this.initialWorkspaceRoot || this.workspaceRoot || this.getWorkspaceRoot();
+        // Always use active root for file operations (NOT initial!)
+        const baseRoot = this.getWorkspaceRoot({ mode: "active" });
+        
+        if (!baseRoot) {
+            throw new Error('❌ Cannot resolve path: Workspace root not set. User must select folder via "Klasör Seç" button.');
+        }
 
         if (!baseRoot) {
             throw new Error('❌ No workspace root set - cannot resolve path');
@@ -1446,6 +1478,10 @@ class KodCanavari {
 
                 // Platform Detection API
                 getPlatform: () => ipcRenderer.invoke('get-platform'),
+
+                // 🔑 Workspace Root API (SSOT in main process)
+                setCwd: (absolutePath) => ipcRenderer.invoke('cwd:set', absolutePath),
+                getCwd: () => ipcRenderer.invoke('cwd:get'),
 
                 // File System API'leri
                 readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
@@ -3539,7 +3575,14 @@ Daha sonra "Kaydedilen Projeler" bölümünden erişebilirsin.`;
             }
 
             // Run regular command via IPC
+            // Note: cwd is optional here (main process will use cwdRef from SSOT)
             const result = await this.ipc.invoke('run-command', command, this.currentWorkingDirectory);
+
+            // Check for "NO_WORKSPACE_SELECTED" error (fail-fast from main)
+            if (!result.success && result.error === 'NO_WORKSPACE_SELECTED') {
+                this.addTerminalLine('❌ Workspace seçilmemiş! Lütfen "Klasör Seç" butonunu kullanın.', 'error');
+                return;
+            }
 
             if (result.stdout) {
                 this.addTerminalLine(result.stdout, 'output');
@@ -7373,10 +7416,11 @@ Please consider the conversation context when responding. Reference previous dis
                 const firstAction = analysis.plannedActions[0];
                 const commandToCheck = firstAction.command || firstAction.fileName || firstAction.description || 'unknown';
                 
-                // Policy check
+                // Policy check (use active workspace root)
+                const cwd = this.getWorkspaceRoot({ mode: "active" }) || process.cwd();
                 const policyResult = this.policyEngine.validate({
                     command: commandToCheck,
-                    cwd: this.currentFolder || process.cwd(),
+                    cwd: cwd,
                     context: {
                         action: firstAction,
                         allActions: analysis.plannedActions,
