@@ -7301,6 +7301,19 @@ Please consider the conversation context when responding. Reference previous dis
         this.addChatMessage('ai', '🤔 İsteğinizi analiz ediyorum...');
 
         try {
+            // 🔐 PHASE 6: ELYSION CHAMBER - Event emission for narrator
+            if (this.eventBus) {
+                this.eventBus.emit({
+                    type: 'TASK_START',
+                    task: { 
+                        id: Date.now(),
+                        title: 'User Request Analysis',
+                        description: userRequest,
+                        timestamp: Date.now()
+                    }
+                });
+            }
+
             // Step 1: Router Agent - Intent Analysis & Auto Role Selection
             const route = await this.routeUserIntent(userRequest);
 
@@ -7349,7 +7362,105 @@ Please consider the conversation context when responding. Reference previous dis
                 this.consecutiveNoToolMessages = 0; // Reset on valid tool use
             }
 
+            // 🔐 PHASE 6: ELYSION CHAMBER - Policy Check & Approval Gate
+            let approvalToken = null;
+            
+            if (this.policyEngine && this.approvalSystem && analysis.plannedActions && analysis.plannedActions.length > 0) {
+                // Extract first command/action for policy validation
+                const firstAction = analysis.plannedActions[0];
+                const commandToCheck = firstAction.command || firstAction.fileName || firstAction.description || 'unknown';
+                
+                // Policy check
+                const policyResult = this.policyEngine.validate({
+                    command: commandToCheck,
+                    cwd: this.currentFolder || process.cwd(),
+                    context: {
+                        action: firstAction,
+                        allActions: analysis.plannedActions,
+                        userRequest: userRequest
+                    }
+                });
+
+                console.log('🔐 Policy Check Result:', policyResult);
+
+                // Emit policy check event
+                if (this.eventBus) {
+                    this.eventBus.emit({
+                        type: policyResult.canProceed ? 'POLICY_CHECK_PASS' : 'POLICY_VIOLATION',
+                        policy: policyResult,
+                        command: commandToCheck
+                    });
+                }
+
+                // If policy blocks, stop immediately
+                if (!policyResult.canProceed) {
+                    this.addChatMessage('ai', `🔴 **POLİTİKA ENGELLEDİ!**\n\n❌ ${policyResult.violations[0]?.message || 'Güvenlik politikası ihlali'}`);
+                    return;
+                }
+
+                // Build approval proposal
+                const proposal = {
+                    step: {
+                        id: Date.now(),
+                        title: analysis.summary || 'Planned Operation',
+                        intent: userRequest,
+                        estimatedDuration: '~1 minute'
+                    },
+                    commands: analysis.plannedActions
+                        .filter(a => a.command)
+                        .map(a => a.command),
+                    files: analysis.plannedActions
+                        .filter(a => a.fileName)
+                        .map(a => ({
+                            path: a.fileName,
+                            operation: a.action || 'write'
+                        })),
+                    risks: this.assessRisks(analysis.plannedActions),
+                    probes: this.buildProbesForActions(analysis.plannedActions),
+                    policyViolations: policyResult.warnings || []
+                };
+
+                console.log('🔐 Requesting approval for proposal:', proposal);
+
+                // Request approval (shows modal, waits for user)
+                try {
+                    const approval = await this.approvalSystem.requestApproval(proposal);
+                    
+                    if (!approval.approved) {
+                        this.addChatMessage('ai', `❌ İşlem reddedildi.\n\n💬 Sebep: ${approval.reason || 'Kullanıcı onaylamadı'}`);
+                        
+                        // Emit denial event
+                        if (this.eventBus) {
+                            this.eventBus.emit({
+                                type: 'APPROVAL_DENIED',
+                                reason: approval.reason
+                            });
+                        }
+                        return;
+                    }
+
+                    // Approval granted - store token
+                    approvalToken = approval.token;
+                    console.log('✅ Approval granted with token:', approvalToken);
+
+                    // Emit approval event
+                    if (this.eventBus) {
+                        this.eventBus.emit({
+                            type: 'APPROVAL_GRANTED',
+                            token: approvalToken,
+                            proposal: proposal
+                        });
+                    }
+
+                } catch (error) {
+                    console.error('❌ Approval request failed:', error);
+                    this.addChatMessage('ai', `❌ Onay sistemi hatası: ${error.message}`);
+                    return;
+                }
+            }
+
             // Step 3: Show plan to user with approval (if needed)
+            // NOTE: showExecutionPlan is now optional since we have Elysion Chamber approval
             const approved = await this.showExecutionPlan(analysis, route);
 
             if (!approved) {
@@ -7358,7 +7469,8 @@ Please consider the conversation context when responding. Reference previous dis
             }
 
             // Step 4: Execute with real-time updates using selected role
-            await this.executeWithLiveUpdates(analysis, route);
+            // Pass approval token to execution (for token-gated operations)
+            await this.executeWithLiveUpdates(analysis, route, approvalToken);
 
         } catch (error) {
             this.addChatMessage('ai', `❌ Hata: ${error.message}`);
@@ -8647,27 +8759,78 @@ Now provide the CORRECTED response (pure JSON only):`;
         });
     }
 
-    async executeWithLiveUpdates(analysis) {
+    async executeWithLiveUpdates(analysis, route = null, approvalToken = null) {
         // 🧭 NIGHT ORDERS EXECUTOR: Check if orders.json protocol is available
         if (analysis.orders && Array.isArray(analysis.orders.steps)) {
-            return await this.executeNightOrders(analysis.orders);
+            return await this.executeNightOrders(analysis.orders, approvalToken);
+        }
+
+        // 🔐 PHASE 6: Validate approval token if Elysion Chamber is active
+        if (this.approvalSystem && approvalToken) {
+            const isValid = this.approvalSystem.validateToken(approvalToken);
+            if (!isValid) {
+                this.addChatMessage('ai', '❌ **GÜVENLİK HATASI:** Geçersiz onay token\'ı!\n\nİşlem iptal edildi.');
+                console.error('🔴 SECURITY: Invalid approval token detected!');
+                return;
+            }
+            console.log('✅ Approval token validated');
         }
 
         // Fallback to legacy plannedActions protocol
         const progressMessage = this.addChatMessage('ai', '🚀 İşlem başladı...');
 
         const plannedActions = analysis.plannedActions || [];
+        
+        // 🔐 PHASE 6: Emit execution start event
+        if (this.eventBus) {
+            this.eventBus.emit({
+                type: 'EXECUTION_START',
+                totalSteps: plannedActions.length,
+                approvalToken: approvalToken ? '***' : null
+            });
+        }
+
         for (let i = 0; i < plannedActions.length; i++) {
             const action = plannedActions[i];
 
             // Update progress
             this.updateProgressMessage(progressMessage, `⏳ Step ${i + 1}/${plannedActions.length}: ${action.description}`);
 
+            // 🔐 PHASE 6: Emit step start event
+            if (this.eventBus) {
+                this.eventBus.emit({
+                    type: 'START_STEP',
+                    step: {
+                        id: i + 1,
+                        title: action.description,
+                        intent: action.tool || action.action
+                    }
+                });
+            }
+
             try {
+                // 🔐 PHASE 6: Use approval token (marks as used - single-use)
+                if (this.approvalSystem && approvalToken && i === 0) {
+                    this.approvalSystem.useToken(approvalToken);
+                    console.log('🔐 Approval token consumed (single-use)');
+                }
+
                 await this.executeAction(action);
 
                 // Show success for this step
                 this.updateProgressMessage(progressMessage, `✅ Step ${i + 1}/${plannedActions.length}: ${action.description} - Tamamlandı`);
+
+                // 🔐 PHASE 6: Emit step success event
+                if (this.eventBus) {
+                    this.eventBus.emit({
+                        type: 'STEP_RESULT',
+                        step: {
+                            id: i + 1,
+                            title: action.description
+                        },
+                        result: 'PASS'
+                    });
+                }
 
                 // Small delay for UX
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -8675,7 +8838,60 @@ Now provide the CORRECTED response (pure JSON only):`;
             } catch (error) {
                 this.updateProgressMessage(progressMessage, `❌ Step ${i + 1}: ${action.description} - Hata: ${error.message}`);
 
-                // Ask user if they want to continue
+                // 🔐 PHASE 6: Emit error event
+                if (this.eventBus) {
+                    this.eventBus.emit({
+                        type: 'ERROR',
+                        step: {
+                            id: i + 1,
+                            title: action.description
+                        },
+                        error: error.message
+                    });
+                }
+
+                // 🔐 PHASE 6: Try CriticAgent for automatic fix
+                if (this.criticAgent) {
+                    console.log('🔬 CriticAgent analyzing failure...');
+                    
+                    try {
+                        const analysisResult = await this.criticAgent.analyze({
+                            step: action,
+                            observations: [],
+                            stderr: error.message,
+                            exitCode: -1
+                        });
+
+                        if (analysisResult && analysisResult.fixPlan) {
+                            this.addChatMessage('ai', `🔬 **Critic Agent Analizi:**\n\n📋 Root Cause: ${analysisResult.rootCause}\n\n🔧 Fix Plan (${analysisResult.fixPlan.length} step${analysisResult.fixPlan.length > 1 ? 's' : ''})`);
+                            
+                            // Execute fix plan
+                            const fixResult = await this.criticAgent.executeFix(analysisResult.fixPlan);
+                            
+                            if (fixResult.success) {
+                                this.addChatMessage('ai', '✅ Otomatik düzeltme başarılı! Devam ediyorum...');
+                                
+                                // Retry the failed action
+                                await this.executeAction(action);
+                                this.updateProgressMessage(progressMessage, `✅ Step ${i + 1}/${plannedActions.length}: ${action.description} - Düzeltildi & Tamamlandı`);
+                                
+                                // Emit success after fix
+                                if (this.eventBus) {
+                                    this.eventBus.emit({
+                                        type: 'STEP_RESULT',
+                                        step: { id: i + 1, title: action.description },
+                                        result: 'PASS_AFTER_FIX'
+                                    });
+                                }
+                                continue; // Skip user prompt, continue to next step
+                            }
+                        }
+                    } catch (criticError) {
+                        console.error('🔬 CriticAgent failed:', criticError);
+                    }
+                }
+
+                // Ask user if they want to continue (fallback if critic fails)
                 const shouldContinue = await this.askUserToContinue(error, action);
                 if (!shouldContinue) {
                     this.addChatMessage('ai', '⏹️ İşlem kullanıcı tarafından durduruldu.');
@@ -8684,15 +8900,72 @@ Now provide the CORRECTED response (pure JSON only):`;
             }
         }
 
+        // 🔐 PHASE 6: Run probes after execution
+        if (this.probeMatrix && analysis.plannedActions) {
+            const probes = this.buildProbesForActions(analysis.plannedActions);
+            
+            if (probes.length > 0) {
+                this.addChatMessage('ai', `🔍 Doğrulama probes çalıştırılıyor (${probes.length} test)...`);
+                
+                try {
+                    const probeResults = await this.probeMatrix.runProbes(probes);
+                    
+                    // Show results in UI
+                    if (window.elysionUI) {
+                        window.elysionUI.showProbeResults(probeResults);
+                    }
+                    
+                    const passedCount = probeResults.results.filter(r => r.passed).length;
+                    this.addChatMessage('ai', `✅ Probe Results: ${passedCount}/${probeResults.total} passed`);
+                    
+                    // Emit probe results
+                    if (this.eventBus) {
+                        this.eventBus.emit({
+                            type: 'PROBE_RESULTS',
+                            results: probeResults
+                        });
+                    }
+                } catch (probeError) {
+                    console.error('❌ Probe execution failed:', probeError);
+                    this.addChatMessage('ai', `⚠️ Doğrulama testleri çalıştırılamadı: ${probeError.message}`);
+                }
+            }
+        }
+
         // Final success message
         this.updateProgressMessage(progressMessage, '🎉 Tüm işlemler tamamlandı!');
+        
+        // 🔐 PHASE 6: Emit completion event
+        if (this.eventBus) {
+            this.eventBus.emit({
+                type: 'EXECUTION_COMPLETE',
+                totalSteps: plannedActions.length,
+                success: true
+            });
+        }
+        
         this.refreshExplorer(); // Refresh file explorer
     }
 
-    async executeNightOrders(orders) {
+    async executeNightOrders(orders, approvalToken = null) {
         console.log('🧭 NIGHT ORDERS PROTOCOL ACTIVATED!');
         console.log('📋 Mission:', orders.mission);
         console.log('🎯 Acceptance Criteria:', orders.acceptance);
+
+        // 🔐 PHASE 6: Validate approval token if provided
+        if (this.approvalSystem && approvalToken) {
+            const isValid = this.approvalSystem.validateToken(approvalToken);
+            if (!isValid) {
+                console.error('🔴 SECURITY: Invalid approval token for Night Orders!');
+                this.addChatMessage('ai', '❌ **GÜVENLİK HATASI:** Geçersiz onay token\'ı!\n\nMission iptal edildi.');
+                return;
+            }
+            console.log('✅ Approval token validated for Night Orders');
+            
+            // Use token immediately (single-use)
+            this.approvalSystem.useToken(approvalToken);
+            console.log('🔐 Approval token consumed');
+        }
 
         // 🎯 START LIVE VISUALIZATION
         this.startLiveVisualization();
@@ -10381,6 +10654,112 @@ ${matrix}
             // Add event listener to document for event delegation
             document.addEventListener('click', handleRecoveryClick);
         });
+    }
+
+    // 🔐 PHASE 6: ELYSION CHAMBER - Helper Methods
+    
+    assessRisks(plannedActions) {
+        // Analyze planned actions for risks
+        const risks = [];
+        
+        if (!plannedActions || plannedActions.length === 0) {
+            return [{ level: 'LOW', message: 'No operations planned' }];
+        }
+
+        // Check for file deletions
+        const deletions = plannedActions.filter(a => 
+            a.action === 'delete_file' || 
+            a.command?.includes('rm ') || 
+            a.command?.includes('del ')
+        );
+        if (deletions.length > 0) {
+            risks.push({
+                level: 'HIGH',
+                message: `${deletions.length} file deletion(s) detected`,
+                details: deletions.map(d => d.fileName || d.command)
+            });
+        }
+
+        // Check for system commands
+        const systemCmds = plannedActions.filter(a => 
+            a.command?.includes('npm install') ||
+            a.command?.includes('pip install') ||
+            a.command?.includes('git push') ||
+            a.command?.includes('sudo')
+        );
+        if (systemCmds.length > 0) {
+            risks.push({
+                level: 'MEDIUM',
+                message: `${systemCmds.length} system command(s) detected`,
+                details: systemCmds.map(c => c.command)
+            });
+        }
+
+        // Check for file overwrites
+        const writes = plannedActions.filter(a => 
+            a.action === 'write_file' || 
+            a.tool === 'write_file'
+        );
+        if (writes.length > 5) {
+            risks.push({
+                level: 'MEDIUM',
+                message: `${writes.length} file write(s) detected`,
+                details: writes.map(w => w.fileName || w.args?.path)
+            });
+        }
+
+        // Default: low risk
+        if (risks.length === 0) {
+            risks.push({
+                level: 'LOW',
+                message: 'Standard operations only',
+                details: ['File reads', 'Safe writes']
+            });
+        }
+
+        return risks;
+    }
+
+    buildProbesForActions(plannedActions) {
+        // Build validation probes based on planned actions
+        const probes = [];
+
+        if (!plannedActions || plannedActions.length === 0) {
+            return [];
+        }
+
+        // Probe for file creations
+        const fileWrites = plannedActions.filter(a => 
+            a.action === 'write_file' || 
+            a.tool === 'write_file'
+        );
+        
+        fileWrites.forEach(fw => {
+            const filePath = fw.fileName || fw.args?.path;
+            if (filePath) {
+                probes.push({
+                    type: 'FILE_EXISTS',
+                    target: filePath,
+                    description: `Verify ${filePath} was created`
+                });
+            }
+        });
+
+        // Probe for commands execution
+        const commands = plannedActions.filter(a => 
+            a.command || a.tool === 'run_cmd'
+        );
+        
+        if (commands.length > 0) {
+            probes.push({
+                type: 'PROCESS_SUCCESS',
+                target: 'Last command',
+                description: 'Verify command completed successfully'
+            });
+        }
+
+        // Limit to 5 probes max
+        return probes.slice(0, 5);
     }
 
     clearAgentState() {
