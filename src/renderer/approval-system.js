@@ -35,12 +35,39 @@ class ApprovalSystem {
     /**
      * Request approval for a proposal (BLOCKING)
      * @param {Object} proposal - Proposal object
+     * @param {Object} options - { developerMode, policyEngine }
      * @returns {Promise<Object>} Approval result { approved, token?, reason? }
      */
-    async requestApproval(proposal) {
+    async requestApproval(proposal, options = {}) {
+        const { developerMode = false, policyEngine = null } = options;
+        
+        // 🔓 AUTO-APPROVE: Developer Mode
+        if (developerMode) {
+            console.log('🔓 Developer Mode: Auto-approving all operations');
+            const token = this.generateToken();
+            return {
+                approved: true,
+                autoApproved: true,
+                reason: 'developer-mode',
+                token
+            };
+        }
+        
+        // 🔓 AUTO-APPROVE: Policy-based (safe operations)
+        if (policyEngine && policyEngine.canAutoApprove(proposal)) {
+            console.log('✅ Safe operation: Auto-approving based on policy');
+            const token = this.generateToken();
+            return {
+                approved: true,
+                autoApproved: true,
+                reason: 'policy-safe',
+                token
+            };
+        }
+        
         const id = `approval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        console.log(`🔐 Requesting approval for: ${proposal.step?.title || 'Unknown'}`);
+        console.log(`🔐 Requesting manual approval for: ${proposal.step?.title || 'Unknown'}`);
         
         // Create pending approval
         return new Promise((resolve, reject) => {

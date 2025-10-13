@@ -1174,6 +1174,10 @@ class KodCanavari {
         this.approvalSystem = typeof ApprovalSystem !== 'undefined' ? new ApprovalSystem() : null;
         this.policyEngine = typeof PolicyEngine !== 'undefined' ? new PolicyEngine() : null;
         this.eventBus = typeof EventBus !== 'undefined' ? new EventBus() : null;
+        
+        // 🔓 Developer Mode (auto-approve all operations)
+        this.developerMode = localStorage.getItem('developerMode') === 'true' || false;
+        console.log(`🔓 Developer Mode: ${this.developerMode ? 'ENABLED (auto-approve all)' : 'DISABLED'}`);
 
         if (this.approvalSystem) {
             console.log('✅ Approval System initialized');
@@ -7474,9 +7478,12 @@ Please consider the conversation context when responding. Reference previous dis
 
                 console.log('🔐 Requesting approval for proposal:', proposal);
 
-                // Request approval (shows modal, waits for user)
+                // Request approval (auto-approve if developer mode or safe operation)
                 try {
-                    const approval = await this.approvalSystem.requestApproval(proposal);
+                    const approval = await this.approvalSystem.requestApproval(proposal, {
+                        developerMode: this.developerMode,
+                        policyEngine: this.policyEngine
+                    });
                     
                     if (!approval.approved) {
                         this.addChatMessage('ai', `❌ İşlem reddedildi.\n\n💬 Sebep: ${approval.reason || 'Kullanıcı onaylamadı'}`);
@@ -15564,6 +15571,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    
+    // 🔓 DEVELOPER MODE TOGGLE (Console Command)
+    window.toggleDeveloperMode = function() {
+        if (window.kodCanavari) {
+            window.kodCanavari.developerMode = !window.kodCanavari.developerMode;
+            localStorage.setItem('developerMode', window.kodCanavari.developerMode);
+            
+            const status = window.kodCanavari.developerMode ? 'ENABLED ✅' : 'DISABLED ❌';
+            console.log(`🔓 Developer Mode: ${status}`);
+            
+            if (window.kodCanavari.developerMode) {
+                console.log('⚠️ All operations will be auto-approved!');
+            } else {
+                console.log('✅ Manual approval required for operations.');
+            }
+            
+            return window.kodCanavari.developerMode;
+        }
+    };
+    
+    console.log('💡 TIP: Use toggleDeveloperMode() in console to enable/disable auto-approval');
 });
 
 // Handle theme changes

@@ -304,6 +304,48 @@ class PolicyEngine {
             bySeverity
         };
     }
+    
+    /**
+     * 🔓 Check if operation qualifies for auto-approval
+     * @param {Object} proposal - Approval proposal
+     * @returns {boolean} True if safe to auto-approve
+     */
+    canAutoApprove(proposal) {
+        const { risk, type, operations = [] } = proposal;
+        
+        // Rule 1: Only low-risk operations
+        if (risk !== 'low') {
+            return false;
+        }
+        
+        // Rule 2: Read-only operations always safe
+        if (type === 'read-only' || type === 'probe' || type === 'analyze') {
+            return true;
+        }
+        
+        // Rule 3: Safe file operations (create/write in workspace)
+        if (type === 'file-creation' || type === 'file-write') {
+            // Check if all operations are safe
+            const allSafe = operations.every(op => {
+                const tool = op.tool || '';
+                // fs.write with no destructive flags
+                if (tool.includes('write') || tool.includes('create')) {
+                    return !op.args?.force && !op.args?.overwrite;
+                }
+                return false;
+            });
+            
+            return allSafe;
+        }
+        
+        // Rule 4: Build/test commands (non-destructive)
+        if (type === 'build' || type === 'test') {
+            return true;
+        }
+        
+        // Default: require manual approval
+        return false;
+    }
 }
 
 // Export for use in other modules
