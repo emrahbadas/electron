@@ -537,6 +537,7 @@
     background: linear-gradient(135deg, #9c27b0, #7b1fa2);
     color: white;
     cursor: pointer;
+    -webkit-user-select: none; /* Safari 3+ support */
     user-select: none;
 }
 

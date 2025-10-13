@@ -1,0 +1,458 @@
+/**
+ * 🎨 ELYSION CHAMBER UI POLISH
+ * Enhanced animations, transitions, and visual effects
+ */
+
+/* ========================================
+   SMOOTH ANIMATIONS
+   ======================================== */
+
+/* Modal fade-in animation */
+.modal.approval-modal:not(.hidden) {
+    animation: approvalModalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes approvalModalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Modal slide-out animation on close */
+.modal.approval-modal.closing {
+    animation: approvalModalFadeOut 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes approvalModalFadeOut {
+    from {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+}
+
+/* ========================================
+   BUTTON INTERACTIONS
+   ======================================== */
+
+/* Approve button pulse animation */
+.btn-success:hover {
+    animation: buttonPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes buttonPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+    }
+}
+
+/* Deny button shake on hover */
+.btn-danger:hover {
+    animation: buttonShake 0.5s ease-in-out;
+}
+
+@keyframes buttonShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* Button press effect */
+.btn:active {
+    transform: scale(0.95);
+    transition: transform 0.1s ease;
+}
+
+/* ========================================
+   APPROVAL TIMEOUT ANIMATION
+   ======================================== */
+
+/* Timeout countdown urgency effect */
+.approval-timeout {
+    transition: all 0.3s ease;
+}
+
+.approval-timeout.urgent {
+    color: #ff4444 !important;
+    animation: timeoutBlink 1s ease-in-out infinite;
+    font-weight: bold;
+}
+
+@keyframes timeoutBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Progress bar animation */
+.approval-timeout::before {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4caf50, #ff9800, #f44336);
+    animation: timeoutProgress 60s linear forwards;
+}
+
+@keyframes timeoutProgress {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+/* ========================================
+   PROBE RESULTS ANIMATIONS
+   ======================================== */
+
+/* Probe result item entrance */
+.probe-result-item {
+    animation: probeItemSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+}
+
+.probe-result-item:nth-child(1) { animation-delay: 0.1s; }
+.probe-result-item:nth-child(2) { animation-delay: 0.2s; }
+.probe-result-item:nth-child(3) { animation-delay: 0.3s; }
+.probe-result-item:nth-child(4) { animation-delay: 0.4s; }
+.probe-result-item:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes probeItemSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Probe success checkmark animation */
+.probe-result-item.success .fas.fa-check-circle {
+    animation: checkmarkPop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes checkmarkPop {
+    0% {
+        transform: scale(0) rotate(-45deg);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2) rotate(10deg);
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+}
+
+/* Probe failure X animation */
+.probe-result-item.failed .fas.fa-times-circle {
+    animation: errorShake 0.6s ease-in-out;
+}
+
+@keyframes errorShake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+/* ========================================
+   NARRATOR PANEL ANIMATIONS
+   ======================================== */
+
+/* Narrator panel slide-in from bottom-right */
+.narrator-panel:not(.hidden) {
+    animation: narratorSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes narratorSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) translateY(0);
+    }
+}
+
+/* Narrator message typing effect */
+.narrator-message {
+    animation: messageTypeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes messageTypeIn {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        max-height: 200px;
+        transform: translateY(0);
+    }
+}
+
+/* Narrator icon pulse */
+.narrator-message i {
+    animation: iconPulse 2s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Narrator toggle button spin */
+.narrator-toggle i {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.narrator-panel.collapsed .narrator-toggle i {
+    transform: rotate(180deg);
+}
+
+/* ========================================
+   COMMAND & FILE ITEMS HOVER
+   ======================================== */
+
+/* Command item hover glow */
+.command-item:hover {
+    background: rgba(124, 58, 237, 0.1);
+    border-left-color: var(--primary-color);
+    transform: translateX(5px);
+    transition: all 0.3s ease;
+}
+
+/* File item hover glow */
+.file-item:hover {
+    background: rgba(33, 150, 243, 0.1);
+    border-left-color: #2196f3;
+    transform: translateX(5px);
+    transition: all 0.3s ease;
+}
+
+/* ========================================
+   POLICY VIOLATION ALERT
+   ======================================== */
+
+/* Violation item entrance */
+.violation-item {
+    animation: violationAlert 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes violationAlert {
+    0% {
+        opacity: 0;
+        transform: scale(0.9) rotate(-2deg);
+    }
+    50% {
+        transform: scale(1.05) rotate(1deg);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+/* Critical violation glow */
+.violation-item.critical {
+    animation: criticalGlow 2s ease-in-out infinite;
+}
+
+@keyframes criticalGlow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(244, 67, 54, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(244, 67, 54, 0.6),
+                    0 0 40px rgba(244, 67, 54, 0.3);
+    }
+}
+
+/* ========================================
+   RISK BADGE ANIMATIONS
+   ======================================== */
+
+/* Risk badge pulse based on severity */
+.risk-badge.HIGH {
+    animation: highRiskPulse 2s ease-in-out infinite;
+}
+
+@keyframes highRiskPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(244, 67, 54, 0);
+    }
+}
+
+.risk-badge.MEDIUM {
+    animation: mediumRiskPulse 3s ease-in-out infinite;
+}
+
+@keyframes mediumRiskPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(255, 152, 0, 0);
+    }
+}
+
+/* ========================================
+   SCROLL ANIMATIONS
+   ======================================== */
+
+/* Smooth scroll behavior */
+.approval-body,
+.probe-body,
+.narrator-content {
+    scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for approval modal */
+.approval-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.approval-body::-webkit-scrollbar-track {
+    background: rgba(124, 58, 237, 0.05);
+    border-radius: 4px;
+}
+
+.approval-body::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #7c3aed, #5b21b6);
+    border-radius: 4px;
+}
+
+.approval-body::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #8b5cf6, #6d28d9);
+}
+
+/* ========================================
+   LOADING STATES
+   ======================================== */
+
+/* Spinner for probe execution */
+.probe-loading {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(124, 58, 237, 0.3);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: probeSpinner 0.8s linear infinite;
+}
+
+@keyframes probeSpinner {
+    to { transform: rotate(360deg); }
+}
+
+/* Skeleton loading for narrator messages */
+.narrator-waiting {
+    animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ========================================
+   FOCUS STATES (Accessibility)
+   ======================================== */
+
+/* Enhanced focus for buttons */
+.btn:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+}
+
+/* Enhanced focus for modal close */
+.modal-close:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    background: rgba(124, 58, 237, 0.1);
+}
+
+/* ========================================
+   RESPONSIVE ENHANCEMENTS
+   ======================================== */
+
+/* Mobile: Reduce animation complexity */
+@media (max-width: 768px) {
+    /* Disable complex animations on mobile for performance */
+    .approval-modal,
+    .probe-result-item,
+    .narrator-message {
+        animation-duration: 0.2s;
+    }
+    
+    /* Simplify pulse effects */
+    .btn-success:hover,
+    .risk-badge.HIGH,
+    .risk-badge.MEDIUM {
+        animation: none;
+    }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ========================================
+   DARK MODE ENHANCEMENTS
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+    /* Enhanced shadows for dark mode */
+    .approval-content {
+        box-shadow: 0 20px 60px rgba(124, 58, 237, 0.4),
+                    0 0 100px rgba(124, 58, 237, 0.2);
+    }
+    
+    /* Brighter glows for dark backgrounds */
+    .violation-item.critical {
+        box-shadow: 0 0 30px rgba(244, 67, 54, 0.5);
+    }
+}
+
+/* ========================================
+   PRINT STYLES (For documentation)
+   ======================================== */
+
+@media print {
+    /* Hide interactive elements when printing */
+    .approval-footer,
+    .narrator-toggle,
+    .modal-close {
+        display: none !important;
+    }
+    
+    /* Remove animations */
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
