@@ -229,23 +229,27 @@ class ElysionChamberUI {
     handleApprove() {
         console.log('✅ User approved:', this.currentApprovalId);
         
-        // Stop timeout
+        // Stop timeout FIRST
         if (this.approvalTimeoutTimer) {
             clearInterval(this.approvalTimeoutTimer);
+            this.approvalTimeoutTimer = null;
         }
         
-        // Hide modal
+        // Notify approval system BEFORE hiding modal
+        let result = { success: false, error: 'Unknown error' };
+        if (window.kodCanavari && window.kodCanavari.approvalSystem) {
+            result = window.kodCanavari.approvalSystem.approveProposal(this.currentApprovalId);
+            console.log('🔐 Approval result:', result);
+        }
+        
+        // Hide modal AFTER approval
         this.hideApprovalModal();
         
-        // Notify approval system
-        if (window.kodCanavari && window.kodCanavari.approvalSystem) {
-            const result = window.kodCanavari.approvalSystem.approveProposal(this.currentApprovalId);
-            
-            if (result.success) {
-                this.showNotification('Approval granted! Executing...', 'success');
-            } else {
-                this.showNotification('Approval failed: ' + result.error, 'error');
-            }
+        // Show result
+        if (result.success) {
+            this.showNotification('Approval granted! Executing...', 'success');
+        } else {
+            this.showNotification('Approval failed: ' + result.error, 'error');
         }
     }
     

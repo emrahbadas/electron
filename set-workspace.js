@@ -26,7 +26,7 @@
 
 // ===== CONFIGURATION =====
 // 👇 CHANGE THIS to your desired workspace path
-const workspacePath = 'C:\\Users\\emrah badas\\OneDrive\\Desktop\\kodlama\\Yeni klasör (5)\\blog-platform';
+const workspacePath = 'C:\\Users\\emrah badas\\OneDrive\\Desktop\\kodlama\\Yeni klasör (5)\\deneme';
 
 // ===== VALIDATION =====
 if (!workspacePath || typeof workspacePath !== 'string') {
