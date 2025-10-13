@@ -165,6 +165,12 @@ class ApprovalSystem {
      * @returns {boolean} Valid or not
      */
     validateToken(token) {
+        // 🔓 DEVELOPER MODE: Skip validation
+        if (this.config.developerMode || (typeof window !== 'undefined' && window.kodCanavari?.developerMode)) {
+            console.log('🔓 Developer Mode: Token validation bypassed');
+            return true;
+        }
+        
         const data = this.tokens.get(token);
         
         if (!data) {
@@ -193,6 +199,12 @@ class ApprovalSystem {
      * @throws {Error} If token invalid
      */
     useToken(token) {
+        // 🔓 DEVELOPER MODE: Skip token consumption
+        if (this.config.developerMode || (typeof window !== 'undefined' && window.kodCanavari?.developerMode)) {
+            console.log('🔓 Developer Mode: Token consumption bypassed');
+            return { autoApproved: true, reason: 'developer-mode' };
+        }
+        
         if (!this.validateToken(token)) {
             throw new Error('❌ Invalid or expired token');
         }

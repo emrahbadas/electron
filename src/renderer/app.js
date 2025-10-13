@@ -8407,10 +8407,10 @@ FOR COMPLEX PROJECTS (>8 files): MANDATORY AUTO-PLANNING MODE
                     console.warn('⚠️ Response format violation:', validation.reason);
 
                     // Auto-repair: Ask LLM to return pure JSON
-                    const repairedResponse = await this.repairJSONResponse(userMessage, response, validation.reason);
+                    const repairedResponse = await this.repairJSONResponse(userRequest, response, validation.reason);
                     if (repairedResponse) {
                         // Retry parsing with repaired response
-                        return this.parseOpenAIResponse(repairedResponse, route);
+                        return this.analyzeUserRequest(userRequest, route);
                     }
                 }
 
