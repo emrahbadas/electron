@@ -12,6 +12,7 @@
     <!-- Use stable Prism.js version with dark theme -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.28.0/themes/prism-dark.min.css">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="elysion-chamber-ui.css">
 </head>
 
 <body>
@@ -683,6 +684,132 @@
             </div>
         </div>
 
+        <!-- 🔐 Elysion Chamber: Approval Gate Modal -->
+        <div class="modal approval-modal hidden" id="approvalModal">
+            <div class="modal-content approval-content">
+                <div class="modal-header approval-header">
+                    <h3><i class="fas fa-lock"></i> Approval Required</h3>
+                    <span class="approval-id" id="approvalId"></span>
+                </div>
+                <div class="modal-body approval-body">
+                    <!-- Proposal Summary -->
+                    <div class="approval-section">
+                        <h4><i class="fas fa-clipboard-list"></i> Operation Summary</h4>
+                        <div class="proposal-summary" id="proposalSummary">
+                            <div class="summary-item">
+                                <span class="label">Step:</span>
+                                <span class="value" id="approvalStepTitle">Loading...</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="label">Intent:</span>
+                                <span class="value" id="approvalStepIntent">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Commands to Execute -->
+                    <div class="approval-section">
+                        <h4><i class="fas fa-terminal"></i> Commands (<span id="commandCount">0</span>)</h4>
+                        <div class="command-list" id="commandList">
+                            <!-- Commands will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Files to Modify -->
+                    <div class="approval-section">
+                        <h4><i class="fas fa-file-code"></i> Files to Modify (<span id="fileCount">0</span>)</h4>
+                        <div class="file-list" id="fileList">
+                            <!-- Files will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Policy Violations (if any) -->
+                    <div class="approval-section policy-section hidden" id="policySection">
+                        <h4><i class="fas fa-shield-alt"></i> Policy Warnings</h4>
+                        <div class="policy-violations" id="policyViolations">
+                            <!-- Violations will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Risk Assessment -->
+                    <div class="approval-section risk-section">
+                        <h4><i class="fas fa-exclamation-triangle"></i> Risk Assessment</h4>
+                        <div class="risk-assessment" id="riskAssessment">
+                            <p>Loading...</p>
+                        </div>
+                    </div>
+
+                    <!-- Probes (Validation Checks) -->
+                    <div class="approval-section">
+                        <h4><i class="fas fa-check-circle"></i> Validation Checks (<span id="probeCount">0</span>)</h4>
+                        <div class="probe-list" id="probeList">
+                            <!-- Probes will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer approval-footer">
+                    <div class="approval-actions">
+                        <button class="btn btn-danger" id="denyApproval">
+                            <i class="fas fa-times"></i> Deny
+                        </button>
+                        <button class="btn btn-success" id="approveButton">
+                            <i class="fas fa-check"></i> Approve & Execute
+                        </button>
+                    </div>
+                    <div class="approval-timeout">
+                        <i class="fas fa-clock"></i> Timeout: <span id="approvalTimeout">60s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔍 Elysion Chamber: Probe Results Modal -->
+        <div class="modal probe-modal hidden" id="probeModal">
+            <div class="modal-content probe-content">
+                <div class="modal-header probe-header">
+                    <h3><i class="fas fa-microscope"></i> Validation Results</h3>
+                    <button class="modal-close" id="closeProbeModal">&times;</button>
+                </div>
+                <div class="modal-body probe-body">
+                    <div class="probe-summary" id="probeSummary">
+                        <div class="probe-stat">
+                            <span class="stat-label">Total:</span>
+                            <span class="stat-value" id="probeTotal">0</span>
+                        </div>
+                        <div class="probe-stat success">
+                            <span class="stat-label">Passed:</span>
+                            <span class="stat-value" id="probePassed">0</span>
+                        </div>
+                        <div class="probe-stat failed">
+                            <span class="stat-label">Failed:</span>
+                            <span class="stat-value" id="probeFailed">0</span>
+                        </div>
+                    </div>
+                    <div class="probe-results-list" id="probeResultsList">
+                        <!-- Probe results will be inserted here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn primary" id="closeProbeResults">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 📡 Elysion Chamber: Narrator Panel -->
+        <div class="narrator-panel hidden" id="narratorPanel">
+            <div class="narrator-header">
+                <h4><i class="fas fa-user-graduate"></i> Usta Anlatımı</h4>
+                <button class="narrator-toggle" id="narratorToggle">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+            <div class="narrator-body" id="narratorBody">
+                <div class="narrator-content" id="narratorContent">
+                    <p class="narrator-waiting">Waiting for operations...</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Rename Modal -->
         <div class="modal rename-modal hidden" id="renameModal">
             <div class="modal-content">
@@ -805,6 +932,7 @@
     <script src="policy-engine.js"></script>
     <script src="event-bus.js"></script>
     <script src="probe-matrix.js"></script>
+    <script src="elysion-chamber-ui.js"></script>
 
     <!-- Main Application -->
     <script src="app.js"></script>
