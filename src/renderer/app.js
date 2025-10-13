@@ -1231,8 +1231,13 @@ class KodCanavari {
 
         this.currentProjectData = null;
         this.workflowProgress = [];
+        
+        // 🔧 CRITICAL: Initialize path module BEFORE using it
+        this.path = require('path');
+        this.os = require('os');
+        
         // Start in user's Desktop directory by default
-        this.currentWorkingDirectory = require('path').join(require('os').homedir(), 'OneDrive', 'Desktop');
+        this.currentWorkingDirectory = this.path.join(this.os.homedir(), 'OneDrive', 'Desktop');
 
         // ===== WORKSPACE ROOT PERSISTENCE =====
         // Global workspace root management for consistent file operations
