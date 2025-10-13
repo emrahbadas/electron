@@ -14,6 +14,9 @@
  * - APPROVAL_REQUEST/GRANTED/DENIED: Approval workflow
  * - POLICY_VIOLATION: Policy check
  * - ERROR: Error occurred
+ * - NARRATION_BEFORE: Before step execution (goal, rationale, tradeoffs)
+ * - NARRATION_AFTER: After step completion (diff, summary)
+ * - NARRATION_VERIFY: After verification (probe results)
  */
 
 class EventBus {

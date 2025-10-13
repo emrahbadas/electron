@@ -306,6 +306,43 @@ class PolicyEngine {
     }
     
     /**
+     * 🎓 Validate proposal against policies (including Teach mode)
+     * @param {Object} proposal - Approval proposal
+     * @param {Object} settings - App settings (teachWhileDoing, etc.)
+     * @returns {Object} { valid: boolean, violations: array }
+     */
+    validateProposal(proposal, settings = {}) {
+        const violations = [];
+        const { operations = {} } = proposal;
+        const steps = operations.steps || [];
+        
+        // 🎓 TEACH MODE ENFORCEMENT: explain fields required
+        if (settings.teachWhileDoing) {
+            const missingExplain = steps.filter(s => {
+                if (!s.explain) return true;
+                if (!s.explain.goal || s.explain.goal.length < 20) return true;
+                if (!s.explain.rationale || s.explain.rationale.length < 40) return true;
+                return false;
+            });
+            
+            if (missingExplain.length > 0) {
+                violations.push({
+                    severity: 'HIGH',
+                    rule: 'TEACH_MODE_EXPLAIN_REQUIRED',
+                    message: `Teach mode: ${missingExplain.length} steps missing explain fields`,
+                    steps: missingExplain.map(s => s.id),
+                    fix: 'Add explain: { goal (min 20 chars), rationale (min 40 chars), tradeoffs, checklist } to each step'
+                });
+            }
+        }
+        
+        return {
+            valid: violations.length === 0,
+            violations
+        };
+    }
+    
+    /**
      * 🔓 Check if operation qualifies for auto-approval
      * @param {Object} proposal - Approval proposal
      * @returns {boolean} True if safe to auto-approve

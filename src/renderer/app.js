@@ -1079,7 +1079,8 @@ class KodCanavari {
             temperature: 0.2, // Production Agent: Deterministic, precise
             theme: 'dark',
             maxTokens: 4000, // Increased for full file content generation
-            customTemplates: []
+            customTemplates: [],
+            teachWhileDoing: localStorage.getItem('teachWhileDoing') !== 'false' // Default: AÇIK (Usta Modu)
         };
         this.chatHistory = [];
         this.recentFiles = [];
@@ -7925,6 +7926,13 @@ NIGHT ORDERS JSON SCHEMA (STRICT - NO SHORTCUTS):
       "args": {
         "cmd": "node -v"  ← MUST BE REAL COMMAND (NOT EMPTY!)
       },
+      "explain": {
+        "goal": "Node.js versiyonunu kontrol et (min 30 chars)",
+        "rationale": "Build tools Node.js gerektirir, version uyumluluk kontrolü (min 50 chars)",
+        "tradeoffs": "Alternatif: Docker container kullan - Seçilmeme nedeni: Local dev basit (optional)",
+        "checklist": ["Node.js installed", "Version >= 16.x"],
+        "showDiff": false
+      },
       "verify": ["probe"]
     },
     {
@@ -7934,10 +7942,39 @@ NIGHT ORDERS JSON SCHEMA (STRICT - NO SHORTCUTS):
         "path": "package.json",
         "content": "{\"name\":\"my-app\",\"version\":\"1.0.0\",\"scripts\":{\"build\":\"webpack --mode production\"}}"  ← FULL CONTENT (NO <PLACEHOLDERS>!)
       },
+      "explain": {
+        "goal": "Project manifest dosyası oluştur (min 30 chars)",
+        "rationale": "npm dependencies ve scripts yönetimi için gerekir. Build script tanımlı (min 50 chars)",
+        "tradeoffs": "Alternatif: yarn/pnpm - Seçilmeme nedeni: npm widely adopted (optional)",
+        "checklist": ["name field set", "version field set", "build script exists"],
+        "showDiff": true
+      },
       "verify": ["lint", "build"]
     }
   ]
 }
+
+🎓 **USTA MODU (TEACHER MODE) - EXPLAIN SCHEMA ZORUNLU**:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+**EVERY STEP MUST INCLUDE explain FIELD** (Teach-While-Doing enforcement):
+
+explain: {
+  goal: string (min 30 chars) - "Ne yapıyorum?" (1 cümle hedef tanımı)
+  rationale: string (min 50 chars) - "Neden böyle?" (teknik gerekçe, detaylı açıklama)
+  tradeoffs?: string (optional) - "Alternatifler ve neden seçilmedi?" (karşılaştırma)
+  checklist?: string[] (optional) - ["Kontrol 1", "Kontrol 2"] (doğrulama adımları)
+  showDiff?: boolean (default: false) - Diff gösterilsin mi?
+}
+
+✅ EXPLAIN FIELD KURALLARI:
+1. goal: Min 30 karakter, açık ve spesifik hedef
+2. rationale: Min 50 karakter, teknik gerekçe detaylı
+3. tradeoffs: İsteğe bağlı ama önerilir (alternatif çözümler)
+4. checklist: İsteğe bağlı doğrulama maddeleri
+5. showDiff: Dosya değişikliği varsa true yap
+
+🚫 EXPLAIN FIELD OLMADAN STEP GEÇERSİZ!
+Policy engine "Teach mode: Step S1 açıklaması eksik" hatası verir.
 
 ⚠️ CRITICAL RULES FOR orders.json:
 1. terminal.exec → args.cmd MUST NOT be empty (e.g., "node -v", "npm install")
@@ -15591,7 +15628,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    // 🎓 TEACH MODE TOGGLE (Console Command)
+    window.toggleTeachMode = function() {
+        if (window.kodCanavari) {
+            window.kodCanavari.settings.teachWhileDoing = !window.kodCanavari.settings.teachWhileDoing;
+            localStorage.setItem('teachWhileDoing', window.kodCanavari.settings.teachWhileDoing);
+            
+            const status = window.kodCanavari.settings.teachWhileDoing ? 'ENABLED ✅' : 'DISABLED ❌';
+            console.log(`🎓 Teach-While-Doing Mode: ${status}`);
+            
+            if (window.kodCanavari.settings.teachWhileDoing) {
+                console.log('📚 All steps will include detailed explanations (goal, rationale, tradeoffs)');
+                console.log('💡 Policy will enforce explain fields in every step');
+            } else {
+                console.log('⚡ Fast mode: Minimal explanations');
+            }
+            
+            return window.kodCanavari.settings.teachWhileDoing;
+        }
+    };
+    
     console.log('💡 TIP: Use toggleDeveloperMode() in console to enable/disable auto-approval');
+    console.log('💡 TIP: Use toggleTeachMode() in console to enable/disable detailed explanations');
 });
 
 // Handle theme changes
