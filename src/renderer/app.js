@@ -7455,6 +7455,24 @@ Please consider the conversation context when responding. Reference previous dis
                     return;
                 }
 
+                // 🎓 USTA MODU: Validate proposal for teach mode requirements
+                if (analysis.orders && this.policyEngine) {
+                    const proposalValidation = this.policyEngine.validateProposal(analysis.orders, {
+                        teachWhileDoing: this.settings.teachWhileDoing || false
+                    });
+                    
+                    if (!proposalValidation.valid) {
+                        console.error('🔐 Proposal validation failed:', proposalValidation.violations);
+                        this.addChatMessage('ai', 
+                            `🔴 **USTA MODU GEREKSİNİMLERİ KARŞILANMADI!**\n\n` +
+                            proposalValidation.violations.map(v => 
+                                `❌ ${v.message}\n   Steps: ${v.steps?.join(', ') || 'N/A'}`
+                            ).join('\n\n')
+                        );
+                        return;
+                    }
+                }
+
                 // Build approval proposal
                 const proposal = {
                     step: {
@@ -12719,7 +12737,7 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
                     const cmd = parts[0];
                     const args = parts.slice(1);
 
-                    const mcpResult = await fetch('http://127.0.0.1:7777/shell/run', {
+                    const mcpResult = await fetch('http://127.0.0.1:7777/mcp/shell/run', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

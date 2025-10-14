@@ -1,0 +1,12 @@
+body {
+  font-family: 'Inter', sans-serif;
+}
+a {
+  text-decoration: none;
+}
+.hover:text-copper:hover {
+  color: #b87333;
+}
+.hover\:shadow-xl:hover {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
