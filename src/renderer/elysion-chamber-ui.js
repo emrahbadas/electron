@@ -368,6 +368,12 @@ class ElysionChamberUI {
      * @param {string} message - Narrator message
      */
     addNarratorMessage(message) {
+        // 🔇 DEVELOPER MODE: Hide narrator panel (use Usta Modu UI instead)
+        if (window.kodCanavari?.developerMode) {
+            // Silently ignore in dev mode - Usta Modu UI handles narration
+            return;
+        }
+        
         const content = document.getElementById('narratorContent');
         
         // Remove waiting message

@@ -134,6 +134,10 @@ class NarratorAgent {
                 return this.narrateApprovalRequest(event);
                 
             case 'APPROVAL_GRANTED':
+                // 🔇 SILENT IN DEVELOPER MODE: Don't spam "Onay alındı" in dev mode
+                if (window.kodCanavari?.developerMode) {
+                    return null; // Silent in dev mode
+                }
                 return '✅ Onay alındı, devam ediyorum.';
                 
             case 'APPROVAL_DENIED':

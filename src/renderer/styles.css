@@ -1008,6 +1008,44 @@ body {
     font-weight: 600;
 }
 
+/* 🔓 Developer Mode Button Styles */
+.developer-mode-btn {
+    min-width: 90px;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.developer-mode-btn:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.developer-mode-btn.dev-mode-active {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+    color: white;
+    border-color: #ff6b6b;
+    animation: devModePulse 2s infinite;
+}
+
+@keyframes devModePulse {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 107, 107, 0.8);
+    }
+}
+
+.dev-mode-status {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 /* Agent Mode Controls */
 .agent-mode-controls {
     display: flex;

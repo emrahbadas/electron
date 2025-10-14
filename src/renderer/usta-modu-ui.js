@@ -106,6 +106,13 @@ class UstaModuUI {
     addBefore(event) {
         const { stepId, explain, timestamp } = event;
         
+        // 🚫 PREVENT DUPLICATE: Check if step already exists
+        const existingStep = document.getElementById(`step-${stepId}`);
+        if (existingStep) {
+            console.log(`⚠️ Step ${stepId} already exists, skipping duplicate BEFORE narration`);
+            return;
+        }
+        
         // Show panel when first step arrives
         if (!this.isVisible) {
             this.show();
@@ -160,6 +167,12 @@ class UstaModuUI {
         const stepEl = document.getElementById(`step-${stepId}`);
         
         if (stepEl) {
+            // 🚫 PREVENT DUPLICATE: Check if AFTER already added
+            if (stepEl.querySelector('.step-after')) {
+                console.log(`⚠️ Step ${stepId} already has AFTER narration, skipping duplicate`);
+                return;
+            }
+            
             const html = `
                 <div class="step-after">
                     <div class="step-header">
@@ -191,6 +204,12 @@ class UstaModuUI {
         const stepEl = document.getElementById(`step-${stepId}`);
         
         if (stepEl) {
+            // 🚫 PREVENT DUPLICATE: Check if VERIFY already added
+            if (stepEl.querySelector('.step-verify')) {
+                console.log(`⚠️ Step ${stepId} already has VERIFY narration, skipping duplicate`);
+                return;
+            }
+            
             const html = `
                 <div class="step-verify">
                     <div class="step-header">
