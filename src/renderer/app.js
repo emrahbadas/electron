@@ -9123,7 +9123,18 @@ Now provide the CORRECTED response (pure JSON only):`;
                     });
                     console.log(`⏱️ Step ${step.id} completed in ${executionTime}ms (retries: ${retryCount})`);
 
-                    // 🎯 LIVE VISUALIZATION: Mark step completed
+                    // � USTA MODU: Emit AFTER narration
+                    if (step.explain && this.eventBus) {
+                        this.eventBus.emit({
+                            type: 'NARRATION_AFTER',
+                            stepId: step.id,
+                            summary: `Step completed in ${executionTime}ms`,
+                            diff: null, // TODO: Add diff if file changed
+                            timestamp: Date.now()
+                        });
+                    }
+
+                    // �🎯 LIVE VISUALIZATION: Mark step completed
                     this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'completed');
                     this.liveVisualization.metrics.successCount++;
 
@@ -9174,6 +9185,8 @@ Now provide the CORRECTED response (pure JSON only):`;
 
             // Run verifications if step succeeded
             if (retryCount <= maxRetries) {
+                const probeResults = [];
+                
                 if (step.verify && Array.isArray(step.verify)) {
                     for (const checkType of step.verify) {
                         const result = await this.runVerificationCheck(checkType, step);
@@ -9181,12 +9194,14 @@ Now provide the CORRECTED response (pure JSON only):`;
                         // ✅ ENHANCEMENT: Handle 'skip' status
                         if (result === 'skip') {
                             verificationResults[checkType] = 'skip';
+                            probeResults.push({ type: checkType, status: 'skip', target: 'N/A' });
                             this.updateProgressMessage(
                                 progressMessage,
                                 `⏭️ Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: SKIPPED`
                             );
                         } else {
                             verificationResults[checkType] = result ? 'pass' : 'fail';
+                            probeResults.push({ type: checkType, status: result ? 'pass' : 'fail', target: step.args?.path || 'N/A' });
                             this.updateProgressMessage(
                                 progressMessage,
                                 `${result ? '✅' : '❌'} Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: ${result ? 'PASS' : 'FAIL'}`
@@ -9197,6 +9212,16 @@ Now provide the CORRECTED response (pure JSON only):`;
                             }
                             // Continue to next step even if verification fails (report at end)
                         }
+                    }
+                    
+                    // 🎓 USTA MODU: Emit VERIFY narration
+                    if (step.explain && this.eventBus && probeResults.length > 0) {
+                        this.eventBus.emit({
+                            type: 'NARRATION_VERIFY',
+                            stepId: step.id,
+                            probes: probeResults,
+                            timestamp: Date.now()
+                        });
                     }
                 }
             }
@@ -10249,7 +10274,17 @@ Happy coding! 🚀
     async executeOrderStep(step) {
         console.log(`📝 Executing step ${step.id}: ${step.tool}`, step.args);
 
-        // 🎨 LIVE REFLECTION: Show what agent is doing
+        // � USTA MODU: Emit BEFORE narration
+        if (step.explain && this.eventBus) {
+            this.eventBus.emit({
+                type: 'NARRATION_BEFORE',
+                stepId: step.id,
+                explain: step.explain,
+                timestamp: Date.now()
+            });
+        }
+
+        // �🎨 LIVE REFLECTION: Show what agent is doing
         this.showLiveReflection(step);
 
         // ⚠️ SAFETY CHECK: Dangerous command confirmation
