@@ -1281,17 +1281,6 @@ class KodCanavari {
         } else {
             console.warn('⚠️ Critic Agent not available');
         }
-        
-        // 📚 LEARNING STORE (PR-3: FAIL → PASS tracking)
-        this.learningStore = typeof LearningStore !== 'undefined' ? new LearningStore() : null;
-        
-        if (this.learningStore) {
-            console.log('✅ Learning Store initialized');
-            const learningStats = this.learningStore.getStats();
-            console.log(`   - ${learningStats.totalReflections} reflections, ${learningStats.successRate}% success rate, ${learningStats.totalPatterns} patterns`);
-        } else {
-            console.warn('⚠️ Learning Store not available');
-        }
 
         this.currentProjectData = null;
         this.workflowProgress = [];
