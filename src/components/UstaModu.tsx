@@ -24,12 +24,17 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
   const [messages, setMessages] = useState<StepNarration[]>([]);
   const [isVisible, setIsVisible] = useState(false);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [position, setPosition] = useState({ x: window.innerWidth - 470, y: 20 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   // Refs for optimization
   const messageHashMap = useRef(new Map<string, number>());
   const lastEventTime = useRef(0);
   const unsubscribers = useRef<(() => void)[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Dedupe helper
   const generateHash = useCallback((msg: StepNarration): string => {
@@ -126,6 +131,37 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
     }, 1500);
   }, [shouldProcessEvent, addMessage]);
 
+  // Dragging handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.header')) {
+      setIsDragging(true);
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        setDragOffset({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        });
+      }
+    }
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (isDragging) {
+      const newX = Math.max(0, Math.min(window.innerWidth - 450, e.clientX - dragOffset.x));
+      const newY = Math.max(0, Math.min(window.innerHeight - 100, e.clientY - dragOffset.y));
+      setPosition({ x: newX, y: newY });
+    }
+  }, [isDragging, dragOffset]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Toggle collapse
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed(prev => !prev);
+  }, []);
+
   // Subscribe to events on mount
   useEffect(() => {
     const runner = getLegacyRunner();
@@ -144,6 +180,18 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
       console.log('[UstaModu] React component unmounted, cleanup complete');
     };
   }, [handleNarrationBefore, handleNarrationAfter, handleNarrationVerify]);
+
+  // Dragging effect
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // Cleanup old hashes periodically
   useEffect(() => {
@@ -193,30 +241,42 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
   }
 
   return (
-    <div className="usta-modu-container" style={{ 
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      width: '450px',
-      maxHeight: '600px',
-      backgroundColor: '#1a1a2e',
-      borderRadius: '12px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      border: `2px solid ${getStateColor()}`,
-      display: 'flex',
-      flexDirection: 'column',
-      zIndex: 9999,
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '16px',
-        borderBottom: `2px solid ${getStateColor()}`,
+    <div 
+      ref={containerRef}
+      className="usta-modu-container" 
+      onMouseDown={handleMouseDown}
+      style={{ 
+        position: 'fixed',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        width: isCollapsed ? '200px' : '450px',
+        height: isCollapsed ? 'auto' : 'auto',
+        maxHeight: isCollapsed ? 'none' : '600px',
+        backgroundColor: '#1a1a2e',
+        borderRadius: '12px',
+        boxShadow: isDragging ? '0 12px 48px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.4)',
+        border: `2px solid ${getStateColor()}`,
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: '#16213e'
+        flexDirection: 'column',
+        zIndex: 9999,
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        cursor: isDragging ? 'grabbing' : 'default',
+        transition: isDragging ? 'none' : 'width 0.3s ease, box-shadow 0.2s ease',
+        userSelect: 'none'
       }}>
+      {/* Header - Draggable */}
+      <div 
+        className="header"
+        style={{
+          padding: '12px 16px',
+          borderBottom: isCollapsed ? 'none' : `2px solid ${getStateColor()}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          backgroundColor: '#16213e',
+          cursor: 'grab',
+          borderRadius: '10px 10px 0 0'
+        }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{
             fontSize: '24px',
@@ -224,66 +284,92 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
           }}>
             🎓
           </span>
-          <div>
-            <h3 style={{ 
-              margin: 0, 
-              color: '#fff',
-              fontSize: '16px',
-              fontWeight: 600
-            }}>
-              Usta Modu
-            </h3>
-            <p style={{
-              margin: '4px 0 0 0',
-              color: getStateColor(),
-              fontSize: '12px',
-              fontWeight: 500
-            }}>
-              {getStateLabel()}
-            </p>
-          </div>
+          {!isCollapsed && (
+            <div>
+              <h3 style={{ 
+                margin: 0, 
+                color: '#fff',
+                fontSize: '16px',
+                fontWeight: 600
+              }}>
+                Usta Modu
+              </h3>
+              <p style={{
+                margin: '4px 0 0 0',
+                color: getStateColor(),
+                fontSize: '12px',
+                fontWeight: 500
+              }}>
+                {getStateLabel()}
+              </p>
+            </div>
+          )}
         </div>
-        <button
-          onClick={() => setMessages([])}
-          style={{
-            padding: '6px 12px',
-            backgroundColor: '#ef4444',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: 500,
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
-        >
-          🗑️ Temizle
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={toggleCollapse}
+            style={{
+              padding: '6px 10px',
+              backgroundColor: '#6366f1',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 500,
+              transition: 'all 0.2s'
+            }}
+            title={isCollapsed ? 'Genişlet' : 'Küçült'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4f46e5'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6366f1'}
+          >
+            {isCollapsed ? '📖' : '📕'}
+          </button>
+          {!isCollapsed && (
+            <button
+              onClick={() => setMessages([])}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#ef4444',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 500,
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+            >
+              🗑️ Temizle
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Messages */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px'
-      }}>
-        {messages.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            color: '#6b7280',
-            fontSize: '14px',
-            padding: '32px',
-            fontStyle: 'italic'
-          }}>
-            Henüz bir aktivite yok... 🌙
-          </div>
-        ) : (
-          messages.map((msg, idx) => (
+      {/* Messages - Only show when not collapsed */}
+      {!isCollapsed && (
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}>
+          {messages.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              color: '#6b7280',
+              fontSize: '14px',
+              padding: '32px',
+              fontStyle: 'italic'
+            }}>
+              Henüz bir aktivite yok... 🌙
+            </div>
+          ) : (
+            messages.map((msg, idx) => (
             <div
               key={`${msg.stepId}-${idx}`}
               style={{
@@ -400,28 +486,31 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
                 </div>
               )}
             </div>
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      )}
 
-      {/* Footer Stats */}
-      <div style={{
-        padding: '12px 16px',
-        borderTop: '1px solid #374151',
-        backgroundColor: '#16213e',
-        borderRadius: '0 0 10px 10px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontSize: '11px',
-        color: '#9ca3af'
-      }}>
-        <span>📊 Mesaj: {messages.length}/{maxMessages}</span>
-        {currentStep && (
-          <span>🎯 Aktif: {currentStep}</span>
-        )}
-        <span>⚡ Rate: {rateLimit}ms</span>
-      </div>
+      {/* Footer Stats - Only show when not collapsed */}
+      {!isCollapsed && (
+        <div style={{
+          padding: '12px 16px',
+          borderTop: '1px solid #374151',
+          backgroundColor: '#16213e',
+          borderRadius: '0 0 10px 10px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '11px',
+          color: '#9ca3af'
+        }}>
+          <span>📊 Mesaj: {messages.length}/{maxMessages}</span>
+          {currentStep && (
+            <span>🎯 Aktif: {currentStep}</span>
+          )}
+          <span>⚡ Rate: {rateLimit}ms</span>
+        </div>
+      )}
 
       {/* CSS Animations */}
       <style>{`
