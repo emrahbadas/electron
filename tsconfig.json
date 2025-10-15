@@ -47,7 +47,10 @@
     "noFallthroughCasesInSwitch": true,
     
     /* Completeness */
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    
+    /* Deprecations */
+    "ignoreDeprecations": "6.0"
   },
   "include": [
     "src/**/*.ts",
