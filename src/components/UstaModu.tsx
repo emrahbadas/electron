@@ -1,12 +1,24 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   NarrationState,
-  StepNarration,
   NarrationBeforeEvent,
   NarrationAfterEvent,
-  NarrationVerifyEvent
-} from '@types/contracts';
-import { getLegacyRunner } from '@adapters/legacy-runner';
+  NarrationVerifyEvent,
+  ProbeResult
+} from '../../types/contracts';
+import { getLegacyRunner } from '../adapters/legacy-runner';
+
+// Extended StepNarration with phase tracking
+interface StepNarration {
+  stepId: string;
+  phase: 'before' | 'after' | 'verify';
+  timestamp: Date;
+  goal?: string;
+  rationale?: string;
+  success?: boolean;
+  output?: string;
+  results?: ProbeResult[];
+}
 
 interface UstaMosuProps {
   maxMessages?: number;
@@ -83,7 +95,7 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
 
   // Event handlers
   const handleNarrationBefore = useCallback((event: NarrationBeforeEvent) => {
-    if (!shouldProcessEvent()) return;
+    if (!shouldProcessEvent() || !event.data) return;
 
     setState('PLANNING');
     setCurrentStep(event.data.stepId);
@@ -91,36 +103,36 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
     addMessage({
       stepId: event.data.stepId,
       phase: 'before',
-      goal: event.data.goal,
-      rationale: event.data.rationale,
-      timestamp: event.timestamp
+      goal: event.data.explain?.goal,
+      rationale: event.data.explain?.rationale,
+      timestamp: new Date(event.timestamp)
     });
   }, [shouldProcessEvent, addMessage]);
 
   const handleNarrationAfter = useCallback((event: NarrationAfterEvent) => {
-    if (!shouldProcessEvent()) return;
+    if (!shouldProcessEvent() || !event.data) return;
 
     setState('EXECUTING');
 
     addMessage({
       stepId: event.data.stepId,
       phase: 'after',
-      success: event.data.success,
-      output: event.data.output,
-      timestamp: event.timestamp
+      success: true, // After event means it executed
+      output: event.data.summary,
+      timestamp: new Date(event.timestamp)
     });
   }, [shouldProcessEvent, addMessage]);
 
   const handleNarrationVerify = useCallback((event: NarrationVerifyEvent) => {
-    if (!shouldProcessEvent()) return;
+    if (!shouldProcessEvent() || !event.data) return;
 
     setState('VERIFYING');
 
     addMessage({
       stepId: event.data.stepId,
       phase: 'verify',
-      results: event.data.results,
-      timestamp: event.timestamp
+      results: event.data.probes,
+      timestamp: new Date(event.timestamp)
     });
 
     // After verify, go to reflecting
@@ -166,9 +178,9 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
   useEffect(() => {
     const runner = getLegacyRunner();
 
-    const unsub1 = runner.subscribeToEvents('NARRATION_BEFORE', handleNarrationBefore);
-    const unsub2 = runner.subscribeToEvents('NARRATION_AFTER', handleNarrationAfter);
-    const unsub3 = runner.subscribeToEvents('NARRATION_VERIFY', handleNarrationVerify);
+    const unsub1 = runner.subscribeToEvents('NARRATION_BEFORE', handleNarrationBefore as any);
+    const unsub2 = runner.subscribeToEvents('NARRATION_AFTER', handleNarrationAfter as any);
+    const unsub3 = runner.subscribeToEvents('NARRATION_VERIFY', handleNarrationVerify as any);
 
     unsubscribers.current = [unsub1, unsub2, unsub3];
 
@@ -229,11 +241,20 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
   };
 
   const formatTimestamp = (ts: Date): string => {
-    return new Date(ts).toLocaleTimeString('tr-TR', {
+    return ts.toLocaleTimeString('tr-TR', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
     });
+  };
+
+  const getStateEmoji = (phase: 'before' | 'after' | 'verify'): string => {
+    switch (phase) {
+      case 'before': return '🎯';
+      case 'after': return '⚡';
+      case 'verify': return '🔍';
+      default: return '📝';
+    }
   };
 
   if (!isVisible) {

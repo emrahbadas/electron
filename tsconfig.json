@@ -7,11 +7,10 @@
     
     /* Modules */
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
       "@types/*": ["types/*"],
