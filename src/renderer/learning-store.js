@@ -5,11 +5,19 @@
  * Stores reflections in JSONL format.
  */
 
-const fs = require('fs');
-const path = require('path');
+// Use window.require for Electron renderer process
+const fs = window.require ? window.require('fs') : null;
+const path = window.require ? window.require('path') : null;
 
 class LearningStore {
     constructor() {
+        if (!fs || !path) {
+            console.warn('⚠️ Learning Store: Node.js modules not available in renderer');
+            this.disabled = true;
+            return;
+        }
+        
+        this.disabled = false;
         this.learningDir = path.join(process.cwd(), 'learn');
         this.reflectionsFile = path.join(this.learningDir, 'reflections.jsonl');
         this.patternsFile = path.join(this.learningDir, 'patterns.json');
@@ -152,6 +160,7 @@ class LearningStore {
      * @returns {Array} Top patterns
      */
     getTopPatterns(limit = 10) {
+        if (this.disabled) return [];
         const patterns = this.loadPatterns();
         return patterns.patterns
             .sort((a, b) => b.count - a.count)
@@ -193,6 +202,17 @@ class LearningStore {
      * @returns {Object} Stats
      */
     getStats() {
+        if (this.disabled) {
+            return {
+                totalReflections: 0,
+                successfulFixes: 0,
+                failedFixes: 0,
+                totalPatterns: 0,
+                successRate: 0,
+                topPatterns: []
+            };
+        }
+        
         const reflections = this.loadReflections();
         const patterns = this.loadPatterns();
         
