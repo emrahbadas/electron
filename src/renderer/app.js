@@ -1243,7 +1243,7 @@ class KodCanavari {
 
         // � LEARNING STORE (PR-3: Learn from failures)
         this.learningStore = null;
-        if (typeof LearningStore !== 'undefined') {
+        try {
             const { getLearningStore } = require('./learning-store');
             this.learningStore = getLearningStore();
             console.log('✅ Learning Store initialized');
@@ -1253,8 +1253,8 @@ class KodCanavari {
             console.log(`   - ${stats.totalReflections} reflections`);
             console.log(`   - ${stats.totalPatterns} patterns`);
             console.log(`   - ${stats.successRate}% success rate`);
-        } else {
-            console.warn('⚠️ Learning Store not available');
+        } catch (error) {
+            console.warn('⚠️ Learning Store initialization failed:', error.message);
         }
 
         // �👨‍🏫 NARRATOR AGENT (Live commentary)

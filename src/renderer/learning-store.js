@@ -236,7 +236,18 @@ class LearningStore {
     }
 }
 
+// Singleton instance
+let learningStoreInstance = null;
+
+function getLearningStore() {
+    if (!learningStoreInstance) {
+        learningStoreInstance = new LearningStore();
+    }
+    return learningStoreInstance;
+}
+
 // Singleton export
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = LearningStore;
+    module.exports = { LearningStore, getLearningStore };
 }
+

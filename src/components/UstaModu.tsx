@@ -276,7 +276,7 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
 
   return (
     // @ts-ignore - CSS custom properties require inline style
-    <div 
+    <div
       ref={containerRef}
       className={containerClass}
       onMouseDown={handleMouseDown}
@@ -326,51 +326,51 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
             messages.map((msg, idx) => {
               const messageClass = `${styles.message} ${styles[msg.phase]} ${idx === messages.length - 1 ? '' : styles.faded}`;
               return (
-            <div key={`${msg.stepId}-${idx}`} className={messageClass}>
-              {/* Step ID + Timestamp */}
-              <div className={styles.messageHeader}>
-                <span className={styles.stepId}>{msg.stepId}</span>
-                <span className={styles.timestamp}>{formatTimestamp(msg.timestamp)}</span>
-              </div>
-
-              {/* Before Phase */}
-              {msg.phase === 'before' && (
-                <>
-                  <div className={styles.beforeContent}>
-                    {getStateEmoji('before')} {msg.goal || 'Adım planlanıyor...'}
+                <div key={`${msg.stepId}-${idx}`} className={messageClass}>
+                  {/* Step ID + Timestamp */}
+                  <div className={styles.messageHeader}>
+                    <span className={styles.stepId}>{msg.stepId}</span>
+                    <span className={styles.timestamp}>{formatTimestamp(msg.timestamp)}</span>
                   </div>
-                  {msg.rationale && (
-                    <div className={styles.rationale}>
-                      💭 {msg.rationale}
+
+                  {/* Before Phase */}
+                  {msg.phase === 'before' && (
+                    <>
+                      <div className={styles.beforeContent}>
+                        {getStateEmoji('before')} {msg.goal || 'Adım planlanıyor...'}
+                      </div>
+                      {msg.rationale && (
+                        <div className={styles.rationale}>
+                          💭 {msg.rationale}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* After Phase */}
+                  {msg.phase === 'after' && (
+                    <div className={`${styles.afterContent} ${msg.success ? styles.success : styles.error}`}>
+                      {msg.success ? '✅' : '❌'}
+                      <span>{msg.success ? 'Başarılı' : 'Hata'}</span>
+                      {msg.output && (
+                        <span className={styles.output}>
+                          {msg.output}
+                        </span>
+                      )}
                     </div>
                   )}
-                </>
-              )}
 
-              {/* After Phase */}
-              {msg.phase === 'after' && (
-                <div className={`${styles.afterContent} ${msg.success ? styles.success : styles.error}`}>
-                  {msg.success ? '✅' : '❌'}
-                  <span>{msg.success ? 'Başarılı' : 'Hata'}</span>
-                  {msg.output && (
-                    <span className={styles.output}>
-                      {msg.output}
-                    </span>
+                  {/* Verify Phase */}
+                  {msg.phase === 'verify' && msg.results && (
+                    <div className={styles.verifyContent}>
+                      {msg.results.map((result, i) => (
+                        <span key={i} className={`${styles.probeResult} ${styles[result.status]}`}>
+                          {result.type}: {result.status.toUpperCase()}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
-              )}
-
-              {/* Verify Phase */}
-              {msg.phase === 'verify' && msg.results && (
-                <div className={styles.verifyContent}>
-                  {msg.results.map((result, i) => (
-                    <span key={i} className={`${styles.probeResult} ${styles[result.status]}`}>
-                      {result.type}: {result.status.toUpperCase()}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
               );
             })
           )}
