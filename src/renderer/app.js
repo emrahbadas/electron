@@ -9241,13 +9241,13 @@ Now provide the CORRECTED response (pure JSON only):`;
                     });
                     console.log(`⏱️ Step ${step.id} completed in ${executionTime}ms (retries: ${retryCount})`);
 
-                    // � USTA MODU: Emit AFTER narration
-                    if (step.explain && this.eventBus) {
+                    // 🎓 USTA MODU: Always emit AFTER narration
+                    if (this.eventBus) {
                         this.eventBus.emit({
                             type: 'NARRATION_AFTER',
                             stepId: step.id,
                             summary: `Step completed in ${executionTime}ms`,
-                            diff: null, // TODO: Add diff if file changed
+                            diff: null,
                             timestamp: Date.now()
                         });
                     }
@@ -9332,8 +9332,8 @@ Now provide the CORRECTED response (pure JSON only):`;
                         }
                     }
                     
-                    // 🎓 USTA MODU: Emit VERIFY narration
-                    if (step.explain && this.eventBus && probeResults.length > 0) {
+                    // 🎓 USTA MODU: Always emit VERIFY narration
+                    if (this.eventBus && probeResults.length > 0) {
                         this.eventBus.emit({
                             type: 'NARRATION_VERIFY',
                             stepId: step.id,
@@ -10617,12 +10617,14 @@ Happy coding! 🚀
     async executeOrderStep(step) {
         console.log(`📝 Executing step ${step.id}: ${step.tool}`, step.args);
 
-        // � USTA MODU: Emit BEFORE narration
-        if (step.explain && this.eventBus) {
+        // 🎓 USTA MODU: Always emit BEFORE narration
+        if (this.eventBus) {
+            const explainText = step.explain || this.generateExplainFromStep(step);
+            
             this.eventBus.emit({
                 type: 'NARRATION_BEFORE',
                 stepId: step.id,
-                explain: step.explain,
+                explain: explainText,
                 timestamp: Date.now()
             });
         }
