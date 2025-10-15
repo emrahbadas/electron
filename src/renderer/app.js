@@ -5469,7 +5469,29 @@ Not:
             throw new Error('OpenAI API anahtarı ayarlanmamış');
         }
 
-        const defaultSystemPrompt = `Sen KayraDeniz Badaş Kod Canavarı AI asistanısın. Türkçe konuşuyorsun. Kod yazma, açıklama, optimize etme ve hata bulma konularında uzmanısın. Kullanıcıya profesyonel ve yardımsever bir şekilde destek ol.`;
+        // 📚 PATTERN INJECTION: Öğrenilen pattern'leri system prompt'a ekle
+        let learningContext = '';
+        if (this.learningStore) {
+            try {
+                const topPatterns = this.learningStore.getTopPatterns(5);
+                if (topPatterns && topPatterns.length > 0) {
+                    learningContext = '\n\n📚 ÖĞRENİLEN PATTERN\'LER (Geçmiş hatalardan öğrendiklerim):\n';
+                    topPatterns.forEach((pattern, idx) => {
+                        const lastFix = pattern.fixes && pattern.fixes.length > 0 
+                            ? pattern.fixes[pattern.fixes.length - 1].fix 
+                            : 'N/A';
+                        learningContext += `${idx + 1}. ${pattern.id} (${pattern.count}x başarılı)\n`;
+                        learningContext += `   Kök Sebep: ${pattern.rootCause || 'N/A'}\n`;
+                        learningContext += `   Çözüm: ${lastFix}\n\n`;
+                    });
+                    learningContext += '⚠️ Benzer hatalarla karşılaşırsan bu pattern\'leri kullan!\n';
+                }
+            } catch (error) {
+                console.warn('⚠️ Learning Store pattern injection failed:', error.message);
+            }
+        }
+
+        const defaultSystemPrompt = `Sen KayraDeniz Badaş Kod Canavarı AI asistanısın. Türkçe konuşuyorsun. Kod yazma, açıklama, optimize etme ve hata bulma konularında uzmanısın. Kullanıcıya profesyonel ve yardımsever bir şekilde destek ol.${learningContext}`;
 
         let messages = [];
 
