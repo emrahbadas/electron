@@ -5,29 +5,17 @@
  * Stores reflections in JSONL format.
  */
 
-// Use window.require for Electron renderer process
-// Prevent re-declaration if already loaded
-if (typeof window.learningStoreModules === 'undefined') {
-    window.learningStoreModules = {
-        fs: window.require ? window.require('fs') : null,
-        path: window.require ? window.require('path') : null
-    };
-}
-const fs = window.learningStoreModules.fs;
-const path = window.learningStoreModules.path;
+// Wrap entire module in IIFE to prevent global const re-declaration
+(function() {
+    // Only run if not already initialized
+    if (window.LearningStoreInitialized) {
+        console.log('⚠️ Learning Store already initialized, skipping...');
+        return;
+    }
 
-class LearningStore {
-    constructor() {
-        if (!fs || !path) {
-            console.warn('⚠️ Learning Store: Node.js modules not available in renderer');
-            this.disabled = true;
-            return;
-        }
-        
-        this.disabled = false;
-        this.learningDir = path.join(process.cwd(), 'learn');
-        this.reflectionsFile = path.join(this.learningDir, 'reflections.jsonl');
-        this.patternsFile = path.join(this.learningDir, 'patterns.json');
+    // Use window.require for Electron renderer process
+    const fs = window.require ? window.require('fs') : null;
+    const path = window.require ? window.require('path') : null;
         
         this.init();
         
