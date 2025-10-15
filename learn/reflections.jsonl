@@ -1,0 +1,2 @@
+{"timestamp":1760567663516,"mission":"test-smoke","step":"S1","tool":"fs.write","error":"ENOENT: no such file or directory","rootCause":"Directory not created before file write","fix":"","result":"FAIL","pattern":null,"metadata":{"test":true}}
+{"timestamp":1760567663521,"mission":"test-smoke","step":"S1","tool":"fs.write","error":"ENOENT: no such file or directory","rootCause":"Directory not created before file write","fix":"Added fs.mkdirSync before fs.writeFileSync","result":"PASS","pattern":"missing-file","metadata":{"test":true}}

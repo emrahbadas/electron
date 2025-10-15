@@ -1,4 +1,19 @@
 {
-  "lastUpdated": 1760564278238,
-  "patterns": []
+  "lastUpdated": 1760567663524,
+  "patterns": [
+    {
+      "id": "missing-file",
+      "count": 1,
+      "firstSeen": 1760567663524,
+      "lastSeen": 1760567663524,
+      "rootCause": "Directory not created before file write",
+      "fixes": [
+        {
+          "timestamp": 1760567663521,
+          "fix": "Added fs.mkdirSync before fs.writeFileSync",
+          "mission": "test-smoke"
+        }
+      ]
+    }
+  ]
 }
