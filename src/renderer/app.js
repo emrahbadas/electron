@@ -1241,7 +1241,23 @@ class KodCanavari {
             console.warn('⚠️ Probe Matrix not available');
         }
 
-        // 👨‍🏫 NARRATOR AGENT (Live commentary)
+        // � LEARNING STORE (PR-3: Learn from failures)
+        this.learningStore = null;
+        if (typeof LearningStore !== 'undefined') {
+            const { getLearningStore } = require('./learning-store');
+            this.learningStore = getLearningStore();
+            console.log('✅ Learning Store initialized');
+            
+            // Display stats
+            const stats = this.learningStore.getStats();
+            console.log(`   - ${stats.totalReflections} reflections`);
+            console.log(`   - ${stats.totalPatterns} patterns`);
+            console.log(`   - ${stats.successRate}% success rate`);
+        } else {
+            console.warn('⚠️ Learning Store not available');
+        }
+
+        // �👨‍🏫 NARRATOR AGENT (Live commentary)
         // Initialize after EventBus and UI are ready
         this.narratorAgent = null;
         
