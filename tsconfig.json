@@ -11,11 +11,12 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@types/*": ["types/*"],
-      "@components/*": ["src/components/*"],
-      "@adapters/*": ["src/adapters/*"]
+      "@/*": ["./src/*"],
+      "@types/*": ["./types/*"],
+      "@components/*": ["./src/components/*"],
+      "@adapters/*": ["./src/adapters/*"]
     },
     
     /* Emit */

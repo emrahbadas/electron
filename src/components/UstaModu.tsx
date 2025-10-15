@@ -435,9 +435,12 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
                     color: '#fff',
                     fontSize: '13px',
                     fontWeight: 500,
-                    marginBottom: '6px'
+                    marginBottom: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
                   }}>
-                    🎯 {msg.goal}
+                    {getStateEmoji('before')} {msg.goal || 'Adım planlanıyor...'}
                   </div>
                   {msg.rationale && (
                     <div style={{
@@ -496,12 +499,12 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
                         borderRadius: '4px',
                         fontSize: '11px',
                         fontWeight: 600,
-                        backgroundColor: result.status === 'PASS' ? '#065f46' :
-                                       result.status === 'FAIL' ? '#7f1d1d' : '#374151',
+                        backgroundColor: result.status === 'pass' ? '#065f46' :
+                                       result.status === 'fail' ? '#7f1d1d' : '#374151',
                         color: '#fff'
                       }}
                     >
-                      {result.type}: {result.status}
+                      {result.type}: {result.status.toUpperCase()}
                     </span>
                   ))}
                 </div>
