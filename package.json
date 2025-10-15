@@ -28,6 +28,8 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "axios": "^1.6.0",
     "electron-store": "^8.2.0",
-    "ws": "^8.18.0"
+    "eslint": "^9.37.0",
+    "ws": "^8.18.0",
+    "zod": "^3.25.76"
   }
 }

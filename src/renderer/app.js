@@ -1265,9 +1265,21 @@ class KodCanavari {
         } else {
             console.warn('⚠️ Critic Agent not available');
         }
+        
+        // 📚 LEARNING STORE (PR-3: FAIL → PASS tracking)
+        this.learningStore = typeof LearningStore !== 'undefined' ? new LearningStore() : null;
+        
+        if (this.learningStore) {
+            console.log('✅ Learning Store initialized');
+            const learningStats = this.learningStore.getStats();
+            console.log(`   - ${learningStats.totalReflections} reflections, ${learningStats.successRate}% success rate, ${learningStats.totalPatterns} patterns`);
+        } else {
+            console.warn('⚠️ Learning Store not available');
+        }
 
         this.currentProjectData = null;
         this.workflowProgress = [];
+        this.currentMission = null; // PR-3: Track current mission for learning store
         
         // 🔧 CRITICAL: Initialize path module BEFORE using it
         this.path = require('path');
@@ -5352,11 +5364,30 @@ Not:
         if (!this.settings.apiKey) {
             throw new Error('OpenAI API anahtarı ayarlanmamış');
         }
+        
+        // 📚 PR-3: PATTERN INJECTION - Add learned patterns to system prompt
+        let enhancedSystemPrompt = systemPrompt || '';
+        if (this.learningStore && options.injectPatterns !== false) {
+            const stats = this.learningStore.getStats();
+            const topPatterns = stats.topPatterns;
+            
+            if (topPatterns.length > 0) {
+                const learningContext = `\n\n📚 LEARNED PATTERNS (from past failures):\n` +
+                    topPatterns.map(p => {
+                        const lastFix = p.fixes[p.fixes.length - 1];
+                        return `- ${p.id}: ${p.rootCause} → Fix: ${lastFix.fix} (seen ${p.count}x)`;
+                    }).join('\n') +
+                    `\n\nUse these patterns to avoid repeating mistakes.\n`;
+                
+                enhancedSystemPrompt += learningContext;
+                console.log(`📚 Injected ${topPatterns.length} learned patterns into AI context`);
+            }
+        }
 
         // Rate limiting helper function
         const callWithRetry = async (attempt = 1, maxAttempts = 3) => {
             try {
-                return await this.makeOpenAIRequest(message, systemPrompt, options);
+                return await this.makeOpenAIRequest(message, enhancedSystemPrompt, options);
             } catch (error) {
                 if (error.code === 'OPENAI_INSUFFICIENT_QUOTA') {
                     // Quota aşıldığında tekrar denemenin anlamı yok
@@ -9059,6 +9090,11 @@ Now provide the CORRECTED response (pure JSON only):`;
                             // Execute fix plan
                             const fixResult = await this.criticAgent.executeFix(analysisResult.fixPlan);
                             
+                            // 📚 PR-3: Save to learning store
+                            if (this.criticAgent.saveLearning) {
+                                this.criticAgent.saveLearning(analysisResult, fixResult);
+                            }
+                            
                             if (fixResult.success) {
                                 this.addChatMessage('ai', '✅ Otomatik düzeltme başarılı! Devam ediyorum...');
                                 
@@ -9142,6 +9178,25 @@ Now provide the CORRECTED response (pure JSON only):`;
         console.log('🧭 NIGHT ORDERS PROTOCOL ACTIVATED!');
         console.log('📋 Mission:', orders.mission);
         console.log('🎯 Acceptance Criteria:', orders.acceptance);
+        
+        // 🔍 PR-3: ZOD SCHEMA VALIDATION
+        try {
+            const { validateNightOrders } = require('./schemas');
+            const validation = validateNightOrders(orders);
+            
+            if (!validation.valid) {
+                console.error('❌ Invalid Night Orders schema:', validation.errors);
+                const errorMsg = validation.errors.map(e => `${e.path}: ${e.message}`).join(', ');
+                throw new Error(`Schema validation failed: ${errorMsg}`);
+            }
+            console.log('✅ Night Orders schema validated');
+        } catch (error) {
+            if (error.message.includes('Schema validation')) {
+                throw error;
+            }
+            // If schemas.js not found or Zod not installed, warn but continue
+            console.warn('⚠️ Schema validation skipped:', error.message);
+        }
 
         // 🎯 PHASE TRACKING: Track new phase if mission changed
         if (orders.mission !== this.phaseContext.lastMission) {
@@ -9156,6 +9211,9 @@ Now provide the CORRECTED response (pure JSON only):`;
             });
             this.phaseContext.lastMission = orders.mission;
             this.phaseContext.phaseStartTime = Date.now();
+            
+            // PR-3: Set current mission for learning store
+            this.currentMission = orders.mission;
             
             console.log(`🎯 PHASE ${this.phaseContext.currentPhase} STARTED: ${orders.mission}`);
             

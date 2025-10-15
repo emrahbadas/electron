@@ -404,6 +404,36 @@ class CriticAgent {
         this.patterns[name] = pattern;
         console.log(`✅ Pattern added: ${name}`);
     }
+    
+    /**
+     * Save successful fix to learning store (PR-3)
+     * @param {Object} analysisResult - Analysis result with fix plan
+     * @param {Object} fixResult - Fix execution result
+     */
+    saveLearning(analysisResult, fixResult) {
+        if (!window.kodCanavari?.learningStore) {
+            console.warn('⚠️ Learning store not available');
+            return;
+        }
+        
+        const reflection = {
+            mission: window.kodCanavari.currentMission || 'Unknown',
+            step: analysisResult.failedStep || 'Unknown',
+            tool: analysisResult.tool || 'Unknown',
+            error: analysisResult.stderr || analysisResult.error || 'Unknown error',
+            rootCause: analysisResult.rootCause || 'Unknown',
+            fix: analysisResult.fixPlan.map(f => f.description).join(' → '),
+            result: fixResult.success ? 'PASS' : 'FAIL',
+            pattern: analysisResult.pattern || null,
+            metadata: {
+                attempts: fixResult.attempts || 1,
+                duration: fixResult.duration || 0
+            }
+        };
+        
+        window.kodCanavari.learningStore.saveReflection(reflection);
+        console.log('📚 Learning saved:', reflection.pattern || 'generic fix');
+    }
 }
 
 // Export for use in other modules
