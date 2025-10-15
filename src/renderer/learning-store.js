@@ -6,8 +6,15 @@
  */
 
 // Use window.require for Electron renderer process
-const fs = window.require ? window.require('fs') : null;
-const path = window.require ? window.require('path') : null;
+// Prevent re-declaration if already loaded
+if (typeof window.learningStoreModules === 'undefined') {
+    window.learningStoreModules = {
+        fs: window.require ? window.require('fs') : null,
+        path: window.require ? window.require('path') : null
+    };
+}
+const fs = window.learningStoreModules.fs;
+const path = window.learningStoreModules.path;
 
 class LearningStore {
     constructor() {
