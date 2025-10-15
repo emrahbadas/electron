@@ -1,3 +1,4 @@
+/* eslint-disable no-inline-styles */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   NarrationState,
@@ -7,6 +8,7 @@ import type {
   ProbeResult
 } from '../../types/contracts';
 import { getLegacyRunner } from '../adapters/legacy-runner';
+import styles from './UstaModu.module.css';
 
 // Extended StepNarration with phase tracking
 interface StepNarration {
@@ -203,6 +205,7 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
+    return undefined;
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // Cleanup old hashes periodically
@@ -261,107 +264,49 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
     return null;
   }
 
+  const containerClass = `${styles.container} ${isDragging ? styles.dragging : ''} ${isCollapsed ? styles.collapsed : styles.expanded}`;
+  const headerClass = `${styles.header} ${isCollapsed ? styles.collapsed : ''}`;
+
+  // Dinamik renkleri ve pozisyonu CSS değişkenleri olarak ayarla
+  const dynamicStyles = {
+    '--state-color': getStateColor(),
+    '--pos-x': `${position.x}px`,
+    '--pos-y': `${position.y}px`
+  } as React.CSSProperties;
+
   return (
     <div 
       ref={containerRef}
-      className="usta-modu-container" 
+      className={containerClass}
       onMouseDown={handleMouseDown}
-      style={{ 
-        position: 'fixed',
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        width: isCollapsed ? '200px' : '450px',
-        height: isCollapsed ? 'auto' : 'auto',
-        maxHeight: isCollapsed ? 'none' : '600px',
-        backgroundColor: '#1a1a2e',
-        borderRadius: '12px',
-        boxShadow: isDragging ? '0 12px 48px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.4)',
-        border: `2px solid ${getStateColor()}`,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 9999,
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-        cursor: isDragging ? 'grabbing' : 'default',
-        transition: isDragging ? 'none' : 'width 0.3s ease, box-shadow 0.2s ease',
-        userSelect: 'none'
-      }}>
+      style={dynamicStyles}>
       {/* Header - Draggable */}
-      <div 
-        className="header"
-        style={{
-          padding: '12px 16px',
-          borderBottom: isCollapsed ? 'none' : `2px solid ${getStateColor()}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: '#16213e',
-          cursor: 'grab',
-          borderRadius: '10px 10px 0 0'
-        }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{
-            fontSize: '24px',
-            animation: 'pulse 2s ease-in-out infinite'
-          }}>
-            🎓
-          </span>
+      <div className={headerClass}>
+        <div className={styles.headerLeft}>
+          <span className={styles.headerIcon}>🎓</span>
           {!isCollapsed && (
             <div>
-              <h3 style={{ 
-                margin: 0, 
-                color: '#fff',
-                fontSize: '16px',
-                fontWeight: 600
-              }}>
-                Usta Modu
-              </h3>
-              <p style={{
-                margin: '4px 0 0 0',
-                color: getStateColor(),
-                fontSize: '12px',
-                fontWeight: 500
-              }}>
+              <h3 className={styles.headerTitle}>Usta Modu</h3>
+              <p className={styles.headerStatus}>
                 {getStateLabel()}
               </p>
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className={styles.headerButtons}>
           <button
+            type="button"
             onClick={toggleCollapse}
-            style={{
-              padding: '6px 10px',
-              backgroundColor: '#6366f1',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 500,
-              transition: 'all 0.2s'
-            }}
+            className={`${styles.button} ${styles.collapseButton}`}
             title={isCollapsed ? 'Genişlet' : 'Küçült'}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4f46e5'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6366f1'}
           >
             {isCollapsed ? '📖' : '📕'}
           </button>
           {!isCollapsed && (
             <button
+              type="button"
               onClick={() => setMessages([])}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: '#ef4444',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 500,
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+              className={`${styles.button} ${styles.clearButton}`}
             >
               🗑️ Temizle
             </button>
@@ -371,85 +316,30 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
 
       {/* Messages - Only show when not collapsed */}
       {!isCollapsed && (
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
-        }}>
+        <div className={styles.messagesContainer}>
           {messages.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              color: '#6b7280',
-              fontSize: '14px',
-              padding: '32px',
-              fontStyle: 'italic'
-            }}>
+            <div className={styles.emptyState}>
               Henüz bir aktivite yok... 🌙
             </div>
           ) : (
-            messages.map((msg, idx) => (
-            <div
-              key={`${msg.stepId}-${idx}`}
-              style={{
-                padding: '12px',
-                backgroundColor: msg.phase === 'before' ? '#1e3a5f' : 
-                                msg.phase === 'after' ? '#2d1f3f' : '#1f2937',
-                borderRadius: '8px',
-                borderLeft: `4px solid ${
-                  msg.phase === 'before' ? '#3b82f6' :
-                  msg.phase === 'after' ? '#f59e0b' : '#8b5cf6'
-                }`,
-                animation: 'slideIn 0.3s ease-out',
-                opacity: idx === messages.length - 1 ? 1 : 0.7
-              }}
-            >
+            messages.map((msg, idx) => {
+              const messageClass = `${styles.message} ${styles[msg.phase]} ${idx === messages.length - 1 ? '' : styles.faded}`;
+              return (
+            <div key={`${msg.stepId}-${idx}`} className={messageClass}>
               {/* Step ID + Timestamp */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: '8px'
-              }}>
-                <span style={{
-                  color: '#a5b4fc',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  fontFamily: 'monospace'
-                }}>
-                  {msg.stepId}
-                </span>
-                <span style={{
-                  color: '#6b7280',
-                  fontSize: '11px'
-                }}>
-                  {formatTimestamp(msg.timestamp)}
-                </span>
+              <div className={styles.messageHeader}>
+                <span className={styles.stepId}>{msg.stepId}</span>
+                <span className={styles.timestamp}>{formatTimestamp(msg.timestamp)}</span>
               </div>
 
               {/* Before Phase */}
               {msg.phase === 'before' && (
                 <>
-                  <div style={{ 
-                    color: '#fff',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    marginBottom: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}>
+                  <div className={styles.beforeContent}>
                     {getStateEmoji('before')} {msg.goal || 'Adım planlanıyor...'}
                   </div>
                   {msg.rationale && (
-                    <div style={{
-                      color: '#9ca3af',
-                      fontSize: '12px',
-                      fontStyle: 'italic',
-                      paddingLeft: '8px',
-                      borderLeft: '2px solid #374151'
-                    }}>
+                    <div className={styles.rationale}>
                       💭 {msg.rationale}
                     </div>
                   )}
@@ -458,26 +348,11 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
 
               {/* After Phase */}
               {msg.phase === 'after' && (
-                <div style={{ 
-                  color: msg.success ? '#10b981' : '#ef4444',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
+                <div className={`${styles.afterContent} ${msg.success ? styles.success : styles.error}`}>
                   {msg.success ? '✅' : '❌'}
                   <span>{msg.success ? 'Başarılı' : 'Hata'}</span>
                   {msg.output && (
-                    <span style={{
-                      color: '#9ca3af',
-                      fontSize: '11px',
-                      fontFamily: 'monospace',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: '250px'
-                    }}>
+                    <span className={styles.output}>
                       {msg.output}
                     </span>
                   )}
@@ -486,31 +361,17 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
 
               {/* Verify Phase */}
               {msg.phase === 'verify' && msg.results && (
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '6px'
-                }}>
+                <div className={styles.verifyContent}>
                   {msg.results.map((result, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        backgroundColor: result.status === 'pass' ? '#065f46' :
-                                       result.status === 'fail' ? '#7f1d1d' : '#374151',
-                        color: '#fff'
-                      }}
-                    >
+                    <span key={i} className={`${styles.probeResult} ${styles[result.status]}`}>
                       {result.type}: {result.status.toUpperCase()}
                     </span>
                   ))}
                 </div>
               )}
             </div>
-            ))
+              );
+            })
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -518,16 +379,7 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
 
       {/* Footer Stats - Only show when not collapsed */}
       {!isCollapsed && (
-        <div style={{
-          padding: '12px 16px',
-          borderTop: '1px solid #374151',
-          backgroundColor: '#16213e',
-          borderRadius: '0 0 10px 10px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: '11px',
-          color: '#9ca3af'
-        }}>
+        <div className={styles.footer}>
           <span>📊 Mesaj: {messages.length}/{maxMessages}</span>
           {currentStep && (
             <span>🎯 Aktif: {currentStep}</span>
@@ -535,48 +387,6 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
           <span>⚡ Rate: {rateLimit}ms</span>
         </div>
       )}
-
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes pulse {
-          0%, 100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(1.1);
-            opacity: 0.8;
-          }
-        }
-
-        .usta-modu-container::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .usta-modu-container::-webkit-scrollbar-track {
-          background: #1a1a2e;
-        }
-
-        .usta-modu-container::-webkit-scrollbar-thumb {
-          background: ${getStateColor()};
-          border-radius: 3px;
-        }
-
-        .usta-modu-container::-webkit-scrollbar-thumb:hover {
-          background: #555;
-        }
-      `}</style>
     </div>
   );
 };
