@@ -275,6 +275,7 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
   } as React.CSSProperties;
 
   return (
+    // @ts-ignore - CSS custom properties require inline style
     <div 
       ref={containerRef}
       className={containerClass}
