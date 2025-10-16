@@ -5,12 +5,13 @@ import type {
   NarrationBeforeEvent,
   NarrationAfterEvent,
   NarrationVerifyEvent,
-  ProbeResult
+  ProbeResult,
+  TeachingMoment
 } from '../../types/contracts';
 import { getLegacyRunner } from '../adapters/legacy-runner';
 import styles from './UstaModu.module.css';
 
-// Extended StepNarration with phase tracking
+// Extended StepNarration with phase tracking + teaching
 interface StepNarration {
   stepId: string;
   phase: 'before' | 'after' | 'verify';
@@ -20,18 +21,19 @@ interface StepNarration {
   success?: boolean;
   output?: string;
   results?: ProbeResult[];
+  teachingMoment?: TeachingMoment; // 🎓 NEW: Eğitim içeriği
 }
 
-interface UstaMosuProps {
+interface UstaModuProps {
   maxMessages?: number;
   dedupWindowMs?: number;
   rateLimit?: number;
 }
 
-export const UstaModu: React.FC<UstaMosuProps> = ({
+export const UstaModu: React.FC<UstaModuProps> = ({
   maxMessages = 50,
   dedupWindowMs = 2000,
-  rateLimit = 100
+  rateLimit = 120 // Biraz artırdık, titreme olmasın
 }) => {
   // State Management
   const [state, setState] = useState<NarrationState>('PLANNING');
@@ -49,11 +51,25 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
   const unsubscribers = useRef<(() => void)[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastPerStepPhase = useRef(new Map<string, string>()); // "stepId|phase" -> lastPayloadDigest
 
-  // Dedupe helper
-  const generateHash = useCallback((msg: StepNarration): string => {
-    return `${msg.stepId}-${msg.phase}-${msg.goal?.substring(0, 50)}`;
+  // 🎓 Payload digest for stronger deduplication
+  const payloadDigest = useCallback((msg: StepNarration): string => {
+    const base = {
+      g: msg.goal || '',
+      r: msg.rationale || '',
+      o: msg.output || '',
+      res: msg.results ? msg.results.map(p => `${p.type}:${p.status}`).join('|') : '',
+      tm: msg.teachingMoment ? JSON.stringify(msg.teachingMoment) : ''
+    };
+    return JSON.stringify(base);
   }, []);
+
+  // Dedupe helper - now with payload digest
+  const generateHash = useCallback((msg: StepNarration): string => {
+    const dig = payloadDigest(msg);
+    return `${msg.stepId}-${msg.phase}-${dig}`;
+  }, [payloadDigest]);
 
   // Rate limiter
   const shouldProcessEvent = useCallback((): boolean => {
@@ -70,16 +86,27 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Add message with deduplication
+  // Add message with deduplication (STRENGTHENED)
   const addMessage = useCallback((msg: StepNarration) => {
     const hash = generateHash(msg);
-    const lastSeenTime = messageHashMap.current.get(hash) || 0;
     const now = Date.now();
 
-    if (now - lastSeenTime < dedupWindowMs) {
-      console.log('[UstaModu] Dedupe skipped:', hash);
+    // 1) Zaman penceresinde aynı hash geldiyse at
+    const lastSeen = messageHashMap.current.get(hash) || 0;
+    if (now - lastSeen < dedupWindowMs) {
+      // console.log('[UstaModu] Dedupe hash hit:', hash);
       return;
     }
+
+    // 2) Aynı step+phase için son payloadDigest ile aynıysa at
+    const key = `${msg.stepId}|${msg.phase}`;
+    const dig = payloadDigest(msg);
+    const lastDig = lastPerStepPhase.current.get(key);
+    if (lastDig === dig) {
+      // console.log('[UstaModu] Dedupe digest match:', key);
+      return;
+    }
+    lastPerStepPhase.current.set(key, dig);
 
     messageHashMap.current.set(hash, now);
 
@@ -93,7 +120,7 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
     });
 
     setTimeout(scrollToBottom, 50);
-  }, [generateHash, dedupWindowMs, maxMessages, scrollToBottom]);
+  }, [generateHash, payloadDigest, dedupWindowMs, maxMessages, scrollToBottom]);
 
   // Event handlers
   const handleNarrationBefore = useCallback((event: NarrationBeforeEvent) => {
@@ -107,6 +134,7 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
       phase: 'before',
       goal: event.data.explain?.goal,
       rationale: event.data.explain?.rationale,
+      teachingMoment: event.data.explain?.teachingMoment, // 🎓 Eğitim içeriğini aktar
       timestamp: new Date(event.timestamp)
     });
   }, [shouldProcessEvent, addMessage]);
@@ -342,6 +370,68 @@ export const UstaModu: React.FC<UstaMosuProps> = ({
                       {msg.rationale && (
                         <div className={styles.rationale}>
                           💭 {msg.rationale}
+                        </div>
+                      )}
+                      
+                      {/* 🎓 TEACHING MOMENT CARD */}
+                      {msg.teachingMoment && (
+                        <div className={styles.teachingCard}>
+                          <div className={styles.teachingHeader}>
+                            <span className={styles.conceptBadge}>
+                              💡 {msg.teachingMoment.concept}
+                            </span>
+                            <span className={styles.complexityBadge}>
+                              {msg.teachingMoment.complexity === 'basic' && '🟢'}
+                              {msg.teachingMoment.complexity === 'intermediate' && '🟡'}
+                              {msg.teachingMoment.complexity === 'advanced' && '🔴'}
+                              {' '}{msg.teachingMoment.complexity}
+                            </span>
+                          </div>
+                          
+                          {msg.teachingMoment.explanation && (
+                            <p className={styles.teachingExplanation}>
+                              {msg.teachingMoment.explanation}
+                            </p>
+                          )}
+                          
+                          {msg.teachingMoment.bestPractices && msg.teachingMoment.bestPractices.length > 0 && (
+                            <div className={styles.bestPractices}>
+                              <strong>✅ En İyi Uygulamalar:</strong>
+                              <ul>
+                                {msg.teachingMoment.bestPractices.map((bp, i) => (
+                                  <li key={i}>{bp}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {msg.teachingMoment.commonMistakes && msg.teachingMoment.commonMistakes.length > 0 && (
+                            <div className={styles.antipatterns}>
+                              <strong>⚠️ Kaçınılması Gerekenler:</strong>
+                              <ul>
+                                {msg.teachingMoment.commonMistakes.map((cm, i) => (
+                                  <li key={i}>{cm}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {msg.teachingMoment.relatedConcepts && msg.teachingMoment.relatedConcepts.length > 0 && (
+                            <div className={styles.relatedConcepts}>
+                              🔗 <strong>İlgili Konular:</strong> {msg.teachingMoment.relatedConcepts.join(', ')}
+                            </div>
+                          )}
+                          
+                          {msg.teachingMoment.learnMoreUrl && (
+                            <a 
+                              href={msg.teachingMoment.learnMoreUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className={styles.learnMore}
+                            >
+                              📚 Daha fazla öğren →
+                            </a>
+                          )}
                         </div>
                       )}
                     </>

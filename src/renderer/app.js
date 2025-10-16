@@ -8109,6 +8109,87 @@ explain: {
   tradeoffs?: string (optional) - "Alternatifler ve neden seçilmedi?" (karşılaştırma)
   checklist?: string[] (optional) - ["Kontrol 1", "Kontrol 2"] (doğrulama adımları)
   showDiff?: boolean (default: false) - Diff gösterilsin mi?
+  
+  // 🎓 NEW: EDUCATIONAL CONTENT (teachingMoment)
+  teachingMoment?: {
+    concept: string - Öğretilen konsept (örn: "RESTful API Design", "State Management")
+    complexity: 'basic' | 'intermediate' | 'advanced' - Zorluk seviyesi
+    category: 'architecture' | 'security' | 'performance' | 'testing' | 'design' | 'patterns' | 'best-practices'
+    explanation?: string - Kısa açıklama (1-2 cümle, Türkçe)
+    bestPractices?: string[] - En iyi uygulamalar (maks 3 madde)
+    commonMistakes?: string[] - Yaygın hatalar (maks 3 madde)
+    relatedConcepts?: string[] - İlgili konular (maks 3 madde)
+    relevance?: number (0-100) - Kullanıcı için önem skoru (varsayılan: 50)
+    learnMoreUrl?: string - Dış kaynak linki (isteğe bağlı)
+  }
+}
+
+🎯 **TEACHING MOMENT NE ZAMAN EKLENMELİ?**
+1. ✅ Karmaşık adımlarda (complexity: intermediate/advanced)
+2. ✅ Güvenlik kritik işlemler (category: security)
+3. ✅ Mimari kararlar (category: architecture, patterns)
+4. ✅ Yaygın hatalar olabilecek yerlerde (commonMistakes)
+5. ✅ %30 rastgelelik - Her 3 adımdan 1'inde öğret (fazla spam olmasın)
+6. ❌ Basit dosya okuma/yazma (teachingMoment gereksiz)
+
+📚 **TEACHING MOMENT ÖRNEKLERİ**:
+
+// Örnek 1: API Endpoint oluştururken
+"teachingMoment": {
+  "concept": "RESTful API Design",
+  "complexity": "intermediate",
+  "category": "architecture",
+  "explanation": "POST /auth/login endpoint'i oluştururken HTTP metodunu kaynak operasyonuna göre seçiyoruz.",
+  "bestPractices": [
+    "Token'ı httpOnly cookie'de sakla (XSS koruması)",
+    "Rate limiting uygula (brute force önleme)",
+    "Input validation yap (email format, password strength)"
+  ],
+  "commonMistakes": [
+    "❌ Password'ü console.log ile loglamak (güvenlik açığı)",
+    "❌ Token'ı localStorage'a kaydetmek (XSS riski)",
+    "❌ GET request'te password göndermek (URL'de görünür)"
+  ],
+  "relatedConcepts": ["JWT Authentication", "CORS", "Middleware Pattern"],
+  "relevance": 85
+}
+
+// Örnek 2: React State Management
+"teachingMoment": {
+  "concept": "React State Management",
+  "complexity": "basic",
+  "category": "patterns",
+  "explanation": "Küçük formlar için useState yeterli. Global state'e ihtiyaç olduğunda Context/Redux kullan.",
+  "bestPractices": [
+    "Tek object yerine ayrı state'ler → re-render optimize",
+    "useState yerine useReducer → complex state logic",
+    "Form state lokal kalsın → prop drilling önle"
+  ],
+  "commonMistakes": [
+    "❌ Her küçük form için Redux kullanmak (over-engineering)",
+    "❌ State'i doğrudan mutate etmek (React re-render olmaz)"
+  ],
+  "relatedConcepts": ["useReducer", "Context API", "React Query"],
+  "relevance": 70
+}
+
+// Örnek 3: Vite Build Configuration
+"teachingMoment": {
+  "concept": "Vite Entry Points",
+  "complexity": "intermediate",
+  "category": "performance",
+  "explanation": "Multiple entry points için lib mode yerine rollupOptions.input kullan. Lib mode tek entry içindir.",
+  "bestPractices": [
+    "index.html proje root'ta olmalı (entry module hatası önleme)",
+    "Shared chunks için manualChunks tanımla (React runtime ayrı bundle)",
+    "Dynamic import'lar için code splitting aktif"
+  ],
+  "commonMistakes": [
+    "❌ lib mode + multiple entries (conflict yaratır)",
+    "❌ index.html'i src/ altına koymak (Vite bulamaz)"
+  ],
+  "relatedConcepts": ["Rollup Configuration", "Code Splitting", "Tree Shaking"],
+  "relevance": 60
 }
 
 ✅ EXPLAIN FIELD KURALLARI:
@@ -8117,6 +8198,7 @@ explain: {
 3. tradeoffs: İsteğe bağlı ama önerilir (alternatif çözümler)
 4. checklist: İsteğe bağlı doğrulama maddeleri
 5. showDiff: Dosya değişikliği varsa true yap
+6. 🆕 teachingMoment: Karmaşık/kritik adımlarda ekle (yukarıdaki kurallar)
 
 🚫 EXPLAIN FIELD OLMADAN STEP GEÇERSİZ!
 Policy engine "Teach mode: Step S1 açıklaması eksik" hatası verir.

@@ -42,6 +42,43 @@ export interface Explanation {
   
   /** Checklist of important points */
   checklist?: string[];
+  
+  /** 🎓 EDUCATIONAL ENHANCEMENTS */
+  
+  /** Pedagogical insights for the user */
+  teachingMoment?: TeachingMoment;
+}
+
+/**
+ * Teaching moment structure - educational content
+ */
+export interface TeachingMoment {
+  /** Concept being taught (e.g., "RESTful API Design", "State Management") */
+  concept: string;
+  
+  /** Complexity level */
+  complexity: 'basic' | 'intermediate' | 'advanced';
+  
+  /** Category of the teaching */
+  category: 'architecture' | 'security' | 'performance' | 'testing' | 'design' | 'patterns' | 'best-practices';
+  
+  /** Short explanation (1-2 sentences, Turkish) */
+  explanation?: string;
+  
+  /** Best practices for this step */
+  bestPractices?: string[];
+  
+  /** Common mistakes to avoid */
+  commonMistakes?: string[];
+  
+  /** Related concepts to explore */
+  relatedConcepts?: string[];
+  
+  /** Relevance score (0-100, how important is this for the user) */
+  relevance?: number;
+  
+  /** External learning resource */
+  learnMoreUrl?: string;
 }
 
 /**
