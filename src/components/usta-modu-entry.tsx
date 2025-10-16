@@ -2,15 +2,15 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import UstaModu from './UstaModu';
 
-// Wait for legacy system to be ready (using global window object)
+// Wait for legacy system to be ready (check window.kodCanavari)
 const waitForLegacySystem = (maxWaitMs = 5000): Promise<void> => {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     
     const checkLegacy = () => {
-      // Check if window.legacyRunner exists
-      if (typeof window !== 'undefined' && (window as any).legacyRunner) {
-        console.log('[UstaModu Entry] Legacy runner found on window object');
+      // Check if window.kodCanavari exists (main app loaded)
+      if (typeof window !== 'undefined' && (window as any).kodCanavari) {
+        console.log('[UstaModu Entry] window.kodCanavari found');
         resolve();
         return;
       }
