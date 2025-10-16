@@ -1,0 +1,474 @@
+/* 📊 LEARNING DASHBOARD STYLES */
+
+/* Minimized Button */
+.minimized {
+    position: fixed;
+    bottom: 120px;
+    right: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 18px;
+    border-radius: 25px;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 9998;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.minimized:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.minimized .icon {
+    font-size: 20px;
+}
+
+.minimized .label {
+    font-size: 14px;
+}
+
+.minimized .badge {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Dashboard Container */
+.dashboard {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 900px;
+    max-height: 85vh;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header */
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header .icon {
+    font-size: 28px;
+}
+
+.closeBtn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.closeBtn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Loading State */
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    gap: 20px;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Stats Grid */
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    padding: 24px;
+    background: #f8f9fa;
+}
+
+.statCard {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.statCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.statValue {
+    font-size: 32px;
+    font-weight: 700;
+    color: #667eea;
+    margin-bottom: 8px;
+}
+
+.statLabel {
+    font-size: 13px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Content Area */
+.dashboard > div:not(.header):not(.loading) {
+    overflow-y: auto;
+    padding-bottom: 24px;
+}
+
+/* Sections */
+.section {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.section:last-of-type {
+    border-bottom: none;
+}
+
+.section h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #212529;
+}
+
+.emptyState {
+    text-align: center;
+    color: #6c757d;
+    padding: 32px 20px;
+    font-style: italic;
+}
+
+/* Pattern List */
+.patternList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.patternCard {
+    background: #f8f9fa;
+    padding: 16px;
+    border-radius: 12px;
+    border-left: 4px solid #667eea;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.patternCard:hover {
+    background: #e9ecef;
+    border-left-width: 6px;
+}
+
+.patternCard.selected {
+    background: #e7f0ff;
+    border-left-color: #007bff;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
+}
+
+.patternHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.patternId {
+    font-weight: 700;
+    color: #667eea;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.patternCount {
+    background: #667eea;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.patternRoot,
+.patternFix {
+    font-size: 13px;
+    margin-bottom: 6px;
+    line-height: 1.5;
+}
+
+.patternRoot strong,
+.patternFix strong {
+    color: #495057;
+}
+
+.patternMeta {
+    font-size: 12px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Pattern Details */
+.patternDetails {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 12px;
+}
+
+.detailRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.detailRow:last-child {
+    border-bottom: none;
+}
+
+.detailLabel {
+    font-weight: 600;
+    color: #495057;
+}
+
+.detailValue {
+    color: #212529;
+}
+
+.patternDetails h4 {
+    margin: 20px 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+}
+
+.fixHistory {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fixCard {
+    background: white;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid #28a745;
+}
+
+.fixMission {
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.fixContent {
+    color: #495057;
+    font-size: 13px;
+    margin-bottom: 6px;
+    line-height: 1.5;
+}
+
+.fixDate {
+    font-size: 12px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Timeline */
+.timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.timelineItem {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border-left: 4px solid #6c757d;
+}
+
+.timelineItem.pass {
+    border-left-color: #28a745;
+    background: #f1f9f3;
+}
+
+.timelineItem.fail {
+    border-left-color: #dc3545;
+    background: #fff5f5;
+}
+
+.timelineIcon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.timelineContent {
+    flex: 1;
+}
+
+.timelineHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.timelineMission {
+    font-weight: 600;
+    color: #212529;
+    font-size: 14px;
+}
+
+.timelineDate {
+    font-size: 12px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.timelineStep {
+    font-size: 13px;
+    color: #495057;
+    margin-bottom: 6px;
+}
+
+.timelineError,
+.timelineFix,
+.timelinePattern {
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+.timelineError {
+    background: #ffe5e5;
+    color: #c92a2a;
+}
+
+.timelineFix {
+    background: #e7f5ff;
+    color: #1864ab;
+}
+
+.timelinePattern {
+    background: #fff4e6;
+    color: #e67700;
+}
+
+/* Actions */
+.actions {
+    display: flex;
+    gap: 12px;
+    padding: 20px 24px;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.refreshBtn,
+.exportBtn {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.refreshBtn {
+    background: #667eea;
+    color: white;
+}
+
+.refreshBtn:hover {
+    background: #5568d3;
+    transform: translateY(-1px);
+}
+
+.exportBtn {
+    background: white;
+    color: #667eea;
+    border: 2px solid #667eea;
+}
+
+.exportBtn:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-1px);
+}
+
+/* Scrollbar */
+.dashboard > div::-webkit-scrollbar {
+    width: 8px;
+}
+
+.dashboard > div::-webkit-scrollbar-track {
+    background: #f1f3f5;
+}
+
+.dashboard > div::-webkit-scrollbar-thumb {
+    background: #ced4da;
+    border-radius: 4px;
+}
+
+.dashboard > div::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}

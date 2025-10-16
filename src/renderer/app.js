@@ -1248,6 +1248,12 @@ class KodCanavari {
             this.learningStore = getLearningStore();
             console.log('✅ Learning Store initialized');
             
+            // Expose to window for Learning Dashboard
+            if (!window.kodCanavari) {
+                window.kodCanavari = {};
+            }
+            window.kodCanavari.learningStore = this.learningStore;
+            
             // Display stats
             const stats = this.learningStore.getStats();
             console.log(`   - ${stats.totalReflections} reflections`);

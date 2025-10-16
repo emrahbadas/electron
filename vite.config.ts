@@ -17,19 +17,14 @@ export default defineConfig({
     outDir: 'dist-react',
     rollupOptions: {
       input: {
-        'usta-modu': path.resolve(__dirname, 'src/components/usta-modu-entry.tsx')
+        'usta-modu': path.resolve(__dirname, 'src/components/usta-modu-entry.tsx'),
+        'learning-dashboard': path.resolve(__dirname, 'src/renderer/learning-dashboard-entry.tsx')
       },
       output: {
         entryFileNames: '[name].js',
         chunkFileNames: '[name].js',
         assetFileNames: '[name].[ext]'
       }
-    },
-    lib: {
-      entry: path.resolve(__dirname, 'src/components/usta-modu-entry.tsx'),
-      name: 'UstaModu',
-      formats: ['iife'],
-      fileName: 'usta-modu'
     }
   }
 });
