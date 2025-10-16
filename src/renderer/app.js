@@ -9206,19 +9206,31 @@ Now provide the CORRECTED response (pure JSON only):`;
         console.log('📋 Mission:', orders.mission);
         console.log('🎯 Acceptance Criteria:', orders.acceptance);
         
-        // 🔍 PR-3: ZOD SCHEMA VALIDATION
+        // 🔍 PR-3: ZOD SCHEMA VALIDATION + CONTINUE PARSEARGS
         try {
-            const { validateNightOrders } = require('./schemas');
-            const validation = validateNightOrders(orders);
+            const { validateNightOrders: zodValidate } = require('./schemas');
+            const { validateNightOrders: parseArgsValidate } = require('./utils/parseArgs');
             
-            if (!validation.valid) {
-                console.error('❌ Invalid Night Orders schema:', validation.errors);
-                const errorMsg = validation.errors.map(e => `${e.path}: ${e.message}`).join(', ');
+            // Level 1: Zod schema validation (structure)
+            const zodValidation = zodValidate(orders);
+            if (!zodValidation.valid) {
+                console.error('❌ Invalid Night Orders schema:', zodValidation.errors);
+                const errorMsg = zodValidation.errors.map(e => `${e.path}: ${e.message}`).join(', ');
                 throw new Error(`Schema validation failed: ${errorMsg}`);
             }
-            console.log('✅ Night Orders schema validated');
+            console.log('✅ Night Orders schema validated (Zod)');
+            
+            // Level 2: Tool argument validation (semantics)
+            try {
+                parseArgsValidate(orders);
+                console.log('✅ Night Orders arguments validated (parseArgs)');
+            } catch (parseError) {
+                console.error('❌ Invalid Night Orders arguments:', parseError.message);
+                throw new Error(`Argument validation failed: ${parseError.message}`);
+            }
+            
         } catch (error) {
-            if (error.message.includes('Schema validation')) {
+            if (error.message.includes('validation failed')) {
                 throw error;
             }
             // If schemas.js not found or Zod not installed, warn but continue

@@ -18,8 +18,21 @@ const ExplainSchema = z.object({
 
 const StepSchema = z.object({
     id: z.string().regex(/^S\d+$/, 'Step ID must be S1, S2, S3, etc.'),
-    tool: z.enum(['fs.write', 'fs.read', 'fs.delete', 'run_cmd', 'terminal.exec']),
-    args: z.record(z.unknown()),
+    tool: z.enum([
+        'fs.write', 
+        'fs.read', 
+        'fs.delete', 
+        'fs.multiEdit',  // NEW: Multi-edit support
+        'run_cmd', 
+        'terminal.exec'
+    ]),
+    args: z.record(z.unknown()).refine(
+        (args) => {
+            // Tool-specific validation will happen in parseArgs
+            return true;
+        },
+        { message: 'Invalid tool arguments' }
+    ),
     explain: ExplainSchema.optional(),
     verify: z.array(z.string()).optional()
 });
