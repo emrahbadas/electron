@@ -2,11 +2,37 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import UstaModu from './UstaModu';
 
-// Wait for legacy system to be ready
+// Wait for legacy system to be ready (using global window object)
+const waitForLegacySystem = (maxWaitMs = 5000): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    
+    const checkLegacy = () => {
+      // Check if window.legacyRunner exists
+      if (typeof window !== 'undefined' && (window as any).legacyRunner) {
+        console.log('[UstaModu Entry] Legacy runner found on window object');
+        resolve();
+        return;
+      }
+      
+      // Timeout check
+      if (Date.now() - startTime > maxWaitMs) {
+        reject(new Error(`Legacy system not ready after ${maxWaitMs}ms`));
+        return;
+      }
+      
+      // Keep checking every 100ms
+      setTimeout(checkLegacy, 100);
+    };
+    
+    checkLegacy();
+  });
+};
+
+// Initialize Usta Modu
 const initUstaModu = async () => {
-  const { waitForLegacySystem } = await import('@adapters/legacy-runner');
-  
   try {
+    console.log('[UstaModu Entry] Waiting for legacy system...');
     await waitForLegacySystem(5000);
     console.log('[UstaModu Entry] Legacy system ready, mounting React component...');
     
