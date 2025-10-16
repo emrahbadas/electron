@@ -10656,6 +10656,18 @@ Happy coding! 🚀
             case 'fs.read':
                 message = `📖 ${step.args.path} dosyası okunuyor...`;
                 break;
+            
+            case 'fs.multiEdit':
+                const editCount = step.args.edits ? step.args.edits.length : 0;
+                message = `✏️ ${step.args.filepath} dosyasında ${editCount} değişiklik yapılıyor...`;
+                details.push(`${editCount} atomik düzenleme`);
+                if (step.args.edits) {
+                    const replaceAllCount = step.args.edits.filter(e => e.replace_all).length;
+                    if (replaceAllCount > 0) {
+                        details.push(`${replaceAllCount} global değişiklik`);
+                    }
+                }
+                break;
 
             case 'glob':
             case 'list_dir':
@@ -10687,6 +10699,11 @@ Happy coding! 🚀
             case 'write_file':
             case 'fs.write':
                 return `📝 Dosya oluşturuyorum: ${args.path}\n\nBu dosya projenin önemli bir parçası. İçeriği şunları içerecek:\n- ${args.content ? args.content.split('\n').slice(0, 3).join('\n- ') + '...' : 'Kod içeriği'}`;
+            
+            case 'fs.multiEdit':
+                const editCount = args.edits ? args.edits.length : 0;
+                const replaceAllCount = args.edits ? args.edits.filter(e => e.replace_all).length : 0;
+                return `✏️ Dosyayı düzenliyorum: ${args.filepath}\n\n${editCount} atomik değişiklik yapılacak${replaceAllCount > 0 ? ` (${replaceAllCount} global değişiklik dahil)` : ''}.\n\nTüm değişiklikler birlikte uygulanacak - ya hepsi başarılı olur, ya hiçbiri.`;
             
             case 'run_cmd':
             case 'terminal.exec':
@@ -10776,6 +10793,12 @@ Happy coding! 🚀
                     throw new Error(`${step.tool} requires path`);
                 }
                 return await this.readFileWithAgent(step.args.path);
+            
+            case 'fs.multiEdit':
+                if (!step.args.filepath || !step.args.edits) {
+                    throw new Error('fs.multiEdit requires filepath and edits array');
+                }
+                return await this.executeMultiEdit(step.args.filepath, step.args.edits);
 
             case 'run_cmd':
             case 'terminal.exec':
@@ -13120,6 +13143,107 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
             }
         } catch (error) {
             throw new Error(`Dosya okunamadı: ${error.message}`);
+        }
+    }
+
+    /**
+     * ✏️ MULTI-EDIT: Atomic file editing (Continue-inspired)
+     * 
+     * Applies multiple find-and-replace operations sequentially.
+     * All edits must succeed for changes to be applied (atomic operation).
+     * 
+     * @param {string} filepath - File path relative to workspace
+     * @param {Array} edits - Array of { old_string, new_string, replace_all? }
+     * @returns {Object} { success: boolean, editsApplied: number }
+     */
+    async executeMultiEdit(filepath, edits) {
+        if (!filepath || !Array.isArray(edits) || edits.length === 0) {
+            throw new Error('executeMultiEdit requires filepath and non-empty edits array');
+        }
+
+        console.log(`✏️ Multi-Edit: ${filepath} (${edits.length} edits)`);
+
+        // Step 1: Read current file content
+        const readResult = await this.readFileWithAgent(filepath);
+        if (!readResult.success) {
+            throw new Error(`Cannot read file: ${filepath}`);
+        }
+
+        let currentContent = readResult.content;
+        const originalContent = currentContent; // Backup for rollback
+        const appliedEdits = [];
+
+        try {
+            // Step 2: Apply edits sequentially
+            for (let i = 0; i < edits.length; i++) {
+                const edit = edits[i];
+                const { old_string, new_string, replace_all = false } = edit;
+
+                // Validation
+                if (!old_string || new_string === undefined) {
+                    throw new Error(`Edit ${i}: missing old_string or new_string`);
+                }
+
+                if (old_string === new_string) {
+                    throw new Error(`Edit ${i}: old_string and new_string must be different`);
+                }
+
+                // Check if old_string exists
+                if (!currentContent.includes(old_string)) {
+                    throw new Error(
+                        `Edit ${i}: old_string not found in file:\n` +
+                        `Looking for: ${old_string.substring(0, 100)}${old_string.length > 100 ? '...' : ''}`
+                    );
+                }
+
+                // Apply replacement
+                if (replace_all) {
+                    // Replace all occurrences
+                    const occurrences = (currentContent.match(new RegExp(old_string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+                    currentContent = currentContent.split(old_string).join(new_string);
+                    console.log(`  ✅ Edit ${i + 1}/${edits.length}: Replaced ${occurrences} occurrences`);
+                    appliedEdits.push({ index: i, occurrences, type: 'replace_all' });
+                } else {
+                    // Replace first occurrence only
+                    const index = currentContent.indexOf(old_string);
+                    currentContent = currentContent.substring(0, index) + 
+                                     new_string + 
+                                     currentContent.substring(index + old_string.length);
+                    console.log(`  ✅ Edit ${i + 1}/${edits.length}: Replaced first occurrence`);
+                    appliedEdits.push({ index: i, occurrences: 1, type: 'replace_first' });
+                }
+            }
+
+            // Step 3: Write updated content atomically
+            const writeResult = await this.createFileWithAgent(filepath, currentContent);
+            
+            if (!writeResult.success) {
+                throw new Error(`Failed to write file: ${writeResult.error || 'Unknown error'}`);
+            }
+
+            console.log(`✅ Multi-Edit complete: ${appliedEdits.length} edits applied to ${filepath}`);
+
+            return {
+                success: true,
+                editsApplied: appliedEdits.length,
+                details: appliedEdits,
+                originalLength: originalContent.length,
+                newLength: currentContent.length
+            };
+
+        } catch (error) {
+            // Rollback: Restore original content if any edit fails
+            console.error(`❌ Multi-Edit failed, rolling back: ${error.message}`);
+            
+            // Attempt to restore original content
+            try {
+                await this.createFileWithAgent(filepath, originalContent);
+                console.log(`🔄 Rollback successful: ${filepath} restored to original state`);
+            } catch (rollbackError) {
+                console.error(`❌ CRITICAL: Rollback failed! File may be corrupted: ${rollbackError.message}`);
+            }
+
+            throw new Error(`Multi-Edit failed at edit ${appliedEdits.length + 1}/${edits.length}: ${error.message}`);
         }
     }
 
