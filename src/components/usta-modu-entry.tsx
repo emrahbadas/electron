@@ -10,10 +10,14 @@ const initUstaModu = async () => {
     await waitForLegacySystem(5000);
     console.log('[UstaModu Entry] Legacy system ready, mounting React component...');
     
-    // Create container
-    const container = document.createElement('div');
-    container.id = 'usta-modu-react-root';
-    document.body.appendChild(container);
+    // Find or create container
+    let container = document.getElementById('usta-modu-root');
+    if (!container) {
+      console.warn('[UstaModu Entry] #usta-modu-root not found, creating fallback container');
+      container = document.createElement('div');
+      container.id = 'usta-modu-root';
+      document.body.appendChild(container);
+    }
     
     // Mount React
     const root = createRoot(container);
