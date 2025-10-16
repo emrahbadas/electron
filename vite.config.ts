@@ -24,6 +24,7 @@ export default defineConfig({
         entryFileNames: '[name].js',
         chunkFileNames: '[name].js',
         assetFileNames: '[name].[ext]'
+        // ES modules format (default)
       }
     }
   }

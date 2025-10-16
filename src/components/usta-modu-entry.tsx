@@ -2,6 +2,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import UstaModu from './UstaModu';
 
+// Debug: Confirm script is loading
+console.log('🎓 [UstaModu Entry] Script loaded! Timestamp:', new Date().toISOString());
+
 // Wait for legacy system to be ready (check window.kodCanavari)
 const waitForLegacySystem = (maxWaitMs = 5000): Promise<void> => {
   return new Promise((resolve, reject) => {
