@@ -12,20 +12,6 @@ const mcpRouter = require('./mcp-mini.js');
 app.use(cors());
 app.use(express.json());
 
-// 🏥 Health Check Endpoint
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        service: 'KayraDeniz-MCP-Server',
-        port: PORT,
-        timestamp: new Date().toISOString(),
-        endpoints: {
-            mcp: '/mcp/*',
-            ai: '/ai/chat'
-        }
-    });
-});
-
 // Mount MCP endpoints
 app.use('/mcp', mcpRouter);
 console.log('🔧 Mini MCP mounted at /mcp/*');
@@ -119,15 +105,21 @@ app.get('/ai/models', async (req, res) => {
     }
 });
 
-// Health check (proxy server)
+// 🏥 Health Check Endpoint
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'OK', 
-        service: 'AI Proxy Server',
+        service: 'KayraDeniz-MCP-Server',
+        port: PORT,
         timestamp: new Date().toISOString(),
         github_token: process.env.GITHUB_TOKEN ? 'Configured' : 'Missing',
         mcp_enabled: true,
-        mcp_health: `http://127.0.0.1:${PORT}/mcp/health`
+        mcp_health: `http://127.0.0.1:${PORT}/mcp/health`,
+        endpoints: {
+            mcp: '/mcp/*',
+            ai: '/ai/chat',
+            models: '/ai/models'
+        }
     });
 });
 

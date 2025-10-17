@@ -5529,3 +5529,222 @@ details summary:hover {
         max-height: calc(100vh - 140px);
     }
 }
+
+/* ================================================================
+   🌌 LUMA CONFIRMATION MODAL STYLES
+   ================================================================ */
+
+.luma-confirmation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: lumafade-in 0.2s ease-out;
+}
+
+@keyframes lumafade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.luma-confirmation-content {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    animation: luma-slide-up 0.3s ease-out;
+}
+
+@keyframes luma-slide-up {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.luma-confirmation-header {
+    padding: 24px 24px 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.luma-confirmation-header h3 {
+    margin: 0;
+    color: var(--warning-color);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.luma-risk-badge {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.luma-risk-badge.risk-HIGH {
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.5);
+}
+
+.luma-risk-badge.risk-MEDIUM {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ff9800;
+    border: 1px solid rgba(255, 152, 0, 0.5);
+}
+
+.luma-risk-badge.risk-LOW {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.5);
+}
+
+.luma-confirmation-body {
+    padding: 24px;
+}
+
+.luma-warning-message {
+    background: rgba(255, 152, 0, 0.1);
+    border-left: 4px solid var(--warning-color);
+    padding: 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.luma-reasoning {
+    padding: 16px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    margin-bottom: 16px;
+    border-left: 3px solid var(--info-color);
+}
+
+.luma-reasoning strong {
+    color: var(--info-color);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.luma-alternatives {
+    padding: 16px;
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 6px;
+    border-left: 3px solid var(--success-color);
+}
+
+.luma-alternatives strong {
+    color: var(--success-color);
+    display: block;
+    margin-bottom: 12px;
+}
+
+.luma-alternatives ul {
+    margin: 0;
+    padding-left: 24px;
+}
+
+.luma-alternatives li {
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.luma-confirmation-actions {
+    padding: 16px 24px 24px 24px;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border-color);
+}
+
+.luma-btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.luma-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.luma-btn:active {
+    transform: translateY(0);
+}
+
+.luma-btn-danger {
+    background: var(--error-color);
+    color: white;
+}
+
+.luma-btn-danger:hover {
+    background: #d32f2f;
+}
+
+.luma-btn-safe {
+    background: var(--success-color);
+    color: white;
+}
+
+.luma-btn-safe:hover {
+    background: #45a049;
+}
+
+/* Luma chat message styles */
+.chat-message[data-mode="luma-warning"] .message-content {
+    background: rgba(255, 152, 0, 0.1);
+    border-left: 4px solid var(--warning-color);
+}
+
+.chat-message[data-mode="luma-suggestion"] .message-content {
+    background: rgba(33, 150, 243, 0.1);
+    border-left: 4px solid var(--info-color);
+}
+
+.chat-message[data-mode="luma-learned"] .message-content {
+    background: rgba(156, 39, 176, 0.1);
+    border-left: 4px solid #9c27b0;
+}
+
+.chat-message[data-mode="luma-reflection"] .message-content {
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 4px solid #ffc107;
+}
+
+.chat-message[data-mode="luma-autofix"] .message-content {
+    background: rgba(76, 175, 80, 0.1);
+    border-left: 4px solid var(--success-color);
+}

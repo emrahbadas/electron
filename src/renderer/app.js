@@ -1288,6 +1288,38 @@ class KodCanavari {
         });
         console.log('✅ Multi-Agent Coordinator initialized');
         window.kodCanavari.multiAgentCoordinator = this.multiAgentCoordinator;
+        
+        // 🌌 LUMA CORE (Cognitive reasoning engine)
+        this.lumaCore = null;
+        this.lumaBridge = null;
+        try {
+            // Import Luma modules dynamically
+            import('../agents/luma-core.js').then(({ LumaCore }) => {
+                import('../agents/luma-context-bridge.js').then(({ LumaContextBridge }) => {
+                    this.lumaCore = new LumaCore();
+                    this.lumaBridge = new LumaContextBridge({
+                        sessionContext: this.sessionContext,
+                        learningStore: this.learningStore,
+                        eventBus: this.eventBus
+                    });
+                    
+                    console.log('🌌 Luma Core initialized');
+                    console.log('🌉 Luma Context Bridge initialized');
+                    
+                    // Expose to window
+                    window.kodCanavari.lumaCore = this.lumaCore;
+                    window.kodCanavari.lumaBridge = this.lumaBridge;
+                    
+                    // Emit init event for Usta Modu
+                    this.eventBus.emit('LUMA_INITIALIZED', {
+                        timestamp: Date.now(),
+                        message: '🧠 Luma bilinç çekirdeği aktif edildi'
+                    });
+                });
+            });
+        } catch (error) {
+            console.warn('⚠️ Luma initialization failed:', error.message);
+        }
 
         // 👨‍🏫 NARRATOR AGENT (Live commentary)
         // Initialize after EventBus and UI are ready
@@ -3087,6 +3119,75 @@ class KodCanavari {
 
             // Agent mode ile unified system kullan (context-aware)
             if (chatMode === 'agent') {
+                // 🌌 LUMA REASONING (Pre-execution analysis)
+                if (this.lumaBridge) {
+                    try {
+                        const lumaDecision = await this.lumaBridge.processMessage(message);
+                        
+                        // Luma karar verdi - kullanıcıya bildir
+                        if (lumaDecision.type === 'warning') {
+                            // Riskli komut - onay iste
+                            this.addContextualChatMessage('ai', lumaDecision.message, {
+                                mode: 'luma-warning',
+                                lumaDecision
+                            });
+                            
+                            // Kullanıcı onayı bekle
+                            const confirmed = await this.showLumaConfirmation(lumaDecision);
+                            if (!confirmed) {
+                                // Kullanıcı reddetti
+                                if (sendBtn) {
+                                    sendBtn.disabled = false;
+                                    sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                                }
+                                this.isProcessingMessage = false;
+                                return;
+                            }
+                        } else if (lumaDecision.type === 'suggestion') {
+                            // Context eksik - önce düzelt
+                            this.addContextualChatMessage('ai', lumaDecision.message, {
+                                mode: 'luma-suggestion',
+                                lumaDecision
+                            });
+                            
+                            // Auto-fix varsa uygula
+                            if (lumaDecision.metadata?.autoFixable && lumaDecision.fix) {
+                                this.addContextualChatMessage('ai', `🔧 Düzeltme uygulanıyor: ${lumaDecision.fix}`, {
+                                    mode: 'luma-autofix'
+                                });
+                                // Context fix uygulandıktan sonra devam et
+                            }
+                        } else if (lumaDecision.type === 'learned_response') {
+                            // Öğrenilmiş pattern - bilgi ver
+                            this.addContextualChatMessage('ai', lumaDecision.message, {
+                                mode: 'luma-learned',
+                                lumaDecision
+                            });
+                        } else if (lumaDecision.type === 'new_reflection') {
+                            // Yeni hata analizi
+                            this.addContextualChatMessage('ai', lumaDecision.message, {
+                                mode: 'luma-reflection',
+                                lumaDecision
+                            });
+                        }
+                        
+                        // Approved veya dialogue mode ise devam et
+                        if (!lumaDecision.approved && lumaDecision.type === 'warning') {
+                            // Onaylanmadı ve warning, üstte zaten return yapıyoruz
+                            if (sendBtn) {
+                                sendBtn.disabled = false;
+                                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                            }
+                            this.isProcessingMessage = false;
+                            return;
+                        }
+                        
+                    } catch (lumaError) {
+                        console.error('❌ Luma reasoning error:', lumaError);
+                        // Luma hatası önemli değil, devam et
+                    }
+                }
+                
                 // Unified Agent System - GitHub Copilot tarzı with conversation memory
                 await this.executeUnifiedAgentTask(contextAwarePrompt);
             } else {
@@ -16346,6 +16447,86 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
             console.error('❌ Agent safe file edit failed:', error);
             return false;
         }
+    }
+    
+    /**
+     * 🌌 LUMA: Show confirmation dialog for risky commands
+     * @param {Object} lumaDecision - Luma decision object
+     * @returns {Promise<boolean>} - User confirmed or not
+     */
+    async showLumaConfirmation(lumaDecision) {
+        // Developer mode - auto-approve
+        if (this.developerMode) {
+            console.log('🔓 Developer Mode: Auto-approving risky command');
+            return true;
+        }
+        
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = 'luma-confirmation-modal';
+            modal.innerHTML = `
+                <div class="luma-confirmation-content">
+                    <div class="luma-confirmation-header">
+                        <h3>⚠️ Luma Uyarısı</h3>
+                        <p class="luma-risk-badge risk-${lumaDecision.metadata?.riskLevel || 'HIGH'}">
+                            Risk: ${lumaDecision.metadata?.riskLevel || 'HIGH'}
+                        </p>
+                    </div>
+                    
+                    <div class="luma-confirmation-body">
+                        <div class="luma-warning-message">
+                            ${lumaDecision.message}
+                        </div>
+                        
+                        <div class="luma-reasoning">
+                            <strong>Reasoning:</strong> ${lumaDecision.reasoning || 'Güvenlik riski tespit edildi.'}
+                        </div>
+                        
+                        ${lumaDecision.alternatives && lumaDecision.alternatives.length > 0 ? `
+                            <div class="luma-alternatives">
+                                <strong>Alternatifler:</strong>
+                                <ul>
+                                    ${lumaDecision.alternatives.map(alt => `<li>${alt}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="luma-confirmation-actions">
+                        <button class="luma-btn luma-btn-danger" data-action="proceed">
+                            <i class="fas fa-exclamation-triangle"></i> Yine de Devam Et
+                        </button>
+                        <button class="luma-btn luma-btn-safe" data-action="cancel">
+                            <i class="fas fa-shield-alt"></i> İptal Et (Güvenli)
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Add event listeners
+            const proceedBtn = modal.querySelector('[data-action="proceed"]');
+            const cancelBtn = modal.querySelector('[data-action="cancel"]');
+            
+            proceedBtn?.addEventListener('click', () => {
+                modal.remove();
+                resolve(true);
+            });
+            
+            cancelBtn?.addEventListener('click', () => {
+                modal.remove();
+                resolve(false);
+            });
+            
+            // Close on outside click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    resolve(false);
+                }
+            });
+        });
     }
 
     /**
