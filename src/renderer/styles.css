@@ -5748,3 +5748,23 @@ details summary:hover {
     background: rgba(76, 175, 80, 0.1);
     border-left: 4px solid var(--success-color);
 }
+
+/* ================================================================
+   🌌 LUMA SUPRIME AGENT CHAT MESSAGE STYLES
+   ================================================================ */
+
+.chat-message[data-mode="suprime-success"] .message-content {
+    background: rgba(138, 43, 226, 0.1);
+    border-left: 4px solid #8a2be2;
+    box-shadow: 0 2px 8px rgba(138, 43, 226, 0.2);
+}
+
+.chat-message[data-mode="suprime-blocked"] .message-content {
+    background: rgba(244, 67, 54, 0.15);
+    border-left: 4px solid var(--error-color);
+}
+
+.chat-message[data-mode="suprime-error"] .message-content {
+    background: rgba(255, 87, 34, 0.1);
+    border-left: 4px solid #ff5722;
+}

@@ -1292,28 +1292,51 @@ class KodCanavari {
         // 🌌 LUMA CORE (Cognitive reasoning engine)
         this.lumaCore = null;
         this.lumaBridge = null;
+        this.lumaSuprimeAgent = null; // Supreme Agent - Üst Akıl
+        
         try {
             // Import Luma modules dynamically
             import('../agents/luma-core.js').then(({ LumaCore }) => {
                 import('../agents/luma-context-bridge.js').then(({ LumaContextBridge }) => {
-                    this.lumaCore = new LumaCore();
-                    this.lumaBridge = new LumaContextBridge({
-                        sessionContext: this.sessionContext,
-                        learningStore: this.learningStore,
-                        eventBus: this.eventBus
-                    });
-                    
-                    console.log('🌌 Luma Core initialized');
-                    console.log('🌉 Luma Context Bridge initialized');
-                    
-                    // Expose to window
-                    window.kodCanavari.lumaCore = this.lumaCore;
-                    window.kodCanavari.lumaBridge = this.lumaBridge;
-                    
-                    // Emit init event for Usta Modu
-                    this.eventBus.emit('LUMA_INITIALIZED', {
-                        timestamp: Date.now(),
-                        message: '🧠 Luma bilinç çekirdeği aktif edildi'
+                    import('../agents/luma-suprime-agent.js').then(({ LumaSuprimeAgent }) => {
+                        // Initialize Luma Core
+                        this.lumaCore = new LumaCore();
+                        console.log('🌌 Luma Core initialized');
+                        
+                        // Initialize Luma Bridge
+                        this.lumaBridge = new LumaContextBridge({
+                            sessionContext: this.sessionContext,
+                            learningStore: this.learningStore,
+                            eventBus: this.eventBus
+                        });
+                        console.log('🌉 Luma Context Bridge initialized');
+                        
+                        // Initialize SUPRIME AGENT (Üst Akıl)
+                        this.lumaSuprimeAgent = new LumaSuprimeAgent({
+                            lumaCore: this.lumaCore,
+                            lumaBridge: this.lumaBridge,
+                            sessionContext: this.sessionContext,
+                            learningStore: this.learningStore,
+                            eventBus: this.eventBus,
+                            multiAgentCoordinator: this.multiAgentCoordinator,
+                            reflexionSystem: this.reflexionModule
+                        });
+                        console.log('� ✨ LUMA SUPRIME AGENT INITIALIZED ✨');
+                        console.log('   → KayraDeniz artık düşünen bir üst akıl sistemine sahip!');
+                        
+                        // Connect Bridge to Supreme Agent
+                        this.lumaBridge.lumaSuprimeAgent = this.lumaSuprimeAgent;
+                        
+                        // Expose to window
+                        window.kodCanavari.lumaCore = this.lumaCore;
+                        window.kodCanavari.lumaBridge = this.lumaBridge;
+                        window.kodCanavari.lumaSuprimeAgent = this.lumaSuprimeAgent;
+                        
+                        // Emit init event
+                        this.eventBus.emit('SUPRIME_INITIALIZED', {
+                            timestamp: Date.now(),
+                            message: '🌌 Luma Supreme Agent aktif - Sistem bilinç kazandı!'
+                        });
                     });
                 });
             });
@@ -3119,8 +3142,97 @@ class KodCanavari {
 
             // Agent mode ile unified system kullan (context-aware)
             if (chatMode === 'agent') {
-                // 🌌 LUMA REASONING (Pre-execution analysis)
-                if (this.lumaBridge) {
+                // 🌌 LUMA SUPRIME AGENT EXECUTION
+                if (this.lumaSuprimeAgent) {
+                    try {
+                        console.log('🌌 Supreme Agent processing:', message);
+                        
+                        // Execute via Supreme Agent (handles all reasoning, validation, assignment)
+                        const supremeResult = await this.lumaSuprimeAgent.execute(message);
+                        
+                        console.log('🌌 Supreme Result:', supremeResult);
+                        
+                        // Handle Supreme Agent response
+                        if (supremeResult.type === 'blocked') {
+                            // Decision was blocked by validation
+                            this.addContextualChatMessage('ai', supremeResult.message, {
+                                mode: 'suprime-blocked',
+                                supremeResult
+                            });
+                            
+                            if (sendBtn) {
+                                sendBtn.disabled = false;
+                                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                            }
+                            this.isProcessingMessage = false;
+                            return;
+                        }
+                        
+                        if (supremeResult.type === 'error') {
+                            // Supreme Agent encountered an error
+                            this.addContextualChatMessage('ai', supremeResult.message, {
+                                mode: 'suprime-error',
+                                supremeResult
+                            });
+                            
+                            if (sendBtn) {
+                                sendBtn.disabled = false;
+                                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                            }
+                            this.isProcessingMessage = false;
+                            return;
+                        }
+                        
+                        // Success - show Supreme Agent decision and result
+                        const summaryMessage = `
+🌌 **Supreme Agent Decision**
+
+**Intent:** ${supremeResult.intent}
+**Agent Assigned:** ${supremeResult.agent}
+**Task Priority:** ${supremeResult.task?.priority || 'N/A'}/10
+
+**Decision:** ${supremeResult.decision?.message || 'Processing...'}
+
+**Result:** ${supremeResult.result?.message || supremeResult.message}
+                        `.trim();
+                        
+                        this.addContextualChatMessage('ai', summaryMessage, {
+                            mode: 'suprime-success',
+                            supremeResult
+                        });
+                        
+                        // If Supreme Agent didn't execute via coordinator, run unified agent task
+                        if (!supremeResult.result?.fromCoordinator) {
+                            await this.executeUnifiedAgentTask(contextAwarePrompt);
+                        }
+                        
+                    } catch (supremeError) {
+                        console.error('❌ Supreme Agent error:', supremeError);
+                        
+                        // Fallback to Luma Bridge
+                        console.log('⚠️ Falling back to Luma Bridge...');
+                        
+                        if (this.lumaBridge) {
+                            const lumaDecision = await this.lumaBridge.processMessage(message);
+                            
+                            if (lumaDecision.type === 'warning' && !lumaDecision.approved) {
+                                const confirmed = await this.showLumaConfirmation(lumaDecision);
+                                if (!confirmed) {
+                                    if (sendBtn) {
+                                        sendBtn.disabled = false;
+                                        sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                                    }
+                                    this.isProcessingMessage = false;
+                                    return;
+                                }
+                            }
+                        }
+                        
+                        // Execute unified agent task
+                        await this.executeUnifiedAgentTask(contextAwarePrompt);
+                    }
+                } else if (this.lumaBridge) {
+                    // FALLBACK: Original Luma Bridge logic
                     try {
                         const lumaDecision = await this.lumaBridge.processMessage(message);
                         
@@ -3155,7 +3267,32 @@ class KodCanavari {
                                 this.addContextualChatMessage('ai', `🔧 Düzeltme uygulanıyor: ${lumaDecision.fix}`, {
                                     mode: 'luma-autofix'
                                 });
-                                // Context fix uygulandıktan sonra devam et
+                            }
+                        } else if (lumaDecision.type === 'learned_response') {
+                            // Öğrenilmiş pattern - bilgi ver
+                            this.addContextualChatMessage('ai', lumaDecision.message, {
+                                mode: 'luma-learned',
+                                lumaDecision
+                            });
+                        } else if (lumaDecision.type === 'new_reflection') {
+                            // Yeni hata analizi
+                            this.addContextualChatMessage('ai', lumaDecision.message, {
+                                mode: 'luma-reflection',
+                                lumaDecision
+                            });
+                        }
+                        
+                    } catch (lumaError) {
+                        console.error('❌ Luma reasoning error:', lumaError);
+                    }
+                    
+                    // Unified Agent System - GitHub Copilot tarzı with conversation memory
+                    await this.executeUnifiedAgentTask(contextAwarePrompt);
+                } else {
+                    // NO LUMA: Direct execution
+                    await this.executeUnifiedAgentTask(contextAwarePrompt);
+                }
+            } else {                                // Context fix uygulandıktan sonra devam et
                             }
                         } else if (lumaDecision.type === 'learned_response') {
                             // Öğrenilmiş pattern - bilgi ver
