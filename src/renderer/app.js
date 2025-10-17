@@ -9815,8 +9815,11 @@ Success: ${successCount} | Failed: ${failCount}
             const packageJson = await this.readFileWithAgent('package.json');
             const pkg = JSON.parse(packageJson.content || packageJson);
             
-            // Check for workspaces
-            if (!pkg.workspaces && (await this.checkFileExists('server/package.json') || await this.checkFileExists('client/package.json'))) {
+            // Check if this is a monorepo (has workspace subfolders)
+            const isMonorepo = await this.checkFileExists('server/package.json') || await this.checkFileExists('client/package.json');
+            
+            // 3.1: Missing workspaces config
+            if (!pkg.workspaces && isMonorepo) {
                 mistakes.push({
                     type: 'MISSING_WORKSPACES',
                     severity: 'CRITICAL',
@@ -9836,6 +9839,44 @@ Success: ${successCount} | Failed: ${failCount}
                         }
                     },
                     reason: 'Add workspaces configuration for monorepo'
+                });
+            }
+            
+            // 3.2: Root src/ folder in monorepo (WRONG!)
+            if (isMonorepo && await this.checkFileExists('src')) {
+                mistakes.push({
+                    type: 'WRONG_MONOREPO_STRUCTURE',
+                    severity: 'CRITICAL',
+                    file: 'src/',
+                    reason: 'Root src/ folder detected in monorepo - should only exist in workspaces',
+                    current: 'Root has src/ folder but workspaces (server/, client/) should contain their own src/'
+                });
+                fixes.push({
+                    action: 'DELETE_FOLDER',
+                    path: 'src',
+                    reason: 'Remove root src/ folder - monorepo workspaces have their own src/ folders'
+                });
+            }
+            
+            // 3.3: Root build script pointing to non-existent src/
+            if (isMonorepo && pkg.scripts?.build?.includes('webpack') && !pkg.scripts.build.includes('workspaces')) {
+                mistakes.push({
+                    type: 'WRONG_BUILD_SCRIPT',
+                    severity: 'CRITICAL',
+                    file: 'package.json',
+                    reason: 'Root build script uses webpack but should delegate to workspaces',
+                    current: pkg.scripts.build
+                });
+                fixes.push({
+                    action: 'UPDATE_FILE',
+                    path: 'package.json',
+                    changes: {
+                        scripts: {
+                            ...pkg.scripts,
+                            'build': 'npm run build --workspaces'
+                        }
+                    },
+                    reason: 'Fix root build script to use workspaces instead of webpack'
                 });
             }
         } catch (e) {
@@ -9909,20 +9950,28 @@ Success: ${successCount} | Failed: ${failCount}
                             } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
                                 const result = await this.runCommandWithAgent(fix.cmd);
                                 this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
+                            } else if (fix.action === 'UPDATE_FILE' && fix.path && fix.changes) {
+                                // Read current file
+                                const currentContent = await this.readFileWithAgent(fix.path);
+                                const current = JSON.parse(currentContent.content || currentContent);
+                                
+                                // Merge changes
+                                const updated = { ...current, ...fix.changes };
+                                
+                                // Write updated file
+                                await this.createFileWithAgent(fix.path, JSON.stringify(updated, null, 2));
+                                this.addChatMessage('system', `✅ Updated: ${fix.path}`);
+                            } else if (fix.action === 'DELETE_FOLDER' && fix.path) {
+                                // Use MCP to delete folder
+                                await this.runCommandWithAgent(`rm -rf ${fix.path}`);
+                                this.addChatMessage('system', `✅ Deleted: ${fix.path}/`);
                             }
                         } catch (e) {
                             this.addChatMessage('system', `⚠️ Auto-fix failed for ${fix.path || fix.cmd}: ${e.message}`);
                         }
                     }
                     
-                    this.addChatMessage('ai', '✅ Auto-fixes applied! Verifying...');
-                    
-                    // Re-run verification after fixes
-                    const buildResult = await this.runCommandWithAgent('npm run build');
-                    if (buildResult && buildResult.exitCode === 0) {
-                        this.addChatMessage('ai', '🎉 BUILD SUCCESS after auto-fix! Project is ready!');
-                        return; // Exit early, no need for further analysis
-                    }
+                    this.addChatMessage('ai', '✅ Auto-fixes applied! Continuing...');
                 }
             }
 
@@ -10669,13 +10718,35 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
             // Step 2: Build test
             this.addChatMessage('system', '🔨 Build testi yapılıyor...');
             const buildResult = await this.runTerminalCommand('npm run build', this.currentFolder);
-            if (buildResult && buildResult.exitCode === 0) {
+            
+            // 🔧 CRITICAL FIX: Only show success if build actually passed
+            const buildSuccess = buildResult && buildResult.exitCode === 0;
+            
+            if (buildSuccess) {
                 this.addChatMessage('system', '✅ Build başarılı!');
             } else {
                 this.addChatMessage('system', '⚠️ Build hatası - manuel kontrol gerekebilir');
+                
+                // 🚨 Don't claim success if build failed!
+                this.addChatMessage('ai', `
+⚠️ **PROJE TAMAMLANDI AMA BUILD HATASI VAR!**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 **Yapılanlar:**
+  ✅ Tüm dosyalar oluşturuldu
+  ${installResult?.exitCode === 0 ? '✅' : '❌'} Dependencies yüklendi
+  ❌ Build hatası var - düzeltme gerekiyor
+
+🔧 **Yapılması Gerekenler:**
+  1. Terminal hatalarını kontrol edin
+  2. Eksik dosyaları veya konfigürasyonları düzeltin
+  3. \`npm run build\` komutunu manuel çalıştırın
+
+💡 İpucu: Reflexion modülü otomatik düzeltme önerileri sunuyor.
+                `);
+                return; // Exit early - don't claim success
             }
             
-            // Step 3: Start dev server (background)
+            // Step 3: Start dev server (background) - only if build passed
             this.addChatMessage('system', '🚀 Dev server başlatılıyor...');
             // Don't await - run in background
             this.runTerminalCommand('npm run dev', this.currentFolder, true);

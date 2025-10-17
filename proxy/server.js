@@ -12,6 +12,20 @@ const mcpRouter = require('./mcp-mini.js');
 app.use(cors());
 app.use(express.json());
 
+// 🏥 Health Check Endpoint
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        service: 'KayraDeniz-MCP-Server',
+        port: PORT,
+        timestamp: new Date().toISOString(),
+        endpoints: {
+            mcp: '/mcp/*',
+            ai: '/ai/chat'
+        }
+    });
+});
+
 // Mount MCP endpoints
 app.use('/mcp', mcpRouter);
 console.log('🔧 Mini MCP mounted at /mcp/*');
