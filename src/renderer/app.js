@@ -8848,6 +8848,12 @@ Now provide the CORRECTED response (pure JSON only):`;
         
         console.log('🔧 All backslashes properly escaped');
         
+        // Step 3: Fix single quotes in JSON values (JSON only allows double quotes)
+        // Replace 'value' with "value" but ONLY for property values, not inside strings
+        // This regex finds: ": 'value'" and replaces with: ": \"value\""
+        sanitized = sanitized.replace(/:\s*'([^']*)'/g, ': "$1"');
+        console.log('🔧 Single quotes replaced with double quotes');
+        
         // Count brackets and braces FIRST (NOTE: This counts ALL occurrences, including in strings)
         const openBrackets = (sanitized.match(/\[/g) || []).length;
         const closeBrackets = (sanitized.match(/\]/g) || []).length;
@@ -9375,6 +9381,16 @@ Now provide the CORRECTED response (pure JSON only):`;
         console.log('📋 Mission:', orders.mission);
         console.log('🎯 Acceptance Criteria:', orders.acceptance);
         
+        // 🧠 SESSION CONTEXT: Set mission at the start
+        if (this.sessionContext) {
+            this.sessionContext.setMission(
+                orders.mission,
+                orders.steps.length,
+                orders.acceptance || []
+            );
+            console.log('📍 Session Context: Mission set');
+        }
+        
         // 🔍 PR-3: ZOD SCHEMA VALIDATION + CONTINUE PARSEARGS
         try {
             const { validateNightOrders: zodValidate } = require('./schemas');
@@ -9511,9 +9527,11 @@ Now provide the CORRECTED response (pure JSON only):`;
                     if (this.eventBus) {
                         this.eventBus.emit({
                             type: 'NARRATION_AFTER',
-                            stepId: step.id,
-                            summary: `Step completed in ${executionTime}ms`,
-                            diff: null,
+                            data: {
+                                stepId: step.id,
+                                summary: `Step completed in ${executionTime}ms`,
+                                diff: null
+                            },
                             timestamp: Date.now()
                         });
                     }
@@ -9602,8 +9620,10 @@ Now provide the CORRECTED response (pure JSON only):`;
                     if (this.eventBus && probeResults.length > 0) {
                         this.eventBus.emit({
                             type: 'NARRATION_VERIFY',
-                            stepId: step.id,
-                            probes: probeResults,
+                            data: {
+                                stepId: step.id,
+                                probes: probeResults
+                            },
                             timestamp: Date.now()
                         });
                     }
@@ -10906,8 +10926,10 @@ Happy coding! 🚀
             
             this.eventBus.emit({
                 type: 'NARRATION_BEFORE',
-                stepId: step.id,
-                explain: explainText,
+                data: {
+                    stepId: step.id,
+                    explain: explainText
+                },
                 timestamp: Date.now()
             });
         }

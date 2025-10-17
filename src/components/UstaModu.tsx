@@ -33,7 +33,7 @@ interface UstaModuProps {
 export const UstaModu: React.FC<UstaModuProps> = ({
   maxMessages = 50,
   dedupWindowMs = 2000,
-  rateLimit = 120 // Biraz artırdık, titreme olmasın
+  rateLimit = 50 // 🔧 Daha hızlı event işleme için azaltıldı
 }) => {
   // State Management
   const [state, setState] = useState<NarrationState>('PLANNING');
@@ -124,7 +124,15 @@ export const UstaModu: React.FC<UstaModuProps> = ({
 
   // Event handlers
   const handleNarrationBefore = useCallback((event: NarrationBeforeEvent) => {
-    if (!shouldProcessEvent() || !event.data) return;
+    console.log('[UstaModu] BEFORE event received:', event);
+    if (!shouldProcessEvent()) {
+      console.log('[UstaModu] BEFORE event rate-limited');
+      return;
+    }
+    if (!event.data) {
+      console.log('[UstaModu] BEFORE event has no data!');
+      return;
+    }
 
     setState('PLANNING');
     setCurrentStep(event.data.stepId);
