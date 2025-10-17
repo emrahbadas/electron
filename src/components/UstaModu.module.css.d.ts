@@ -34,6 +34,15 @@ declare const styles: {
   readonly fail: string;
   readonly skip: string;
   readonly footer: string;
+  readonly teachingCard: string;
+  readonly teachingHeader: string;
+  readonly conceptBadge: string;
+  readonly complexityBadge: string;
+  readonly teachingExplanation: string;
+  readonly bestPractices: string;
+  readonly antipatterns: string;
+  readonly relatedConcepts: string;
+  readonly learnMore: string;
 };
 
 export default styles;

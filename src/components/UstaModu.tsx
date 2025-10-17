@@ -175,7 +175,16 @@ export const UstaModu: React.FC<UstaModuProps> = ({
 
   // Dragging handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.header')) {
+    // Check if clicking on header (use ref check instead of closest)
+    const target = e.target as HTMLElement;
+    const headerElement = containerRef.current?.querySelector(`.${styles.header}`);
+    
+    if (headerElement && (target === headerElement || headerElement.contains(target))) {
+      // Don't drag if clicking on buttons
+      if (target.tagName === 'BUTTON' || target.closest('button')) {
+        return;
+      }
+      
       setIsDragging(true);
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {

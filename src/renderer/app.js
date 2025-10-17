@@ -8847,8 +8847,56 @@ Now provide the CORRECTED response (pure JSON only):`;
         let missingCloseBrackets = openBrackets - closeBrackets;
         let missingCloseBraces = openBraces - closeBraces;
 
-        // Remove trailing commas
-        sanitized = sanitized.replace(/,(\s*[\]}])/g, '$1');
+        // Remove trailing commas (AGGRESSIVE: multiple passes)
+        let prevLength = 0;
+        while (prevLength !== sanitized.length) {
+            prevLength = sanitized.length;
+            sanitized = sanitized.replace(/,(\s*[\]}])/g, '$1');
+            sanitized = sanitized.replace(/,(\s*,)/g, ','); // Remove duplicate commas
+        }
+        console.log('🔧 Trailing commas removed');
+
+        // Fix common JSON syntax errors
+        // 1. Remove trailing comma before closing brace/bracket
+        sanitized = sanitized.replace(/,\s*}/g, '}');
+        sanitized = sanitized.replace(/,\s*]/g, ']');
+        
+        // 2. Fix missing quotes around property names (only outside strings)
+        // This is a VERY aggressive fix - only for emergency
+        try {
+            JSON.parse(sanitized);
+            console.log('✅ JSON valid after trailing comma removal');
+            return sanitized;
+        } catch (e) {
+            console.log('⚠️ Still invalid, attempting property name fix:', e.message);
+            
+            // Try to extract error position
+            const posMatch = e.message.match(/position (\d+)/);
+            if (posMatch) {
+                const errorPos = parseInt(posMatch[1], 10);
+                console.log(`🔍 Error at position ${errorPos}`);
+                
+                // Show context around error
+                const contextStart = Math.max(0, errorPos - 50);
+                const contextEnd = Math.min(sanitized.length, errorPos + 50);
+                const errorContext = sanitized.substring(contextStart, contextEnd);
+                console.log('📄 Error context:', errorContext);
+                
+                // Try to truncate at last valid object BEFORE error position
+                console.log('✂️ Truncating at last valid structure before error...');
+                
+                // Find last closing brace before error
+                let lastClosingBrace = sanitized.lastIndexOf('}', errorPos - 1);
+                if (lastClosingBrace > 0) {
+                    console.log(`🔍 Found last closing brace at position ${lastClosingBrace}`);
+                    sanitized = sanitized.substring(0, lastClosingBrace + 1);
+                    
+                    // Recalculate mismatches
+                    missingCloseBrackets = (sanitized.match(/\[/g) || []).length - (sanitized.match(/\]/g) || []).length;
+                    missingCloseBraces = (sanitized.match(/\{/g) || []).length - (sanitized.match(/\}/g) || []).length;
+                }
+            }
+        }
 
         // Remove incomplete trailing content (after last complete structure)
         // Find last complete object or array
