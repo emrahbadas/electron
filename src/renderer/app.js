@@ -3201,10 +3201,10 @@ class KodCanavari {
                             supremeResult
                         });
                         
-                        // If Supreme Agent didn't execute via coordinator, run unified agent task
-                        if (!supremeResult.result?.fromCoordinator) {
-                            await this.executeUnifiedAgentTask(contextAwarePrompt);
-                        }
+                        // Always execute unified agent task after Supreme Agent decision
+                        // Supreme Agent only decides, doesn't execute
+                        console.log('🎯 Executing task via Unified Agent System...');
+                        await this.executeUnifiedAgentTask(contextAwarePrompt);
                         
                     } catch (supremeError) {
                         console.error('❌ Supreme Agent error:', supremeError);
