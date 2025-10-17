@@ -3292,41 +3292,6 @@ class KodCanavari {
                     // NO LUMA: Direct execution
                     await this.executeUnifiedAgentTask(contextAwarePrompt);
                 }
-            } else {                                // Context fix uygulandıktan sonra devam et
-                            }
-                        } else if (lumaDecision.type === 'learned_response') {
-                            // Öğrenilmiş pattern - bilgi ver
-                            this.addContextualChatMessage('ai', lumaDecision.message, {
-                                mode: 'luma-learned',
-                                lumaDecision
-                            });
-                        } else if (lumaDecision.type === 'new_reflection') {
-                            // Yeni hata analizi
-                            this.addContextualChatMessage('ai', lumaDecision.message, {
-                                mode: 'luma-reflection',
-                                lumaDecision
-                            });
-                        }
-                        
-                        // Approved veya dialogue mode ise devam et
-                        if (!lumaDecision.approved && lumaDecision.type === 'warning') {
-                            // Onaylanmadı ve warning, üstte zaten return yapıyoruz
-                            if (sendBtn) {
-                                sendBtn.disabled = false;
-                                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
-                            }
-                            this.isProcessingMessage = false;
-                            return;
-                        }
-                        
-                    } catch (lumaError) {
-                        console.error('❌ Luma reasoning error:', lumaError);
-                        // Luma hatası önemli değil, devam et
-                    }
-                }
-                
-                // Unified Agent System - GitHub Copilot tarzı with conversation memory
-                await this.executeUnifiedAgentTask(contextAwarePrompt);
             } else {
                 // ✨ Enhanced Ask Mode - Unified LLM call (OpenAI or Claude)
                 const enhancedPrompt = this.addExecutionContext(contextAwarePrompt);

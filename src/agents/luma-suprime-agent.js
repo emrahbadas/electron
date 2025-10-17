@@ -341,11 +341,19 @@ export class LumaSuprimeAgent {
         try {
             // If coordinator available, use it
             if (this.multiAgentCoordinator) {
-                return await this.multiAgentCoordinator.assign(agentName, {
+                const sessionId = await this.multiAgentCoordinator.startSession(agentName, task.description, {
                     task,
                     decision,
-                    context: task.context
+                    priority: task.priority,
+                    ...task.context
                 });
+                
+                return {
+                    fromCoordinator: true,
+                    sessionId,
+                    agent: agentName,
+                    message: `Task delegated to ${agentName} via coordinator`
+                };
             }
             
             // Fallback: Direct execution
