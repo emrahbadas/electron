@@ -8822,16 +8822,7 @@ Now provide the CORRECTED response (pure JSON only):`;
         
         console.log('🔧 All backslashes properly escaped');
         
-        // Try to parse first - if it works, return as-is
-        try {
-            JSON.parse(sanitized);
-            console.log('✅ JSON already valid, no sanitization needed');
-            return sanitized;
-        } catch (e) {
-            console.log('⚠️ JSON parse failed, attempting sanitization:', e.message);
-        }
-
-        // Count brackets and braces (NOTE: This counts ALL occurrences, including in strings)
+        // Count brackets and braces FIRST (NOTE: This counts ALL occurrences, including in strings)
         const openBrackets = (sanitized.match(/\[/g) || []).length;
         const closeBrackets = (sanitized.match(/\]/g) || []).length;
         const openBraces = (sanitized.match(/\{/g) || []).length;
@@ -8839,6 +8830,22 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         console.log('📊 Brackets (raw count) - Open:[', openBrackets, 'Close:]', closeBrackets);
         console.log('📊 Braces (raw count) - Open:{', openBraces, 'Close:}', closeBraces);
+        
+        // Check if JSON is complete (matching braces/brackets)
+        const isComplete = (openBrackets === closeBrackets) && (openBraces === closeBraces);
+        
+        if (isComplete) {
+            // Try to parse - if it works, return as-is
+            try {
+                JSON.parse(sanitized);
+                console.log('✅ JSON already valid, no sanitization needed');
+                return sanitized;
+            } catch (e) {
+                console.log('⚠️ JSON complete but parse failed, attempting fix:', e.message);
+            }
+        } else {
+            console.log('⚠️ JSON incomplete - Open:{', openBraces, '} Close:{', closeBraces, '} - Attempting fix...');
+        }
 
         // Fix unterminated strings by finding the last valid position
         // Strategy: If parse fails, truncate at last complete object in plannedActions array
