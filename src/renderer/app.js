@@ -1263,7 +1263,33 @@ class KodCanavari {
             console.warn('⚠️ Learning Store initialization failed:', error.message);
         }
 
-        // �👨‍🏫 NARRATOR AGENT (Live commentary)
+        // 🧠 SESSION CONTEXT (Agent short-term memory)
+        this.sessionContext = new SessionContext();
+        console.log('✅ Session Context initialized');
+        if (!window.kodCanavari) window.kodCanavari = {};
+        window.kodCanavari.sessionContext = this.sessionContext;
+        
+        // 🔍 AGENT TRACE SYSTEM (OpenAI Agents SDK style tracing)
+        this.traceSystem = new AgentTraceSystem(this.eventBus);
+        console.log('✅ Agent Trace System initialized');
+        window.kodCanavari.traceSystem = this.traceSystem;
+        
+        // 🚪 ARTIFACT GATING SYSTEM (Verify artifacts before handoffs)
+        this.gatingSystem = new ArtifactGatingSystem(this.workspaceRoot, window.electronAPI);
+        console.log('✅ Artifact Gating System initialized');
+        window.kodCanavari.gatingSystem = this.gatingSystem;
+        
+        // 🤝 MULTI-AGENT COORDINATOR (Agent orchestration)
+        this.multiAgentCoordinator = new MultiAgentCoordinator({
+            traceSystem: this.traceSystem,
+            gatingSystem: this.gatingSystem,
+            approvalSystem: this.approvalSystem,
+            policyEngine: this.policyEngine
+        });
+        console.log('✅ Multi-Agent Coordinator initialized');
+        window.kodCanavari.multiAgentCoordinator = this.multiAgentCoordinator;
+
+        // 👨‍🏫 NARRATOR AGENT (Live commentary)
         // Initialize after EventBus and UI are ready
         this.narratorAgent = null;
         
