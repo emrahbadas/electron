@@ -1494,6 +1494,76 @@ ipcMain.handle('ai-clear-history', async (event) => {
 
 // ===== CONTINUE AGENT IPC HANDLERS =====
 
+// ===== MCP PROXY RESTART HANDLER =====
+let mcpProxyProcess = null;
+
+ipcMain.handle('restart-mcp-proxy', async (event) => {
+  try {
+    console.log('🔄 [Main] MCP Proxy restart requested...');
+    
+    // Kill existing proxy process if running
+    if (mcpProxyProcess && !mcpProxyProcess.killed) {
+      console.log('🛑 [Main] Stopping existing MCP proxy...');
+      mcpProxyProcess.kill('SIGTERM');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+    }
+    
+    // Start new proxy process
+    const { spawn } = require('child_process');
+    const proxyPath = path.join(__dirname, '../../proxy/server.js');
+    
+    console.log('🚀 [Main] Starting MCP proxy:', proxyPath);
+    
+    mcpProxyProcess = spawn('node', [proxyPath], {
+      cwd: path.dirname(proxyPath),
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    
+    // Log proxy output
+    mcpProxyProcess.stdout.on('data', (data) => {
+      console.log('[MCP Proxy]', data.toString().trim());
+    });
+    
+    mcpProxyProcess.stderr.on('data', (data) => {
+      console.error('[MCP Proxy Error]', data.toString().trim());
+    });
+    
+    mcpProxyProcess.on('exit', (code) => {
+      console.log(`[MCP Proxy] Process exited with code ${code}`);
+      mcpProxyProcess = null;
+    });
+    
+    // Give proxy time to start
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    console.log('✅ [Main] MCP Proxy restart completed');
+    
+    return { 
+      success: true, 
+      message: 'MCP Proxy restarted successfully',
+      pid: mcpProxyProcess.pid
+    };
+    
+  } catch (error) {
+    console.error('❌ [Main] MCP Proxy restart error:', error);
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
+});
+
+// Cleanup on app quit
+app.on('before-quit', () => {
+  if (mcpProxyProcess && !mcpProxyProcess.killed) {
+    console.log('🛑 [Main] Stopping MCP proxy on app quit...');
+    mcpProxyProcess.kill('SIGTERM');
+  }
+});
+
+// ===== CONTINUE AGENT IPC HANDLERS (continued) =====
+
 // Continue agent'i başlat
 ipcMain.handle('continue-initialize', async (event, workspacePath) => {
   try {

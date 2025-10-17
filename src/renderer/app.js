@@ -1708,7 +1708,10 @@ class KodCanavari {
                 // Streaming Process API'leri
                 startProcess: (processId, command, cwd) => ipcRenderer.invoke('start-process', processId, command, cwd),
                 stopProcess: (processId) => ipcRenderer.invoke('stop-process', processId),
-                listProcesses: () => ipcRenderer.invoke('list-processes')
+                listProcesses: () => ipcRenderer.invoke('list-processes'),
+
+                // MCP Proxy Management
+                restartMCPProxy: () => ipcRenderer.invoke('restart-mcp-proxy')
             };
             console.log('✅ electronAPI initialized with IPC communication');
 

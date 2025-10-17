@@ -123,8 +123,8 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Start server
-app.listen(PORT, '127.0.0.1', () => {
+// Start server with keepalive and error handling
+const server = app.listen(PORT, '127.0.0.1', () => {
     console.log(`🚀 AI Proxy Server running on http://127.0.0.1:${PORT}`);
     console.log(`📋 Health check: http://127.0.0.1:${PORT}/health`);
     console.log(`🤖 AI Chat endpoint: http://127.0.0.1:${PORT}/ai/chat`);
@@ -139,5 +139,31 @@ app.listen(PORT, '127.0.0.1', () => {
     console.log(`   - Verify: /mcp/verify`);
     console.log(`   - Health: /mcp/health\n`);
 });
+
+// Increase server timeouts to prevent premature connection closure
+server.keepAliveTimeout = 120000; // 2 minutes
+server.headersTimeout = 125000; // 2 minutes + 5 seconds
+
+// Graceful error handling
+server.on('error', (error) => {
+    console.error('❌ Server error:', error);
+    if (error.code === 'EADDRINUSE') {
+        console.log('⚠️ Port 7777 already in use, trying to restart...');
+        setTimeout(() => {
+            server.close();
+            server.listen(PORT, '127.0.0.1');
+        }, 1000);
+    }
+});
+
+// Log connection events for debugging
+server.on('connection', (socket) => {
+    socket.setKeepAlive(true, 30000); // Enable TCP keepalive with 30s interval
+});
+
+// Heartbeat to keep process alive
+setInterval(() => {
+    console.log(`💓 MCP Proxy heartbeat - ${new Date().toISOString()}`);
+}, 60000); // Every 60 seconds
 
 module.exports = app;
