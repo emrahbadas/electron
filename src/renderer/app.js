@@ -11214,6 +11214,24 @@ Happy coding! 🚀
         // �🎨 LIVE REFLECTION: Show what agent is doing
         this.showLiveReflection(step);
 
+        // 🔧 TOOL BRIDGE: Try to execute via ToolBridge first (handles aliases)
+        if (window.toolBridge) {
+            const supportedTools = window.toolBridge.getSupportedTools();
+            
+            // Check if tool exists in ToolBridge
+            if (supportedTools.includes(step.tool)) {
+                console.log(`🔧 [ToolBridge] Executing via ToolBridge: ${step.tool}`);
+                const bridgeResult = await window.toolBridge.executeTool(step.tool, step.args);
+                
+                // If ToolBridge execution failed with "Unknown tool", fall through to legacy handler
+                if (!bridgeResult.error || !bridgeResult.error.includes('Unknown tool')) {
+                    return bridgeResult;
+                }
+                
+                console.warn(`⚠️ [ToolBridge] Failed, falling back to legacy handler:`, bridgeResult.error);
+            }
+        }
+
         // ⚠️ SAFETY CHECK: Dangerous command confirmation
         if (step.tool === 'run_cmd' || step.tool === 'terminal.exec') {
             const isDangerous = this.isDangerousCommand(step.args.cmd);
