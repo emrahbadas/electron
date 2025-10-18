@@ -19,6 +19,7 @@
 9. [Workflow Diagramları](#workflow-diagramları)
 10. [Kurulum Rehberi](#kurulum-rehberi)
 11. [Geliştirici Notları](#geliştirici-notları)
+12. [v2.1 Evolution Roadmap](#v21-evolution-roadmap)
 
 ---
 
@@ -1604,6 +1605,254 @@ Bu proje aşağıdaki teknolojileri kullanmaktadır:
 
 ---
 
+## 🚀 v2.1 Evolution Roadmap
+
+### Overview
+Version 2.1 introduces **Adaptive Learning** and **Anti-Pattern-Trap** mechanisms to balance past experience with creative exploration.
+
+### Problem Statement
+Current issue identified from real user experience:
+- AI systems learn from successful patterns
+- After time, they force unique projects into known categories
+- Example: **KargoMarketing.com** (buyer+seller+carrier hybrid) kept being forced into pure e-commerce or pure logistics patterns
+- Result: "Lojistik kesinine versek alım satım pasif olur" - balance is lost
+
+### Proposed Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                  LUMA v2.1 ADAPTIVE SYSTEM               │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌────────────────────────────────────────────┐         │
+│  │   Adaptive Reflexion Memory                │         │
+│  │   • Weighted pattern learning              │         │
+│  │   • score = count + successRate + similarity│        │
+│  │   • Recall similar project fixes           │         │
+│  └────────────────────────────────────────────┘         │
+│                      ↓                                   │
+│  ┌────────────────────────────────────────────┐         │
+│  │   Context Replay Engine                    │         │
+│  │   • Find similar previous projects         │         │
+│  │   • if (similarity > 0.75) replay pattern  │         │
+│  │   • Inject learned optimizations           │         │
+│  └────────────────────────────────────────────┘         │
+│                      ↓                                   │
+│  ┌────────────────────────────────────────────┐         │
+│  │   Cognitive Divergence Layer               │         │
+│  │   • Balance stability vs novelty           │         │
+│  │   • if (similarity > 0.8 && known) reuse   │         │
+│  │   • else exploreNewWithGuidance()          │         │
+│  └────────────────────────────────────────────┘         │
+│                      ↓                                   │
+│  ┌────────────────────────────────────────────┐         │
+│  │   Self-Divergence Protocol                 │         │
+│  │   • "Bu proje geçmişe ne kadar benziyor?"  │         │
+│  │   • "Benzerlik amaca hizmet ediyor mu?"    │         │
+│  │   • "Neden farklılaşmam gerek?"            │         │
+│  └────────────────────────────────────────────┘         │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Implementation Classes
+
+#### 1. AdaptiveReflexionMemory
+```javascript
+class AdaptiveReflexionMemory {
+    constructor() {
+        this.patterns = new Map(); // key: contextHash, value: {count, fixes, successRate}
+    }
+
+    findSimilarContext(currentProject) {
+        // Calculate similarity scores
+        const scores = [];
+        for (const [hash, pattern] of this.patterns) {
+            const similarity = this.calculateSimilarity(currentProject, pattern.context);
+            const score = pattern.count + pattern.successRate + similarity;
+            scores.push({hash, score, similarity, pattern});
+        }
+        return scores.sort((a, b) => b.score - a.score);
+    }
+
+    suggestOptimizedPlan(similarProject) {
+        if (similarProject.similarity > 0.75) {
+            return this.replayFixes(similarProject.pattern.fixes);
+        }
+        return null;
+    }
+}
+```
+
+#### 2. ContextReplayEngine
+```javascript
+class ContextReplayEngine {
+    constructor(learningStore, adaptiveMemory) {
+        this.learningStore = learningStore;
+        this.adaptiveMemory = adaptiveMemory;
+    }
+
+    async replayPatternsFor(projectType) {
+        const similar = this.adaptiveMemory.findSimilarContext(projectType);
+        if (similar.length > 0 && similar[0].similarity > 0.75) {
+            return this.injectLearnedFixes(similar[0].pattern);
+        }
+        return null;
+    }
+
+    injectLearnedFixes(pattern) {
+        // Apply successful fixes from past projects
+        return pattern.fixes.filter(fix => fix.successRate > 0.8);
+    }
+}
+```
+
+#### 3. CognitiveDivergenceLayer
+```javascript
+class CognitiveDivergenceLayer {
+    constructor(replayEngine) {
+        this.replayEngine = replayEngine;
+        this.noveltyThreshold = 0.8;
+    }
+
+    async decideStrategy(projectContext) {
+        const similar = await this.replayEngine.replayPatternsFor(projectContext);
+        
+        if (similar && similar.similarity > this.noveltyThreshold) {
+            // Known pattern - reuse with confidence
+            return {strategy: 'REUSE_PATTERN', pattern: similar};
+        } else {
+            // Novel project - explore with guidance
+            return {strategy: 'EXPLORE_NEW', guidance: this.createExplorationGuidance()};
+        }
+    }
+
+    createExplorationGuidance() {
+        return {
+            rules: [
+                'Understand unique requirements first',
+                'Don\'t force into known categories',
+                'Ask user for clarification on ambiguous parts',
+                'Build custom solution if needed'
+            ]
+        };
+    }
+}
+```
+
+#### 4. Self-Divergence Protocol
+```javascript
+class SelfDivergenceProtocol {
+    async questionDecision(decision, context) {
+        const questions = [
+            `Bu proje geçmiş pattern'e ne kadar benziyor? (Similarity: ${context.similarity})`,
+            `Benzerlik kullanıcı amacına hizmet ediyor mu?`,
+            `Bu proje gerçekten ${context.assumedCategory} mı yoksa hybrid mi?`,
+            `Neden farklılaşmam gerek?`
+        ];
+
+        // Internal reasoning loop
+        for (const question of questions) {
+            const answer = await this.internalReasoning(question, context);
+            if (answer.divergenceNeeded) {
+                return {diverge: true, reason: answer.reason};
+            }
+        }
+
+        return {diverge: false};
+    }
+}
+```
+
+### Integration Points
+
+**With Existing Systems:**
+- **LearningStore**: Feed pattern data to AdaptiveReflexionMemory
+- **Reflexion System**: Use Context Replay Engine for fix suggestions
+- **Luma Supreme Agent**: Integrate Cognitive Divergence Layer in decision flow
+- **SessionContext**: Store project similarity scores for future reference
+
+### Test Cases
+
+**Scenario 1: KargoMarketing.com Clone**
+```javascript
+// User request: "Alıcı-satıcı-kargo taşıyıcı hybrid sistemi yap"
+// Expected: Agent recognizes hybrid nature, doesn't force into e-commerce OR logistics
+// Test: Check if all 3 components (buyer, seller, carrier) are balanced in generated code
+```
+
+**Scenario 2: Novel Game Concept**
+```javascript
+// User request: "Gravity-based puzzle platformer with time manipulation"
+// Expected: Agent explores new mechanics, doesn't copy standard platformer
+// Test: Check if unique game mechanics are implemented (not just Mario clone)
+```
+
+**Scenario 3: Known Blog Platform**
+```javascript
+// User request: "Simple blog with posts and comments"
+// Expected: Agent reuses successful blog pattern from Learning Store
+// Test: Check if optimized structure from past blogs is applied
+```
+
+### Success Metrics
+
+| Metric | Target | Measurement Method |
+|--------|--------|-------------------|
+| **Pattern Reuse Speed** | 30% faster on similar projects | Compare generation time vs fresh projects |
+| **Novel Project Quality** | No forced categorization | User survey + manual code review |
+| **Creative Balance** | 70% stability + 30% novelty | Track strategy decisions (REUSE vs EXPLORE) |
+| **User Satisfaction** | 90%+ approval rate | Elysion Chamber approval tracking |
+
+### Implementation Timeline
+
+**Phase 1: Memory Foundation** (Week 1-2)
+- Implement AdaptiveReflexionMemory class
+- Integrate with existing LearningStore
+- Test pattern storage and retrieval
+
+**Phase 2: Context Replay** (Week 3-4)
+- Implement ContextReplayEngine class
+- Add similarity calculation algorithms
+- Test with past successful projects
+
+**Phase 3: Cognitive Divergence** (Week 5-6)
+- Implement CognitiveDivergenceLayer class
+- Add novelty detection
+- Test with hybrid projects (like KargoMarketing.com)
+
+**Phase 4: Self-Questioning** (Week 7-8)
+- Implement SelfDivergenceProtocol class
+- Internal reasoning loop
+- Full integration testing
+
+### Risk Mitigation
+
+**Risk 1: Over-reliance on past patterns**
+- Mitigation: noveltyThreshold tuning (default 0.8)
+- Monitoring: Track EXPLORE vs REUSE ratio
+
+**Risk 2: Slow similarity calculations**
+- Mitigation: Cache recent calculations, use hash-based indexing
+- Monitoring: Performance profiling on large Learning Store
+
+**Risk 3: False positive similarities**
+- Mitigation: Multi-factor scoring (count + successRate + similarity)
+- Monitoring: User feedback on suggested patterns
+
+### Documentation Updates
+
+When v2.1 is implemented, update:
+- **This guide** - Add new classes to Agent Systems section
+- **QUICKSTART.md** - Add examples of adaptive learning
+- **agent-style-guide.md** - Add guidelines for pattern reuse decisions
+
+### References
+
+For detailed v2.1 implementation plan, see: **LUMA_V2_1_ADAPTIVE_EVOLUTION_PLAN.md**
+
+---
+
 **Last Updated:** 2025-01-18  
-**Document Version:** 2.0.0  
-**Status:** ✅ Complete & Production Ready
+**Document Version:** 2.1.0 (Roadmap Added)  
+**Status:** ✅ Complete & Production Ready | 🚧 v2.1 Planning Phase
