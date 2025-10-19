@@ -3207,7 +3207,17 @@ class KodCanavari {
                         // Always execute unified agent task after Supreme Agent decision
                         // Supreme Agent only decides, doesn't execute
                         console.log('🎯 Executing task via Unified Agent System...');
-                        await this.executeUnifiedAgentTask(contextAwarePrompt);
+                        
+                        // 🔑 CRITICAL FIX: Pass Luma's agent decision to SKIP router override
+                        const lumaRoute = {
+                            role: supremeResult.agent.toLowerCase().replace('agent', ''), // "ExecutorAgent" → "executor"
+                            mode: 'action',
+                            confidence: 1.0,
+                            reasoning: supremeResult.decision?.message || 'Luma Supreme decision',
+                            lumaDecisionFinal: true // ← FLAG to prevent router override
+                        };
+                        
+                        await this.executeUnifiedAgentTask(contextAwarePrompt, lumaRoute);
                         
                     } catch (supremeError) {
                         console.error('❌ Supreme Agent error:', supremeError);
@@ -7689,7 +7699,7 @@ Please consider the conversation context when responding. Reference previous dis
         }
     }
 
-    async executeUnifiedAgentTask(userRequest) {
+    async executeUnifiedAgentTask(userRequest, preAssignedRoute = null) {
         // Clear any previous agent state
         this.clearAgentState();
 
@@ -7729,8 +7739,27 @@ Please consider the conversation context when responding. Reference previous dis
                 });
             }
 
-            // Step 1: Router Agent - Intent Analysis & Auto Role Selection
-            const route = await this.routeUserIntent(userRequest);
+            // 🔑 CRITICAL FIX: If Luma already decided, SKIP router (prevent override!)
+            let route;
+            if (preAssignedRoute && preAssignedRoute.lumaDecisionFinal) {
+                console.log('✅ Using Luma Supreme decision (router SKIPPED):', preAssignedRoute);
+                route = preAssignedRoute;
+                
+                // Show Luma's decision to user
+                const roleNames = {
+                    executor: "⚙️ Executor (Komut Çalıştırıcı)",
+                    generator: "🔧 Generator (Kod Üretici)",
+                    analyzer: "🔍 Analyzer (Kod Analiz)",
+                    documentation: "📝 Documentation (Döküman)",
+                    coordinator: "⚙️ Coordinator (Koordinatör)",
+                    artist: "🎨 Artist (Görsel İçerik)"
+                };
+                
+                this.addChatMessage('ai', `🌌 Luma Supreme kararı: ${roleNames[route.role] || route.role}\n💡 ${route.reasoning}`);
+            } else {
+                // Step 1: Router Agent - Intent Analysis & Auto Role Selection (ONLY if Luma didn't decide)
+                route = await this.routeUserIntent(userRequest);
+            }
 
             // If router returned null (chat/hybrid mode handled), stop here
             if (!route) {
@@ -9583,19 +9612,38 @@ Now provide the CORRECTED response (pure JSON only):`;
     }
 
     async executeNightOrders(orders, approvalToken = null) {
-        console.log('🧭 NIGHT ORDERS PROTOCOL ACTIVATED!');
-        console.log('📋 Mission:', orders.mission);
-        console.log('🎯 Acceptance Criteria:', orders.acceptance);
-        
-        // 🧠 SESSION CONTEXT: Set mission at the start
-        if (this.sessionContext) {
-            this.sessionContext.setMission(
-                orders.mission,
-                orders.steps.length,
-                orders.acceptance || []
-            );
-            console.log('📍 Session Context: Mission set');
+        // 🔒 CRITICAL: Execution Mutex - Prevent double Night Orders execution
+        if (this.isExecutingNightOrders) {
+            console.warn('⚠️ Night Orders already executing! Queuing this mission...');
+            console.log('📋 Queued Mission:', orders.mission);
+            
+            if (!this.nightOrdersQueue) {
+                this.nightOrdersQueue = [];
+            }
+            
+            this.nightOrdersQueue.push({ orders, approvalToken });
+            
+            this.addChatMessage('ai', `⏳ **Mission Queued**\n\n${orders.mission}\n\n_Waiting for current mission to complete..._`);
+            return;
         }
+        
+        // Set execution flag
+        this.isExecutingNightOrders = true;
+        
+        try {
+            console.log('🧭 NIGHT ORDERS PROTOCOL ACTIVATED!');
+            console.log('📋 Mission:', orders.mission);
+            console.log('🎯 Acceptance Criteria:', orders.acceptance);
+            
+            // 🧠 SESSION CONTEXT: Set mission at the start
+            if (this.sessionContext) {
+                this.sessionContext.setMission(
+                    orders.mission,
+                    orders.steps.length,
+                    orders.acceptance || []
+                );
+                console.log('📍 Session Context: Mission set');
+            }
         
         // 🔍 PR-3: ZOD SCHEMA VALIDATION + CONTINUE PARSEARGS
         try {
@@ -9930,6 +9978,23 @@ Success: ${successCount} | Failed: ${failCount}
         }
 
         this.refreshExplorer();
+        
+        } finally {
+            // 🔒 CRITICAL: Release execution mutex
+            this.isExecutingNightOrders = false;
+            console.log('🔓 Night Orders execution mutex released');
+            
+            // 🔄 CRITICAL: Process queued missions
+            if (this.nightOrdersQueue && this.nightOrdersQueue.length > 0) {
+                const nextMission = this.nightOrdersQueue.shift();
+                console.log(`🔄 Executing queued mission: ${nextMission.orders.mission}`);
+                
+                // Execute next queued mission asynchronously (don't await to prevent recursion)
+                setTimeout(() => {
+                    this.executeNightOrders(nextMission.orders, nextMission.approvalToken);
+                }, 500);
+            }
+        }
     }
 
     // 🧠 ===== REFLEXION MODULE: SELF-CORRECTION ===== 🧠
