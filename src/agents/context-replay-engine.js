@@ -386,6 +386,9 @@ class ContextReplayEngine {
     }
 }
 
+// Export for ES6 modules (MUST BE FIRST!)
+export { ContextReplayEngine };
+
 // Export for Node.js and Browser
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = ContextReplayEngine;

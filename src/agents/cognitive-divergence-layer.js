@@ -375,6 +375,9 @@ class CognitiveDivergenceLayer {
     }
 }
 
+// Export for ES6 modules (MUST BE FIRST!)
+export { CognitiveDivergenceLayer };
+
 // Export for Node.js and Browser
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CognitiveDivergenceLayer;
