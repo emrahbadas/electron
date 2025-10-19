@@ -20,11 +20,29 @@
 import { LumaCore } from './luma-core.js';
 import { LumaContextBridge } from './luma-context-bridge.js';
 
+// 🧠 v2.1 Adaptive Evolution Components
+import { AdaptiveReflexionMemory } from './adaptive-memory.js';
+import { ContextReplayEngine } from './context-replay-engine.js';
+import { CognitiveDivergenceLayer } from './cognitive-divergence-layer.js';
+import { SelfDivergenceProtocol } from './self-divergence-protocol.js';
+
 export class LumaSuprimeAgent {
     constructor(options = {}) {
         // Core systems
         this.lumaCore = options.lumaCore || new LumaCore();
         this.lumaBridge = options.lumaBridge || null; // Will be set externally
+        
+        // 🧠 v2.1 Adaptive Evolution Systems
+        this.adaptiveMemory = new AdaptiveReflexionMemory();
+        this.contextReplay = new ContextReplayEngine(this.adaptiveMemory);
+        this.cognitiveDivergence = new CognitiveDivergenceLayer();
+        this.selfDivergence = new SelfDivergenceProtocol();
+        
+        console.log('🧠 v2.1 Adaptive Components initialized:');
+        console.log('  ✅ AdaptiveReflexionMemory (weighted pattern learning)');
+        console.log('  ✅ ContextReplayEngine (smart fix replay)');
+        console.log('  ✅ CognitiveDivergenceLayer (novelty detection)');
+        console.log('  ✅ SelfDivergenceProtocol (internal questioning)');
         
         // System integrations (set externally)
         this.sessionContext = options.sessionContext || null;
@@ -70,7 +88,25 @@ export class LumaSuprimeAgent {
             // 🎯 STEP 2: Context Gathering (SessionContext + LearningStore)
             const context = await this.gatherSystemContext(input);
             
-            // 🤔 STEP 3: Reasoning (Luma Core with full context)
+            // � v2.1 INTEGRATION POINT 1: Self-Divergence (Internal Questioning)
+            console.log('🤔 v2.1: Activating Self-Divergence Protocol...');
+            const selfCheck = await this.selfDivergence.questionDecision(
+                { type: 'preliminary', intent, input },
+                context
+            );
+            
+            if (selfCheck.recommendation === 'DIVERGE') {
+                console.log('⚠️ Self-Divergence detected potential issue!');
+                console.log('   Questions:', selfCheck.questions.map(q => q.question).join(', '));
+                console.log('   Concerns:', selfCheck.concerns);
+                
+                // Add self-reflection to context for better reasoning
+                context.selfReflection = selfCheck;
+            } else {
+                console.log('✅ Self-Divergence: Decision looks good');
+            }
+            
+            // �🤔 STEP 3: Reasoning (Luma Core with full context)
             const decision = this.lumaCore.reason(intent, {
                 prompt: input,
                 context,
@@ -80,6 +116,36 @@ export class LumaSuprimeAgent {
             
             console.log(`🧠 Supreme Decision:`, decision);
             this.emitSuprimeEvent('DECISION_MADE', { decision });
+            
+            // 🧠 v2.1 INTEGRATION POINT 2: Cognitive Divergence (Novelty Detection)
+            console.log('🔍 v2.1: Activating Cognitive Divergence Layer...');
+            const projectContext = {
+                input,
+                intent,
+                decision,
+                sessionData: context.session
+            };
+            
+            const strategy = await this.cognitiveDivergence.decideStrategy(projectContext);
+            console.log(`🎯 Cognitive Strategy: ${strategy.strategy}`);
+            
+            if (strategy.hybridDetected) {
+                console.log('⚡ HYBRID PROJECT DETECTED!');
+                console.log('   Categories:', strategy.categories);
+                console.log('   Guidance:', strategy.guidance);
+                
+                // Add strategy guidance to decision metadata
+                if (!decision.metadata) decision.metadata = {};
+                decision.metadata.cognitiveStrategy = strategy;
+            }
+            
+            if (strategy.strategy === 'EXPLORE_NEW') {
+                console.log('🚀 Novel scenario detected - exploring new patterns');
+            } else if (strategy.strategy === 'REUSE_PATTERN') {
+                console.log('♻️ Similar pattern found - reusing knowledge');
+            } else {
+                console.log('⚖️ Balanced approach - combining learned + novel');
+            }
             
             // 🚦 STEP 4: Risk Assessment and Validation
             const validation = await this.validateDecision(decision, context);
@@ -112,6 +178,29 @@ export class LumaSuprimeAgent {
             
             // 🚀 STEP 7: Execute via Multi-Agent Coordinator
             this.systemState = 'executing';
+            
+            // 🧠 v2.1 INTEGRATION POINT 3: Context Replay (Pattern Injection)
+            console.log('📚 v2.1: Activating Context Replay Engine...');
+            const replay = await this.contextReplay.replayPatternsFor(projectContext);
+            
+            if (replay && replay.patterns.length > 0) {
+                console.log(`✨ Found ${replay.patterns.length} relevant patterns!`);
+                console.log('   Auto-applying learned fixes...');
+                
+                // Add replay guidance to task context
+                prioritized.replayGuidance = {
+                    patterns: replay.patterns,
+                    recommendation: replay.recommendation,
+                    autoApply: replay.autoApply
+                };
+                
+                if (replay.autoApply) {
+                    console.log('🤖 AUTO-APPLY MODE: Fixes will be injected automatically');
+                }
+            } else {
+                console.log('📝 No patterns found - learning from scratch');
+            }
+            
             const result = await this.executeViaCoordinator(
                 assignedAgent, 
                 prioritized,
@@ -122,6 +211,30 @@ export class LumaSuprimeAgent {
             this.systemState = 'reflecting';
             await this.processResult(result, task, decision);
             
+            // 🧠 v2.1 INTEGRATION POINT 4: Adaptive Memory (Store Pattern)
+            console.log('💾 v2.1: Storing pattern in Adaptive Memory...');
+            const success = result?.success !== false;
+            
+            await this.adaptiveMemory.storePattern(
+                {
+                    input,
+                    intent,
+                    projectType: context.session?.currentProject?.name || 'unknown',
+                    errorContext: context.session?.errors || [],
+                    strategy: decision.metadata?.cognitiveStrategy?.strategy || 'unknown'
+                },
+                {
+                    decision,
+                    task: prioritized,
+                    replayGuidance: prioritized.replayGuidance,
+                    result
+                },
+                success
+            );
+            
+            const memoryStats = this.adaptiveMemory.getStats();
+            console.log(`📊 Adaptive Memory Stats: ${memoryStats.totalPatterns} patterns, avg score: ${memoryStats.averageScore.toFixed(2)}`);
+            
             // 💾 STEP 9: Save Decision to History
             this.recordDecision({
                 input,
@@ -130,7 +243,13 @@ export class LumaSuprimeAgent {
                 task: prioritized,
                 agent: assignedAgent,
                 result,
-                duration: Date.now() - startTime
+                duration: Date.now() - startTime,
+                v21Metadata: {
+                    selfCheck,
+                    strategy,
+                    replay,
+                    memoryStats
+                }
             });
             
             this.systemState = 'idle';
@@ -501,6 +620,28 @@ export class LumaSuprimeAgent {
             agentCounts[d.agent] = (agentCounts[d.agent] || 0) + 1;
         });
         
+        // 🧠 v2.1 Statistics
+        const v21Stats = {
+            adaptiveMemory: this.adaptiveMemory.getStats(),
+            cognitiveDivergence: {
+                totalDecisions: this.decisionHistory.filter(d => d.v21Metadata?.strategy).length,
+                hybridDetections: this.decisionHistory.filter(d => d.v21Metadata?.strategy?.hybridDetected).length,
+                strategyDistribution: {
+                    explore: this.decisionHistory.filter(d => d.v21Metadata?.strategy?.strategy === 'EXPLORE_NEW').length,
+                    reuse: this.decisionHistory.filter(d => d.v21Metadata?.strategy?.strategy === 'REUSE_PATTERN').length,
+                    balanced: this.decisionHistory.filter(d => d.v21Metadata?.strategy?.strategy === 'BALANCED_APPROACH').length
+                }
+            },
+            contextReplay: {
+                totalReplays: this.decisionHistory.filter(d => d.v21Metadata?.replay?.patterns?.length > 0).length,
+                autoApplied: this.decisionHistory.filter(d => d.v21Metadata?.replay?.autoApply).length
+            },
+            selfDivergence: {
+                totalChecks: this.decisionHistory.filter(d => d.v21Metadata?.selfCheck).length,
+                divergenceTriggered: this.decisionHistory.filter(d => d.v21Metadata?.selfCheck?.recommendation === 'DIVERGE').length
+            }
+        };
+        
         return {
             totalDecisions: total,
             successful,
@@ -510,7 +651,8 @@ export class LumaSuprimeAgent {
             agentDistribution: agentCounts,
             currentState: this.systemState,
             queueLength: this.taskQueue.length,
-            activeAssignments: this.agentAssignments.size
+            activeAssignments: this.agentAssignments.size,
+            v21: v21Stats
         };
     }
     
