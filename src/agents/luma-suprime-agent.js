@@ -97,8 +97,12 @@ export class LumaSuprimeAgent {
             
             if (selfCheck.recommendation === 'DIVERGE') {
                 console.log('⚠️ Self-Divergence detected potential issue!');
-                console.log('   Questions:', selfCheck.questions.map(q => q.question).join(', '));
-                console.log('   Concerns:', selfCheck.concerns);
+                if (selfCheck.questions && selfCheck.questions.length > 0) {
+                    console.log('   Questions:', selfCheck.questions.map(q => q.question).join(', '));
+                }
+                if (selfCheck.concerns && selfCheck.concerns.length > 0) {
+                    console.log('   Concerns:', selfCheck.concerns);
+                }
                 
                 // Add self-reflection to context for better reasoning
                 context.selfReflection = selfCheck;
