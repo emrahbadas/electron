@@ -396,6 +396,26 @@ class AdaptiveReflexionMemory {
             this.recentPatterns.pop();
         }
     }
+
+    /**
+     * İstatistikleri getir
+     * @returns {Object} Pattern istatistikleri
+     */
+    getStats() {
+        const allPatterns = Array.from(this.patterns.values());
+        
+        return {
+            totalPatterns: allPatterns.length,
+            successfulPatterns: allPatterns.filter(p => p.successRate >= 0.75).length,
+            averageScore: allPatterns.length > 0 
+                ? allPatterns.reduce((sum, p) => sum + p.score, 0) / allPatterns.length 
+                : 0,
+            averageSuccessRate: allPatterns.length > 0
+                ? allPatterns.reduce((sum, p) => sum + p.successRate, 0) / allPatterns.length
+                : 0,
+            recentPatternsCount: this.recentPatterns.length
+        };
+    }
 }
 
 // Export for ES6 modules (MUST BE FIRST!)
