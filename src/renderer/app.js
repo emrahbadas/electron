@@ -1,6 +1,15 @@
 // KayraDeniz Badaş Kod Canavarı - Frontend Application Logic
 // Modern AI-powered code generation and file management
 
+// ===== AGENT HIERARCHY SYSTEM (VS Code Copilot Style) =====
+const { 
+    AGENT_LEVELS, 
+    AGENT_REGISTRY, 
+    wrapDecision, 
+    validateOverride,
+    logDecisionChain 
+} = require('../agents/agent-hierarchy.js');
+
 // ===== KAYRA TOOLS SYSTEM =====
 // KayraToolsIntegration is loaded via ES module in index.html
 // It will be available on window object after module loads
@@ -3240,14 +3249,21 @@ class KodCanavari {
                         // Supreme Agent only decides, doesn't execute
                         console.log('🎯 Executing task via Unified Agent System...');
                         
-                        // 🔑 CRITICAL FIX: Pass Luma's agent decision to SKIP router override
-                        const lumaRoute = {
+                        // 🎼 HIERARCHY SYSTEM: Wrap Luma's decision with orchestrator metadata
+                        const lumaDecision = {
                             role: supremeResult.agent.toLowerCase().replace('agent', ''), // "ExecutorAgent" → "executor"
                             mode: 'action',
                             confidence: 1.0,
-                            reasoning: supremeResult.decision?.message || 'Luma Supreme decision',
-                            lumaDecisionFinal: true // ← FLAG to prevent router override
+                            reasoning: supremeResult.decision?.message || 'Luma Supreme decision'
                         };
+                        
+                        // Wrap with hierarchy (Level 0 = Orchestrator = FINAL)
+                        const lumaRoute = wrapDecision('LumaSupremeAgent', lumaDecision);
+                        
+                        console.log('🎼 Luma Supreme decision wrapped with hierarchy:');
+                        console.log('   Level:', lumaRoute._hierarchy.level, '(ORCHESTRATOR)');
+                        console.log('   Is Final:', lumaRoute._hierarchy.isFinal, '🔒');
+                        console.log('   Agent:', lumaRoute._hierarchy.agent);
                         
                         await this.executeUnifiedAgentTask(contextAwarePrompt, lumaRoute);
                         
@@ -7771,13 +7787,46 @@ Please consider the conversation context when responding. Reference previous dis
                 });
             }
 
-            // 🔑 CRITICAL FIX: If Luma already decided, SKIP router (prevent override!)
+            // 🎼 HIERARCHY SYSTEM: Validate override attempt
             let route;
-            if (preAssignedRoute && preAssignedRoute.lumaDecisionFinal) {
-                console.log('✅ Using Luma Supreme decision (router SKIPPED):', preAssignedRoute);
-                route = preAssignedRoute;
+            if (preAssignedRoute && preAssignedRoute._hierarchy) {
+                // Luma veya başka bir üst seviye agent karar vermiş
+                console.log('🎼 Existing decision detected from:', preAssignedRoute._hierarchy.agent);
+                console.log('   Level:', preAssignedRoute._hierarchy.level);
+                console.log('   Is Final:', preAssignedRoute._hierarchy.isFinal);
                 
-                // Show Luma's decision to user
+                // Router'ın override etmeye çalışması durumu
+                const overrideValidation = validateOverride(
+                    preAssignedRoute, 
+                    'RouterAgent', 
+                    { role: 'unknown', mode: 'unknown' }
+                );
+                
+                if (overrideValidation.allowed) {
+                    console.log('✅ Router can override previous decision:', overrideValidation.reason);
+                    route = await this.routeUserIntent(userRequest);
+                } else {
+                    console.log('🚫 Router CANNOT override:', overrideValidation.reason);
+                    console.log('✅ Using existing decision (hierarchy preserved)');
+                    route = preAssignedRoute;
+                    
+                    // Show Luma's decision to user
+                    const roleNames = {
+                        executor: "⚙️ Executor (Komut Çalıştırıcı)",
+                        generator: "🔧 Generator (Kod Üretici)",
+                        analyzer: "🔍 Analyzer (Kod Analiz)",
+                        documentation: "📝 Documentation (Döküman)",
+                        coordinator: "⚙️ Coordinator (Koordinatör)",
+                        artist: "🎨 Artist (Görsel İçerik)"
+                    };
+                    
+                    this.addChatMessage('ai', `🌌 Luma Supreme kararı: ${roleNames[route.role] || route.role}\n💡 ${route.reasoning}`);
+                }
+            } else if (preAssignedRoute && preAssignedRoute.lumaDecisionFinal) {
+                // Legacy support: Old lumaDecisionFinal flag
+                console.log('⚠️ Legacy flag detected: lumaDecisionFinal (upgrading to hierarchy system)');
+                route = wrapDecision('LumaSupremeAgent', preAssignedRoute);
+                
                 const roleNames = {
                     executor: "⚙️ Executor (Komut Çalıştırıcı)",
                     generator: "🔧 Generator (Kod Üretici)",
@@ -7789,8 +7838,9 @@ Please consider the conversation context when responding. Reference previous dis
                 
                 this.addChatMessage('ai', `🌌 Luma Supreme kararı: ${roleNames[route.role] || route.role}\n💡 ${route.reasoning}`);
             } else {
-                // Step 1: Router Agent - Intent Analysis & Auto Role Selection (ONLY if Luma didn't decide)
-                route = await this.routeUserIntent(userRequest);
+                // Step 1: Router Agent - Intent Analysis & Auto Role Selection (ONLY if no existing decision)
+                const routerDecision = await this.routeUserIntent(userRequest);
+                route = wrapDecision('RouterAgent', routerDecision);
             }
 
             // If router returned null (chat/hybrid mode handled), stop here
