@@ -16810,6 +16810,14 @@ Commit message: "${message}"`);
 document.addEventListener('DOMContentLoaded', () => {
     window.kodCanavari = new KodCanavari();
 
+    // Initialize MCP Proxy Monitor (after kodCanavari is ready)
+    if (typeof window.initializeMCPMonitor === 'function') {
+        window.initializeMCPMonitor();
+        console.log('🔍 [Main] MCP Monitor initialization triggered');
+    } else {
+        console.warn('⚠️ [Main] MCP Monitor not found, auto-restart disabled');
+    }
+
     // Initialize GitHub and Code Agent managers
     if (typeof KayraGitHubCodeManager !== 'undefined') {
         window.githubCodeManager = new KayraGitHubCodeManager();

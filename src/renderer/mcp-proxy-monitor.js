@@ -166,44 +166,43 @@ class MCPProxyMonitor {
 // Initialize monitor when DOM is ready
 let mcpProxyMonitor = null;
 
-if (typeof window !== 'undefined') {
-    // Wait for document ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeMonitor);
-    } else {
-        initializeMonitor();
+/**
+ * Initialize and start MCP Monitor
+ * Should be called AFTER window.kodCanavari is created
+ */
+function initializeMCPMonitor() {
+    if (mcpProxyMonitor) {
+        console.log('⚠️ [MCP Monitor] Already initialized, skipping...');
+        return mcpProxyMonitor;
     }
+
+    if (!window.kodCanavari) {
+        console.error('❌ [MCP Monitor] window.kodCanavari not found! Call this after KodCanavari initialization.');
+        return null;
+    }
+
+    // Initialize monitor
+    mcpProxyMonitor = new MCPProxyMonitor();
+    
+    // Attach to global for debugging
+    window.mcpProxyMonitor = mcpProxyMonitor;
+    
+    // Start monitoring after 10 seconds (allow Electron to fully initialize)
+    setTimeout(() => {
+        mcpProxyMonitor.start();
+        console.log('✅ [MCP Monitor] Initialized and started');
+    }, 10000);
+    
+    // Expose control methods in console
+    console.log('💡 Use mcpProxyMonitor.forceRestart() to manually restart proxy');
+    console.log('💡 Use mcpProxyMonitor.getStatus() to check monitor status');
+    
+    return mcpProxyMonitor;
 }
 
-function initializeMonitor() {
-    // Wait for KodCanavari to be ready
-    const checkKodCanavari = setInterval(() => {
-        if (window.kodCanavari) {
-            clearInterval(checkKodCanavari);
-            
-            // Initialize monitor
-            mcpProxyMonitor = new MCPProxyMonitor();
-            
-            // Attach to global for debugging
-            window.mcpProxyMonitor = mcpProxyMonitor;
-            
-            // Start monitoring after 10 seconds (allow Electron to fully initialize)
-            setTimeout(() => {
-                mcpProxyMonitor.start();
-                console.log('✅ [MCP Monitor] Initialized and started');
-            }, 10000);
-            
-            // Expose control methods in console
-            console.log('💡 Use mcpProxyMonitor.forceRestart() to manually restart proxy');
-            console.log('💡 Use mcpProxyMonitor.getStatus() to check monitor status');
-        }
-    }, 500);
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-        clearInterval(checkKodCanavari);
-        console.warn('⚠️ [MCP Monitor] KodCanavari not found after 30s, monitor not started');
-    }, 30000);
+// Expose initialization function
+if (typeof window !== 'undefined') {
+    window.initializeMCPMonitor = initializeMCPMonitor;
 }
 
 // Export for module usage
