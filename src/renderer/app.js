@@ -3074,6 +3074,13 @@ class KodCanavari {
         this.isProcessingMessage = true;
         this.lastMessageTime = now;
 
+        // 🔄 CRITICAL FIX: Reset phase context for NEW user request
+        // Each new user message starts from Phase 1
+        this.phaseContext.currentPhase = 0; // Will become 1 in executeNightOrders
+        this.phaseContext.completedFiles.clear();
+        this.phaseContext.lastMission = null;
+        console.log('🔄 Phase context reset for new user request');
+
         // Get UI elements and variables at method scope
         const chatInput = document.getElementById('chatInput');
         const sendBtn = document.getElementById('sendChatBtn');
