@@ -220,7 +220,7 @@ export class LumaSuprimeAgent {
             // 🧠 v2.1 INTEGRATION POINT 4: Adaptive Memory (Store Pattern)
             console.log('💾 v2.1: Storing pattern in Adaptive Memory...');
             const success = result?.success !== false;
-            
+            // 4️⃣ Adaptive Memory ile pattern kaydet
             await this.adaptiveMemory.storePattern(
                 {
                     input,
@@ -229,12 +229,26 @@ export class LumaSuprimeAgent {
                     errorContext: context.session?.errors || [],
                     strategy: decision.metadata?.cognitiveStrategy?.strategy || 'unknown'
                 },
-                {
-                    decision,
-                    task: prioritized,
-                    replayGuidance: prioritized.replayGuidance,
-                    result
-                },
+                [
+                    {
+                        type: 'decision',
+                        path: context.session?.currentProject?.path || '',
+                        content: JSON.stringify(decision),
+                        reasoning: decision.reasoning || ''
+                    },
+                    {
+                        type: 'task',
+                        path: context.session?.currentProject?.path || '',
+                        content: JSON.stringify(prioritized),
+                        reasoning: prioritized.replayGuidance || ''
+                    },
+                    {
+                        type: 'result',
+                        path: context.session?.currentProject?.path || '',
+                        content: JSON.stringify(result),
+                        reasoning: success ? 'Execution completed successfully' : 'Execution failed'
+                    }
+                ],
                 success
             );
             
