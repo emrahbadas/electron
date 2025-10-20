@@ -3074,13 +3074,6 @@ class KodCanavari {
         this.isProcessingMessage = true;
         this.lastMessageTime = now;
 
-        // 🔄 CRITICAL FIX: Reset phase context for NEW user request
-        // Each new user message starts from Phase 1
-        this.phaseContext.currentPhase = 0; // Will become 1 in executeNightOrders
-        this.phaseContext.completedFiles.clear();
-        this.phaseContext.lastMission = null;
-        console.log('🔄 Phase context reset for new user request');
-
         // Get UI elements and variables at method scope
         const chatInput = document.getElementById('chatInput');
         const sendBtn = document.getElementById('sendChatBtn');
@@ -3092,6 +3085,21 @@ class KodCanavari {
             if (!chatInput || !chatInput.value.trim()) return;
 
             message = chatInput.value.trim();
+            
+            // 🔄 SMART PHASE RESET: Only reset if NEW project detected
+            // Keywords indicating continuation: "devam", "phase", "adım", "sonraki"
+            const isContinuation = /\b(devam|phase|adım|sonraki|kaldığı|tamamla)\b/i.test(message);
+            
+            if (!isContinuation) {
+                // New project - reset phase context
+                this.phaseContext.currentPhase = 0;
+                this.phaseContext.completedFiles.clear();
+                this.phaseContext.lastMission = null;
+                console.log('🔄 Phase context reset - NEW PROJECT detected');
+            } else {
+                console.log('➡️ Phase continuation detected - keeping phase context');
+            }
+            
             chatInput.value = '';
             chatInput.style.height = 'auto';
 
@@ -3157,8 +3165,25 @@ class KodCanavari {
                     try {
                         console.log('🌌 Supreme Agent processing:', message);
                         
+                        // 🔄 Build context with phase information for agent coordination
+                        const supremeContext = {
+                            message,
+                            phaseContext: {
+                                currentPhase: this.phaseContext.currentPhase,
+                                totalPhases: this.phaseContext.totalPhases,
+                                lastMission: this.phaseContext.lastMission,
+                                completedFiles: Array.from(this.phaseContext.completedFiles),
+                                projectContinuation: isContinuation
+                            },
+                            session: this.sessionContext,
+                            system: {
+                                developerMode: this.developerMode,
+                                workspaceRoot: this.workspaceRoot
+                            }
+                        };
+                        
                         // Execute via Supreme Agent (handles all reasoning, validation, assignment)
-                        const supremeResult = await this.lumaSuprimeAgent.execute(message);
+                        const supremeResult = await this.lumaSuprimeAgent.execute(message, supremeContext);
                         
                         console.log('🌌 Supreme Result:', supremeResult);
                         

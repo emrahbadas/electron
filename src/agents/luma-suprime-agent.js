@@ -380,6 +380,9 @@ export class LumaSuprimeAgent {
      * 📋 Create structured task from decision
      */
     createTask(input, intent, decision, context) {
+        // 🧠 Extract phase context from KodCanavari if available
+        const phaseContext = context.phaseContext || {};
+        
         return {
             id: `task-${Date.now()}`,
             input,
@@ -391,7 +394,12 @@ export class LumaSuprimeAgent {
             context: {
                 projectName: context.session?.currentProject?.name,
                 missionGoal: context.session?.activeMission?.goal,
-                hasErrors: context.session?.errors?.length > 0
+                hasErrors: context.session?.errors?.length > 0,
+                // 🔄 PHASE COORDINATION: Share phase context across all agents
+                currentPhase: phaseContext.currentPhase || 1,
+                totalPhases: phaseContext.totalPhases || 1,
+                lastMission: phaseContext.lastMission || null,
+                projectContinuation: phaseContext.projectContinuation || false
             }
         };
     }
@@ -480,18 +488,31 @@ export class LumaSuprimeAgent {
         try {
             // If coordinator available, use it
             if (this.multiAgentCoordinator) {
-                const sessionId = await this.multiAgentCoordinator.startSession(agentName, task.description, {
+                // 🧠 CRITICAL: Pass phase context to ALL agents for coordination
+                const sharedContext = {
                     task,
                     decision,
                     priority: task.priority,
-                    ...task.context
-                });
+                    ...task.context,
+                    // 🔄 Phase coordination context
+                    currentPhase: task.context?.currentPhase || 1,
+                    totalPhases: task.context?.totalPhases || 1,
+                    lastMission: task.context?.lastMission || null,
+                    projectContinuation: task.context?.projectContinuation || false
+                };
+                
+                const sessionId = await this.multiAgentCoordinator.startSession(
+                    agentName, 
+                    task.description, 
+                    sharedContext
+                );
                 
                 return {
                     fromCoordinator: true,
                     sessionId,
                     agent: agentName,
-                    message: `Task delegated to ${agentName} via coordinator`
+                    message: `Task delegated to ${agentName} via coordinator`,
+                    sharedContext // Return for verification
                 };
             }
             
