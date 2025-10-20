@@ -32,9 +32,14 @@ export class LumaSuprimeAgent {
         this.lumaCore = options.lumaCore || new LumaCore();
         this.lumaBridge = options.lumaBridge || null; // Will be set externally
         
-        // 🧠 v2.1 Adaptive Evolution Systems
+        // System integrations (set early for v2.1 dependencies)
+        this.sessionContext = options.sessionContext || null;
+        this.learningStore = options.learningStore || null;
+        this.eventBus = options.eventBus || null;
+        
+        // 🧠 v2.1 Adaptive Evolution Systems (after dependencies)
         this.adaptiveMemory = new AdaptiveReflexionMemory();
-        this.contextReplay = new ContextReplayEngine(this.adaptiveMemory);
+        this.contextReplay = new ContextReplayEngine(this.learningStore, this.adaptiveMemory);
         this.cognitiveDivergence = new CognitiveDivergenceLayer();
         this.selfDivergence = new SelfDivergenceProtocol();
         
@@ -44,10 +49,7 @@ export class LumaSuprimeAgent {
         console.log('  ✅ CognitiveDivergenceLayer (novelty detection)');
         console.log('  ✅ SelfDivergenceProtocol (internal questioning)');
         
-        // System integrations (set externally)
-        this.sessionContext = options.sessionContext || null;
-        this.learningStore = options.learningStore || null;
-        this.eventBus = options.eventBus || null;
+        // Additional system integrations
         this.multiAgentCoordinator = options.multiAgentCoordinator || null;
         this.reflexionSystem = options.reflexionSystem || null;
         
