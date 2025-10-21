@@ -221,7 +221,20 @@ class ReflexionApplier {
             results
         };
         
+        // ✅ IMPROVED: Detailed reflexion summary logging (ChatGPT önerisi)
+        console.log(`📘 Reflexion Summary: ${successCount} fixes applied, ${successCount} successes, ${summary.failed} fails, ${skippedCount} skipped.`);
         console.log(`🧠 [ReflexionApplier] Fix application complete:`, summary);
+        
+        // Additional breakdown logging
+        if (summary.failed > 0) {
+            const failedFixes = results.filter(r => !r.result.success && !r.result.skipped);
+            console.warn(`❌ Failed fixes:`, failedFixes.map(f => `${f.fix.type} ${f.fix.path}`));
+        }
+        
+        if (summary.skipped > 0) {
+            const skippedFixes = results.filter(r => r.result.skipped);
+            console.warn(`⏭️ Skipped fixes:`, skippedFixes.map(f => `${f.fix.type} ${f.fix.path} (${f.result.reason})`));
+        }
         
         return summary;
     }

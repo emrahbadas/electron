@@ -109,6 +109,27 @@ export class LumaCore {
                 reasoning: "Komut/üretim talebi - tool çağrısı zorunlu"
             };
         }
+
+        // 🧠 INTROSPECTION FALLBACK: "Ne? Neden? Niçin?" sistemi
+        let intent = intentMap[nature.type] || "exploration";
+        let responseMode = this.determineResponseMode(nature, cognitiveIntent);
+        let confidence = nature.confidence || this.calculateConfidence(text, nature);
+        
+        // ✅ FIX: Intent mapping boşluklarını doldur
+        if (!intent || intent === undefined) {
+            console.warn("⚠️ Intent incomplete - invoking 'Ne?' introspection");
+            intent = this.askSelf("ne", message, "Bu istek ne hakkında?");
+        }
+        
+        if (!responseMode || responseMode === undefined) {
+            console.warn("⚠️ ResponseMode incomplete - invoking 'Niçin?' introspection");  
+            responseMode = this.askSelf("nicin", message, "Bu isteğe nasıl yaklaşmak etik olur?");
+        }
+        
+        if (!confidence || confidence < 0.2) {
+            console.warn("⚠️ Confidence too low - invoking 'Neden?' introspection");
+            confidence = this.askSelf("neden", message, "Kaptan bunu neden istiyor olabilir?");
+        }
         
         // Exploration signals
         if (text.includes("nasıl") ||
@@ -129,14 +150,14 @@ export class LumaCore {
         
         // ✅ FIX: Use intentMap for default routing
         const finalIntent = {
-            intent: intentMap[nature.type] || "exploration",  // ✅ Map nature to intent
+            intent: intent,  // ✅ Updated intent with fallback
             nature: nature.type,
             requiresTools: nature.needsTools,
             conversational: nature.type === "discussion" || nature.type === "simple_chat",
             reasoning: nature.reasoning,
             // 🧠 NEW: Adaptive Reasoning Mode (ChatGPT önerisi)
-            responseMode: this.determineResponseMode(text, nature),
-            confidence: this.calculateConfidence(text, nature),
+            responseMode: responseMode,  // ✅ Updated responseMode with fallback
+            confidence: confidence,      // ✅ Updated confidence with fallback
             // 🧭 NEW: Cognitive analysis results
             cognitiveIntent: cognitiveIntent
         };
@@ -176,7 +197,8 @@ export class LumaCore {
             return {
                 type: "greeting",
                 needsTools: false,
-                reasoning: "Basit selamlama"
+                reasoning: "Basit selamlama",
+                confidence: 0.95
             };
         }
         
@@ -194,7 +216,8 @@ export class LumaCore {
             return {
                 type: "simple_chat",
                 needsTools: false,
-                reasoning: "Basit sohbet - direkt yanıt yeterli"
+                reasoning: "Basit sohbet - direkt yanıt yeterli",
+                confidence: 0.9
             };
         }
         
@@ -217,7 +240,8 @@ export class LumaCore {
                 return {
                     type: "how_to_question",
                     needsTools: false,
-                    reasoning: "Nasıl yapıldığını öğrenmek istiyor - açıklama yeterli, kod üretme değil"
+                    reasoning: "Nasıl yapıldığını öğrenmek istiyor - açıklama yeterli, kod üretme değil",
+                    confidence: 0.7
                 };
             }
             
@@ -226,14 +250,16 @@ export class LumaCore {
                 return {
                     type: "tutorial",
                     needsTools: true,
-                    reasoning: "Pratik uygulama sorusu - kod örneği göstermeli"
+                    reasoning: "Pratik uygulama sorusu - kod örneği göstermeli",
+                    confidence: 0.8
                 };
             }
             
             return {
                 type: "question",
                 needsTools: false,
-                reasoning: "Bilgi istemi - sohbet yanıtı yeterli"
+                reasoning: "Bilgi istemi - sohbet yanıtı yeterli",
+                confidence: 0.6
             };
         }
         
@@ -248,7 +274,8 @@ export class LumaCore {
             return {
                 type: "file_operation",
                 needsTools: true,
-                reasoning: "Dosya işlemi - fs.read/fs.write tool zorunlu"
+                reasoning: "Dosya işlemi - fs.read/fs.write tool zorunlu",
+                confidence: 0.85
             };
         }
         
@@ -263,7 +290,8 @@ export class LumaCore {
             return {
                 type: "creation",
                 needsTools: true,
-                reasoning: "Kod üretimi - create_file/write_code tool zorunlu"
+                reasoning: "Kod üretimi - create_file/write_code tool zorunlu",
+                confidence: 0.9
             };
         }
         
@@ -277,7 +305,8 @@ export class LumaCore {
             return {
                 type: "analysis",
                 needsTools: true,
-                reasoning: "Kod analizi - read_file/list_files tool gerekebilir"
+                reasoning: "Kod analizi - read_file/list_files tool gerekebilir",
+                confidence: 0.75
             };
         }
         
@@ -292,16 +321,56 @@ export class LumaCore {
             return {
                 type: "discussion",
                 needsTools: false,
-                reasoning: "Fikir tartışması - sohbet yeterli, tool gerekmez"
+                reasoning: "Fikir tartışması - sohbet yeterli, tool gerekmez",
+                confidence: 0.6
             };
         }
         
         // 6️⃣ BELİRSİZ/GENEL (Default - Analyze Context)
-        return {
+        const result = {
             type: "unclear",
             needsTools: false,
-            reasoning: "Belirsiz istek - sohbet ile netleştir, sonra tool karar ver"
+            reasoning: "Belirsiz istek - sohbet ile netleştir, sonra tool karar ver",
+            confidence: this.calculateBasicConfidence(text)
         };
+        
+        return result;
+    }
+    
+    /**
+     * 🎯 Temel güven seviyesi hesapla (classifyRequestNature için)
+     * @param {string} text - Analiz edilecek metin
+     * @returns {number} - 0.0-1.0 arası güven skoru
+     */
+    calculateBasicConfidence(text) {
+        let confidence = 0.5; // Baseline
+        
+        // Net komutlar = yüksek güven
+        if (/^(yap|oluştur|çalıştır|sil|kaydet|aç)\s+/i.test(text)) {
+            confidence += 0.3;
+        }
+        
+        // Belirsiz ifadeler = düşük güven
+        if (/(belki|sanki|galiba|herhalde|muhtemelen)/i.test(text)) {
+            confidence -= 0.2;
+        }
+        
+        // Sorular = orta güven (bilgi istemi)
+        if (/(nasıl|neden|nedir|kim|ne)/i.test(text) || text.endsWith('?')) {
+            confidence += 0.1;
+        }
+        
+        // Basit sohbet = çok yüksek güven
+        if (/^(selam|merhaba|adın ne|nasılsın)[\s!.?]*$/i.test(text)) {
+            confidence = 0.9;
+        }
+        
+        // Uzun cümleler = kompleks istek = düşük güven
+        if (text.split(' ').length > 10) {
+            confidence -= 0.1;
+        }
+        
+        return Math.max(0.1, Math.min(1.0, confidence));
     }
     
     /**
@@ -725,6 +794,67 @@ export class LumaCore {
         }
         
         return null;
+    }
+    
+    /**
+     * 🧠 Meta-sorgulama sistemi: "Ne? Neden? Niçin?" fallback
+     * Intent mapping boşluklarını doldurur
+     * @param {string} questionType - 'ne', 'neden', 'nicin'
+     * @param {string} originalMessage - Orijinal kullanıcı mesajı
+     * @param {string} query - Spesifik soru
+     * @returns {string|number} - Çıkarılan değer
+     */
+    askSelf(questionType, originalMessage, query) {
+        console.log(`🤔 [INTROSPECTION] ${questionType.toUpperCase()}: ${query}`);
+        
+        const text = originalMessage.toLowerCase();
+        
+        switch (questionType) {
+            case 'ne':
+                // Intent belirleme fallback
+                if (text.includes('oluştur') || text.includes('yap') || text.includes('başlat')) {
+                    return 'creation';
+                }
+                if (text.includes('açıkla') || text.includes('nasıl') || text.includes('nedir')) {
+                    return 'exploration';
+                }
+                if (text.includes('çalıştır') || text.includes('npm') || text.includes('run')) {
+                    return 'command';
+                }
+                if (text.includes('selam') || text.includes('merhaba') || text.includes('adın ne')) {
+                    return 'simple_chat';
+                }
+                return 'exploration'; // Varsayılan
+                
+            case 'neden':
+                // Confidence belirleme fallback  
+                if (text.includes('lütfen') || text.includes('yapar mısın')) {
+                    return 0.8; // Kibar talep = yüksek güven
+                }
+                if (text.includes('belki') || text.includes('sanırım')) {
+                    return 0.4; // Belirsizlik = düşük güven
+                }
+                if (text.split(' ').length < 3) {
+                    return 0.9; // Kısa mesaj = basit istek = yüksek güven
+                }
+                return 0.6; // Orta seviye güven
+                
+            case 'nicin':
+                // ResponseMode belirleme fallback
+                if (text.includes('kod') || text.includes('dosya') || text.includes('proje')) {
+                    return 'executive';
+                }
+                if (text.includes('nasıl') || text.includes('neden') || text.includes('açıkla')) {
+                    return 'conversational';
+                }
+                if (text.includes('analiz') || text.includes('kontrol') || text.includes('debug')) {
+                    return 'analytical';
+                }
+                return 'conversational'; // Varsayılan
+                
+            default:
+                return 'unknown';
+        }
     }
     
     /**

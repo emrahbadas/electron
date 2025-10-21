@@ -157,7 +157,7 @@ class AdaptiveReflexionMemory {
      * @returns {Object|null} - Önerilen plan veya null
      */
     async suggestOptimizedPlan(currentContext) {
-        const similarPatterns = await this.findSimilarContext(currentContext, 0.75);
+        const similarPatterns = await this.findSimilarContext(currentContext, 0.6); // ✅ IMPROVED: 0.75 -> 0.6 for more pattern matching
         
         if (similarPatterns.length === 0) {
             console.log('📭 No similar patterns found for optimization');
