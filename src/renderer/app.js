@@ -3236,6 +3236,23 @@ class KodCanavari {
                         
                         console.log('🌌 Supreme Result:', supremeResult);
                         
+                        // ✅ EARLY RETURN: Handle greeting responses (no execution needed)
+                        if (supremeResult.type === 'greeting' || supremeResult.skipExecution) {
+                            console.log('💬 Greeting response - skipping unified agent task');
+                            
+                            this.addContextualChatMessage('ai', supremeResult.message, {
+                                mode: 'greeting',
+                                supremeResult
+                            });
+                            
+                            if (sendBtn) {
+                                sendBtn.disabled = false;
+                                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                            }
+                            this.messageMutex.release(); // Early return: Release mutex!
+                            return;
+                        }
+                        
                         // Handle Supreme Agent response
                         if (supremeResult.type === 'blocked') {
                             // Decision was blocked by validation
