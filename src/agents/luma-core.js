@@ -31,8 +31,12 @@ export class LumaCore {
     analyzeIntent(message) {
         const text = message.toLowerCase();
         
+        console.log('🔍 [DEBUG] analyzeIntent() called with:', message);
+        
         // 🧠 STEP 1: İç Sorgulama - İsteğin doğasını belirle
         const nature = this.classifyRequestNature(text);
+        
+        console.log('🔍 [DEBUG] classifyRequestNature() returned:', nature);
         
         // ✅ FIX: Nature → Intent mapping
         const intentMap = {
@@ -45,6 +49,8 @@ export class LumaCore {
             "discussion": "idea",
             "unclear": "exploration"
         };
+        
+        console.log('🔍 [DEBUG] Intent mapped:', intentMap[nature.type]);
         
         // ✅ Greeting signals (selamlaşma)
         if (text.match(/^(selam|merhaba|hey|hi|hello|günaydın|iyi akşamlar|nasılsın|naber)[\s!.?]*$/i)) {
@@ -107,13 +113,17 @@ export class LumaCore {
         }
         
         // ✅ FIX: Use intentMap for default routing
-        return {
+        const finalIntent = {
             intent: intentMap[nature.type] || "exploration",  // ✅ Map nature to intent
             nature: nature.type,
             requiresTools: nature.needsTools,
             conversational: nature.type === "discussion" || nature.type === "simple_chat",
             reasoning: nature.reasoning
         };
+        
+        console.log('🔍 [DEBUG] analyzeIntent() returning:', finalIntent);
+        
+        return finalIntent;
     }
     
     /**
@@ -258,32 +268,46 @@ export class LumaCore {
      * @returns {Object} - Karar objesi
      */
     reason(intent, payload) {
+        console.log('🔍 [DEBUG] reason() called with intent:', intent);
+        console.log('🔍 [DEBUG] reason() payload.prompt:', payload?.prompt);
+        
         // Handle new intent object format
         const intentType = typeof intent === 'string' ? intent : intent.intent;
         const intentData = typeof intent === 'object' ? intent : null;
         
+        console.log('🔍 [DEBUG] intentType:', intentType);
+        console.log('🔍 [DEBUG] intentData.nature:', intentData?.nature);
+        
         // ✅ FIX: Check nature first for simple_chat
         if (intentData?.nature === "simple_chat") {
+            console.log('🔍 [DEBUG] Routing to brainstorm() via nature check');
             return this.brainstorm(payload, intentData);  // Simple chat handler
         }
         
         switch (intentType) {
             case "greeting":
+                console.log('🔍 [DEBUG] Routing to respondToGreeting()');
                 return this.respondToGreeting(payload, intentData);
             
             case "simple_chat":  // ✅ NEW: Handle simple chat intent
+                console.log('🔍 [DEBUG] Routing to brainstorm() via simple_chat case');
                 return this.brainstorm(payload, intentData);
             
             case "idea":
+                console.log('🔍 [DEBUG] Routing to brainstorm() via idea case');
                 return this.brainstorm(payload, intentData);
             
             case "command":
+                console.log('🔍 [DEBUG] Routing to evaluateExecution()');
                 return this.evaluateExecution(payload, intentData);
             case "reflection":
+                console.log('🔍 [DEBUG] Routing to selfReflect()');
                 return this.selfReflect(payload, intentData);
             case "exploration":
+                console.log('🔍 [DEBUG] Routing to explore()');
                 return this.explore(payload, intentData);
             default:
+                console.log('🔍 [DEBUG] Default routing to brainstorm()');
                 return this.brainstorm(payload, intentData);
         }
     }
@@ -330,10 +354,15 @@ export class LumaCore {
     brainstorm(data, intentData = null) {
         const { prompt, context } = data;
         
+        console.log('🔍 [DEBUG] brainstorm() called with prompt:', prompt);
+        console.log('🔍 [DEBUG] brainstorm() intentData:', intentData);
+        
         // 🧠 Use intentData if available
         const skipTools = intentData?.requiresTools === false;
         const isConversational = intentData?.conversational === true;
         const isSimpleChat = intentData?.nature === "simple_chat";
+        
+        console.log('🔍 [DEBUG] brainstorm() isSimpleChat:', isSimpleChat);
         
         // 🎯 SIMPLE CHAT: "evet", "hayır", "adın ne" gibi basit sohbetler
         if (isSimpleChat) {
@@ -351,6 +380,10 @@ export class LumaCore {
             };
             
             const response = Object.keys(simpleResponses).find(key => prompt.toLowerCase().includes(key));
+            
+            const finalMessage = response ? simpleResponses[response] : "💬 Anlıyorum!";
+            
+            console.log('🔍 [DEBUG] brainstorm() simple chat response:', finalMessage);
             
             return {
                 type: "dialogue",
@@ -522,12 +555,18 @@ export class LumaCore {
     explore(data, intentData = null) {
         const { prompt } = data;
         
+        console.log('🔍 [DEBUG] explore() called with prompt:', prompt);
+        console.log('🔍 [DEBUG] explore() intentData:', intentData);
+        
         // 🧠 Use intentData if available
         const skipTools = intentData?.requiresTools === false;
         const nature = intentData?.nature;
         
+        console.log('🔍 [DEBUG] explore() nature:', nature);
+        
         // ✅ FIX: Route simple_chat to brainstorm instead!
         if (nature === "simple_chat") {
+            console.log('🔍 [DEBUG] explore() redirecting to brainstorm() because nature=simple_chat');
             return this.brainstorm(data, intentData);
         }
         
