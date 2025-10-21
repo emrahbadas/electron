@@ -3119,7 +3119,7 @@ class KodCanavari {
         // ✅ FIX: Declare variables at method scope (accessible in try/catch/finally)
         const chatInput = document.getElementById('chatInput');
         const sendBtn = document.getElementById('sendChatBtn');
-        let message, chatMode, contextAwarePrompt, displayMessage, conversationContext;
+        let message, chatMode, contextAwarePrompt, displayMessage, conversationContext, isContinuation;
 
         // ✅ NEW: Proper mutex-based atomic execution
         // Replaces old flag-based system with guaranteed atomic operations
@@ -3132,9 +3132,11 @@ class KodCanavari {
                 return;
             }
 
-            message = chatInput.value.trim();            // 🔄 SMART PHASE RESET: Only reset if NEW project detected
+            message = chatInput.value.trim();
+
+            // 🔄 SMART PHASE RESET: Only reset if NEW project detected
             // Keywords indicating continuation: "devam", "phase", "adım", "sonraki"
-            const isContinuation = /\b(devam|phase|adım|sonraki|kaldığı|tamamla)\b/i.test(message);
+            isContinuation = /\b(devam|phase|adım|sonraki|kaldığı|tamamla)\b/i.test(message);
             
             if (!isContinuation) {
                 // New project - reset phase context
