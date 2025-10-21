@@ -111,16 +111,47 @@ export class LumaCore {
      * @returns {Object} - { type, needsTools, reasoning }
      */
     classifyRequestNature(text) {
+        // 0️⃣ ÇOK KISA/BASIT CEVAPLAR (Conversational - No Tools)
+        // "evet", "hayır", "tamam", "olur", "adın ne" gibi
+        const simpleResponsePatterns = [
+            /^(evet|hayır|tamam|olur|peki|ok|okay|yok|var)[\s!.?]*$/i,
+            /^(adın|ismin|kim|kimsin|ne yapıyorsun)[\s!.?]*$/i,
+            /^(ne|naber|nasılsın|iyi misin)[\s!.?]*$/i
+        ];
+        
+        if (simpleResponsePatterns.some(p => p.test(text))) {
+            return {
+                type: "simple_chat",
+                needsTools: false,
+                reasoning: "Basit sohbet - direkt yanıt yeterli, tool gerekmez"
+            };
+        }
+        
         // 1️⃣ SORU/BİLGİ İSTEMİ (Conversational - No Tools)
+        // ÖNEMLİ: "nasıl yapılır" ile "nasıl yazılır" ayrımı!
         const questionPatterns = [
-            /^(ne|nedir|nasıl|neden|kim|hangi|kaç)/i,
+            /^(ne|nedir|neden|kim|hangi|kaç)/i,
             /(anlat|bilgi ver|açıkla|söyle|öğren)/i,
             /\?$/  // Soru işareti ile bitiyor
         ];
         
+        // "nasıl yazılır" = bilgi sorusu (tool yok)
+        // "nasıl yaparım" = action talebi (tool gerekli)
+        const isHowToQuestion = /nasıl (yazılır|yapılır|olur|çalışır|kullanılır)/i.test(text);
+        const isActionRequest = /(yap|oluştur|üret|kur|hazırla|başlat)/i.test(text);
+        
         if (questionPatterns.some(p => p.test(text))) {
-            // Ama "nasıl yapılır" gibi pratik sorular tool gerektirebilir
-            if (text.includes("yap") || text.includes("oluştur") || text.includes("kur")) {
+            // "nasıl yazılır" ama "yap" yok → Bilgi sorusu
+            if (isHowToQuestion && !isActionRequest) {
+                return {
+                    type: "how_to_question",
+                    needsTools: false,
+                    reasoning: "Nasıl yapıldığını öğrenmek istiyor - açıklama yeterli, kod üretme değil"
+                };
+            }
+            
+            // "yap", "oluştur" var → Action talebi
+            if (isActionRequest) {
                 return {
                     type: "tutorial",
                     needsTools: true,
@@ -151,10 +182,10 @@ export class LumaCore {
         }
         
         // 3️⃣ KOD ÜRETME/PROJE OLUŞTURMA (Action - Tools Required)
+        // ÖNEMLİ: Sadece "yap", "oluştur" gibi ACTION kelimeleri varsa
         const creationPatterns = [
-            /(yap|oluştur|üret|hazırla|kur|setup|create|build|make)/i,
-            /(proje|uygulama|website|api|component|class|function)/i,
-            /(python|javascript|react|node|html|css)/i
+            /^(yap|oluştur|üret|hazırla|kur|setup|create|build|make)/i,
+            /(proje|uygulama|website|api|component|class|function)\s+(yap|oluştur)/i
         ];
         
         if (creationPatterns.some(p => p.test(text))) {
@@ -274,6 +305,39 @@ export class LumaCore {
         // 🧠 Use intentData if available
         const skipTools = intentData?.requiresTools === false;
         const isConversational = intentData?.conversational === true;
+        const isSimpleChat = intentData?.nature === "simple_chat";
+        
+        // 🎯 SIMPLE CHAT: "evet", "hayır", "adın ne" gibi basit sohbetler
+        if (isSimpleChat) {
+            const simpleResponses = {
+                "evet": "✅ Anladım! Devam ediyorum...",
+                "hayır": "❌ Tamam, iptal ediyorum.",
+                "tamam": "👍 Oldu!",
+                "olur": "✅ Harika!",
+                "adın": "🐉 Ben KayraDeniz, Kod Canavarı!",
+                "ismin": "🐉 Benim adım KayraDeniz!",
+                "kim": "🐉 Ben KayraDeniz, senin kod yazma asistanınım!",
+                "kimsin": "🐉 Ben KayraDeniz! Kod yazmak, proje oluşturmak ve sorunları çözmek için buradayım!",
+                "naber": "💪 İyidir! Kod yazmaya hazırım!",
+                "nasılsın": "🚀 Harikayım! Ne yapalım bugün?"
+            };
+            
+            const response = Object.keys(simpleResponses).find(key => prompt.toLowerCase().includes(key));
+            
+            return {
+                type: "dialogue",
+                intent: "simple_chat",
+                mood: "friendly",
+                approved: true,
+                message: response ? simpleResponses[response] : "💬 Anlıyorum! Başka bir şey söylemek ister misin?",
+                reasoning: "Basit sohbet yanıtı - tool gerekmez",
+                skipExecution: true,  // 🔑 Simple chat = no tools
+                metadata: {
+                    simpleChat: true,
+                    timestamp: Date.now()
+                }
+            };
+        }
         
         return {
             type: "dialogue",
@@ -281,8 +345,8 @@ export class LumaCore {
             mood: "creative",
             approved: true,
             message: isConversational 
-                ? `� ${prompt} hakkında konuşalım! Ne düşünüyorsun?`
-                : `�💡 Düşünüyorum kaptan... "${prompt}" hakkında birkaç fikrim var.`,
+                ? `💭 ${prompt} hakkında konuşalım! Ne düşünüyorsun?`
+                : `� Düşünüyorum kaptan... "${prompt}" hakkında birkaç fikrim var.`,
             reasoning: intentData?.reasoning || "Bu bir fikir tartışması, risk yok.",
             skipExecution: skipTools,  // 🔑 Tool gerekmeyen sohbetler için
             suggestions: isConversational ? [
