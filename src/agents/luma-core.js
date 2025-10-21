@@ -34,11 +34,23 @@ export class LumaCore {
         // 🧠 STEP 1: İç Sorgulama - İsteğin doğasını belirle
         const nature = this.classifyRequestNature(text);
         
+        // ✅ FIX: Nature → Intent mapping
+        const intentMap = {
+            "simple_chat": "simple_chat",      // ✅ NEW: Direct simple responses
+            "how_to_question": "exploration",  // ✅ Informational, not creation
+            "question": "exploration",
+            "file_operation": "execution",
+            "creation": "creation",
+            "analysis": "analysis",
+            "discussion": "idea",
+            "unclear": "exploration"
+        };
+        
         // ✅ Greeting signals (selamlaşma)
         if (text.match(/^(selam|merhaba|hey|hi|hello|günaydın|iyi akşamlar|nasılsın|naber)[\s!.?]*$/i)) {
             return {
                 intent: "greeting",
-                nature: "conversational",
+                nature: "greeting",
                 requiresTools: false,
                 conversational: true,
                 reasoning: "Basit selamlama - sohbet yanıtı yeterli"
@@ -84,22 +96,22 @@ export class LumaCore {
             text.includes("açıkla") ||
             text.includes("nedir")) {
             return {
-                intent: "exploration",
+                intent: intentMap[nature.type] || "exploration",  // ✅ Use mapping
                 nature: nature.type,
                 requiresTools: nature.needsTools,
-                conversational: nature.type === "question",
-                reasoning: nature.type === "question" 
+                conversational: nature.type === "question" || nature.type === "how_to_question",
+                reasoning: nature.type === "question" || nature.type === "how_to_question"
                     ? "Bilgi istemi - sohbet yanıtı yeterli"
                     : "Keşif talebi - kod okuma gerekebilir"
             };
         }
         
-        // Default: Detailed nature analysis
+        // ✅ FIX: Use intentMap for default routing
         return {
-            intent: "idea",
+            intent: intentMap[nature.type] || "exploration",  // ✅ Map nature to intent
             nature: nature.type,
             requiresTools: nature.needsTools,
-            conversational: nature.type === "discussion",
+            conversational: nature.type === "discussion" || nature.type === "simple_chat",
             reasoning: nature.reasoning
         };
     }
@@ -119,7 +131,13 @@ export class LumaCore {
             /^(ne|naber|nasılsın|iyi misin)[\s!.?]*$/i
         ];
         
-        if (simpleResponsePatterns.some(p => p.test(text))) {
+        // ✅ FIX: Context-aware simple chat detection
+        // "evet" → simple_chat ✅
+        // "evet Phase 2'yi başlat" → NOT simple_chat (has context) ✅
+        const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+        const hasContext = wordCount > 2 || text.includes('phase') || text.includes('faz');
+        
+        if (simpleResponsePatterns.some(p => p.test(text)) && !hasContext) {
             return {
                 type: "simple_chat",
                 needsTools: false,
@@ -135,9 +153,9 @@ export class LumaCore {
             /\?$/  // Soru işareti ile bitiyor
         ];
         
-        // "nasıl yazılır" = bilgi sorusu (tool yok)
-        // "nasıl yaparım" = action talebi (tool gerekli)
-        const isHowToQuestion = /nasıl (yazılır|yapılır|olur|çalışır|kullanılır)/i.test(text);
+        // ✅ FIX: Expanded pattern to catch more variations
+        // "nasıl yazılır/yapılır/yapılabilir/olur/olabilir" = bilgi sorusu
+        const isHowToQuestion = /nasıl (yazılır|yapılır|yapılabilir|olur|olabilir|çalışır|kullanılır|kullanılabilir|edilir|edebilir)/i.test(text);
         const isActionRequest = /(yap|oluştur|üret|kur|hazırla|başlat)/i.test(text);
         
         if (questionPatterns.some(p => p.test(text))) {
@@ -244,11 +262,21 @@ export class LumaCore {
         const intentType = typeof intent === 'string' ? intent : intent.intent;
         const intentData = typeof intent === 'object' ? intent : null;
         
+        // ✅ FIX: Check nature first for simple_chat
+        if (intentData?.nature === "simple_chat") {
+            return this.brainstorm(payload, intentData);  // Simple chat handler
+        }
+        
         switch (intentType) {
             case "greeting":
                 return this.respondToGreeting(payload, intentData);
+            
+            case "simple_chat":  // ✅ NEW: Handle simple chat intent
+                return this.brainstorm(payload, intentData);
+            
             case "idea":
                 return this.brainstorm(payload, intentData);
+            
             case "command":
                 return this.evaluateExecution(payload, intentData);
             case "reflection":
