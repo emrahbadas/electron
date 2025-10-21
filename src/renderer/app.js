@@ -3116,18 +3116,16 @@ class KodCanavari {
     }
 
     async sendChatMessage() {
+        // ✅ FIX: Declare variables at method scope (accessible in try/catch/finally)
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendChatBtn');
+        let message, chatMode, contextAwarePrompt, displayMessage, conversationContext;
+
         // ✅ NEW: Proper mutex-based atomic execution
         // Replaces old flag-based system with guaranteed atomic operations
         await this.messageMutex.acquire();
         
         try {
-            // Get UI elements and variables at method scope
-            const chatInput = document.getElementById('chatInput');
-            const sendBtn = document.getElementById('sendChatBtn');
-
-            // Define variables that will be used across try blocks
-            let message, chatMode, contextAwarePrompt, displayMessage, conversationContext;      
-            
             // Early return #1: Empty input check
             if (!chatInput || !chatInput.value.trim()) {
                 this.messageMutex.release(); // Release mutex before early return!
