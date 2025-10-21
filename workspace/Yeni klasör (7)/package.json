@@ -1,0 +1,13 @@
+{
+  "name": "hesap-makinesi",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "start": "node calculator.js",
+    "dev": "npm run dev --workspace=server & npm run dev --workspace=client"
+  },
+  "workspaces": [
+    "server",
+    "client"
+  ]
+}

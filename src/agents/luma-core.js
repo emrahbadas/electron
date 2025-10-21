@@ -134,40 +134,48 @@ export class LumaCore {
      * @returns {Object} - { type, needsTools, reasoning }
      */
     classifyRequestNature(text) {
-        // 0️⃣ ÇOK KISA/BASIT CEVAPLAR (Conversational - No Tools)
-        // "evet", "hayır", "tamam", "olur", "adın ne" gibi
+        // 🎯 ÖNCE COMMAND/EXECUTION KONTROLÜ (ChatGPT önerisi)
+        if (/başlat|tamamla|phase|oluştur|çalıştır|yap|üret|hazırla|kur|setup|devam\s+et/.test(text)) {
+            return {
+                type: "action",
+                needsTools: true,
+                reasoning: "Aksiyon komutu - execution gerekli"
+            };
+        }
+        
+        // 🧠 REFLECTION/ANALYSIS KONTROLÜ
+        if (/neden|nasıl|niye|analiz|açıkla|incele|kontrol|debug|hata|başarısız|çalışmıyor/.test(text)) {
+            return {
+                type: "reflection",
+                needsTools: false,
+                reasoning: "Analiz/açıklama sorusu - bilgi verme yeterli"
+            };
+        }
+        
+        // 💬 GREETING KONTROLÜ (Sadece basit selamlar)
+        if (/^(selam|merhaba|naber|nasılsın|hey|hi|hello)[\s!.?]*$/i.test(text)) {
+            return {
+                type: "greeting",
+                needsTools: false,
+                reasoning: "Basit selamlama"
+            };
+        }
+        
+        // 0️⃣ SIMPLE CHAT (Basit tek kelime yanıtlar)
         const simpleResponsePatterns = [
             /^(evet|hayır|tamam|olur|peki|ok|okay|yok|var)[\s!.?]*$/i,
-            /^(adın|ismin|kim|kimsin|ne yapıyorsun)[\s!.?]*$/i,
-            /^(ne|naber|nasılsın|iyi misin)[\s!.?]*$/i
+            /^(adın|ismin|kim|kimsin|ne yapıyorsun)[\s!.?]*$/i
         ];
         
-        // ✅ FIX: Context-aware simple chat detection
-        // "evet" → simple_chat ✅
-        // "evet Phase 2'yi başlat" → NOT simple_chat (has context) ✅
+        // ✅ Context-aware: "evet phase 2" değil sadece "evet"
         const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
-        const hasContext = wordCount > 2 || text.includes('phase') || text.includes('faz');
+        const hasContext = wordCount > 1;
         
         if (simpleResponsePatterns.some(p => p.test(text)) && !hasContext) {
             return {
                 type: "simple_chat",
                 needsTools: false,
-                reasoning: "Basit sohbet - direkt yanıt yeterli, tool gerekmez"
-            };
-        }
-        
-        // 🎯 CONTEXT-AWARE COMMANDS: "evet phase 2 başlat", "tamam devam et" gibi
-        const contextualCommandPatterns = [
-            /(evet|tamam|olur|peki).*(phase|faz|devam|başlat|continue)/i,
-            /(phase|faz)\s*\d+.*(başlat|start|devam|continue)/i,
-            /(devam\s+et|başlat|continue|start).*(phase|faz)/i
-        ];
-        
-        if (contextualCommandPatterns.some(p => p.test(text))) {
-            return {
-                type: "action",
-                needsTools: true,
-                reasoning: "Context-aware komut - phase continuation veya execution"
+                reasoning: "Basit sohbet - direkt yanıt yeterli"
             };
         }
         

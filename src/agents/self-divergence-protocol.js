@@ -423,8 +423,8 @@ class SelfDivergenceProtocol {
             // Çoğu soru divergence öneriyorsa
             recommendation = 'DIVERGE';
             confidence = overallDivergenceScore;
-        } else if (overallDivergenceScore > 0.6) {
-            // Score yüksek ama çoğunluk divergence önermiyorsa
+        } else if (overallDivergenceScore > 0.85) {
+            // ✅ FIX: Threshold yükseltildi (ChatGPT önerisi) - sadece ciddi durumlarda diverge
             recommendation = 'RECONSIDER';
             confidence = 0.6;
         }
