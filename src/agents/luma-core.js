@@ -119,7 +119,10 @@ export class LumaCore {
             nature: nature.type,
             requiresTools: nature.needsTools,
             conversational: nature.type === "discussion" || nature.type === "simple_chat",
-            reasoning: nature.reasoning
+            reasoning: nature.reasoning,
+            // 🧠 NEW: Adaptive Reasoning Mode (ChatGPT önerisi)
+            responseMode: this.determineResponseMode(text, nature),
+            confidence: this.calculateConfidence(text, nature)
         };
         
         console.log('🔍 [DEBUG] analyzeIntent() returning:', finalIntent);
@@ -286,6 +289,65 @@ export class LumaCore {
     }
     
     /**
+     * 🧠 ADAPTIVE REASONING MODE: Yanıt biçimini belirle
+     * Unified Cognitive Pipeline için (ChatGPT önerisi)
+     * @param {string} text - Kullanıcı mesajı
+     * @param {Object} nature - classifyRequestNature() sonucu
+     * @returns {string} - "conversational" | "mixed" | "executive"
+     */
+    determineResponseMode(text, nature) {
+        // Kesin konuşma modu
+        if (nature.type === "simple_chat" || nature.type === "greeting") {
+            return "conversational";
+        }
+        
+        // Kesin aksiyon modu
+        if (nature.type === "action" && text.includes("başlat")) {
+            return "executive";
+        }
+        
+        // Karma mod - hem konuş hem yap
+        if (nature.type === "reflection" || 
+            (nature.type === "action" && text.includes("açıkla"))) {
+            return "mixed";
+        }
+        
+        return "conversational"; // Default
+    }
+    
+    /**
+     * 🧠 CONFIDENCE CALCULATOR: Karar kesinliğini ölç
+     * @param {string} text - Kullanıcı mesajı
+     * @param {Object} nature - classifyRequestNature() sonucu
+     * @returns {number} - 0.0 - 1.0 confidence score
+     */
+    calculateConfidence(text, nature) {
+        let confidence = 0.5; // Baseline
+        
+        // Net komutlar = yüksek güven
+        if (text.includes("yap") || text.includes("oluştur") || text.includes("başlat")) {
+            confidence += 0.3;
+        }
+        
+        // Belirsiz ifadeler = düşük güven
+        if (text.includes("belki") || text.includes("sanki") || text.includes("galiba")) {
+            confidence -= 0.2;
+        }
+        
+        // Sorular = orta güven
+        if (text.includes("nasıl") || text.includes("neden")) {
+            confidence += 0.1;
+        }
+        
+        // Basit cevaplar = çok yüksek güven
+        if (nature.type === "simple_chat") {
+            confidence = 0.9;
+        }
+        
+        return Math.max(0.1, Math.min(1.0, confidence));
+    }
+    
+    /**
      * Niyet bazlı akıl yürütme yapar
      * @param {string} intent - Tespit edilen niyet veya intent object
      * @param {Object} payload - Mesaj ve context bilgisi
@@ -301,6 +363,14 @@ export class LumaCore {
         
         console.log('🔍 [DEBUG] intentType:', intentType);
         console.log('🔍 [DEBUG] intentData.nature:', intentData?.nature);
+        console.log('🔍 [DEBUG] intentData.responseMode:', intentData?.responseMode);
+        console.log('🔍 [DEBUG] intentData.confidence:', intentData?.confidence);
+        
+        // 🧠 ADAPTIVE REASONING: Confidence-based routing (ChatGPT önerisi)
+        if (intentData?.confidence < 0.6 && intentData?.responseMode !== "executive") {
+            console.log('🔍 [DEBUG] Low confidence - routing to conversational mode');
+            return this.brainstorm(payload, intentData);
+        }
         
         // ✅ FIX: Check nature first for simple_chat
         if (intentData?.nature === "simple_chat") {
