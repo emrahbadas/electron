@@ -15570,9 +15570,9 @@ Router Agent sizin için otomatik karar verir.
         this.currentFolder = folderPath;
         this.setWorkingDirectory(folderPath);
 
-        // ✅ STABILITY FIX: Don't change workspace root during navigation
-        // Only update navigation-related properties
-        // this.setWorkspaceRoot(folderPath);  // REMOVED
+        // ✅ FIX: Update workspace root when user explicitly selects folder
+        // This ensures localStorage persistence and proper workspace tracking
+        this.setWorkspaceRoot(folderPath);
 
         this.refreshExplorer();
     }
