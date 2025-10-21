@@ -47,6 +47,7 @@ export class LumaCore {
             "creation": "creation",
             "analysis": "analysis",
             "discussion": "idea",
+            "action": "command",               // ✅ NEW: Context-aware commands
             "unclear": "exploration"
         };
         
@@ -152,6 +153,21 @@ export class LumaCore {
                 type: "simple_chat",
                 needsTools: false,
                 reasoning: "Basit sohbet - direkt yanıt yeterli, tool gerekmez"
+            };
+        }
+        
+        // 🎯 CONTEXT-AWARE COMMANDS: "evet phase 2 başlat", "tamam devam et" gibi
+        const contextualCommandPatterns = [
+            /(evet|tamam|olur|peki).*(phase|faz|devam|başlat|continue)/i,
+            /(phase|faz)\s*\d+.*(başlat|start|devam|continue)/i,
+            /(devam\s+et|başlat|continue|start).*(phase|faz)/i
+        ];
+        
+        if (contextualCommandPatterns.some(p => p.test(text))) {
+            return {
+                type: "action",
+                needsTools: true,
+                reasoning: "Context-aware komut - phase continuation veya execution"
             };
         }
         
