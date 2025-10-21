@@ -10092,6 +10092,8 @@ Success: ${successCount} | Failed: ${failCount}
             this.addChatMessage('ai', reflexionMessage);
             
             // Auto-fix enabled by default
+            let appliedFixes = 0;  // ✅ Track actually applied fixes
+            
             if (fixes.length > 0) {
                 this.addChatMessage('system', '🔧 Applying auto-fixes...');
                 
@@ -10100,9 +10102,11 @@ Success: ${successCount} | Failed: ${failCount}
                         if (fix.action === 'CREATE_FILE' && fix.content) {
                             await this.createFileWithAgent(fix.path, fix.content);
                             this.addChatMessage('system', `✅ Created: ${fix.path}`);
+                            appliedFixes++;  // ✅ Count successful fix
                         } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
                             const result = await this.runCommandWithAgent(fix.cmd);
                             this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
+                            appliedFixes++;  // ✅ Count successful fix
                         } else if (fix.action === 'UPDATE_FILE' && fix.changes) {
                             // Update package.json with workspaces
                             const pkgPath = fix.path;
@@ -10111,13 +10115,25 @@ Success: ${successCount} | Failed: ${failCount}
                             Object.assign(pkg, fix.changes);
                             await this.createFileWithAgent(pkgPath, JSON.stringify(pkg, null, 2));
                             this.addChatMessage('system', `✅ Updated: ${fix.path}`);
+                            appliedFixes++;  // ✅ Count successful fix
+                        } else if (fix.action === 'LOG_WARNING') {
+                            // ✅ NEW: Just log warnings, don't count as fix
+                            console.warn(`⚠️ ${fix.message}: ${fix.reason}`);
+                        } else {
+                            // Unknown action
+                            console.warn(`⚠️ Unknown fix action: ${fix.action}`);
                         }
                     } catch (e) {
                         this.addChatMessage('system', `⚠️ Auto-fix failed: ${e.message}`);
                     }
                 }
                 
-                this.addChatMessage('ai', '✅ Auto-fixes applied! Continuing...');
+                // ✅ FIX: Only show success if fixes were actually applied!
+                if (appliedFixes > 0) {
+                    this.addChatMessage('ai', `✅ Applied ${appliedFixes} auto-fix${appliedFixes > 1 ? 'es' : ''}! Continuing...`);
+                } else {
+                    this.addChatMessage('system', '⚠️ No fixes were applied (all suggestions require manual action)');
+                }
             }
         }
 
@@ -10239,46 +10255,34 @@ Success: ${successCount} | Failed: ${failCount}
             const packageJson = await this.readFileWithAgent('package.json');
             const pkg = JSON.parse(packageJson.content || packageJson);
             
-            // Check if this is a monorepo (has workspace subfolders)
-            const isMonorepo = await this.checkFileExists('server/package.json') || await this.checkFileExists('client/package.json');
+            // ✅ FIX: Get target project's CWD (where files were created)
+            const targetCwd = this.workingDirectory || this.cwd || this.getWorkspaceRoot({ mode: "active" });
             
-            // 3.1: Missing workspaces config
-            if (!pkg.workspaces && isMonorepo) {
-                mistakes.push({
-                    type: 'MISSING_WORKSPACES',
-                    severity: 'CRITICAL',
-                    file: 'package.json',
-                    reason: 'Monorepo structure detected but workspaces not configured',
-                    current: pkg
-                });
-                fixes.push({
-                    action: 'UPDATE_FILE',
-                    path: 'package.json',
-                    changes: {
-                        workspaces: ['server', 'client'],
-                        scripts: {
-                            ...pkg.scripts,
-                            'dev': 'npm run dev --workspace=server & npm run dev --workspace=client',
-                            'build': 'npm run build --workspaces'
-                        }
-                    },
-                    reason: 'Add workspaces configuration for monorepo'
-                });
-            }
+            // ✅ FIX: Check if this is a REAL monorepo (has workspaces in package.json)
+            // ❌ OLD: Check folder existence (false positives!)
+            // ✅ NEW: Check package.json workspaces field
+            const isMonorepo = !!(pkg.workspaces && Array.isArray(pkg.workspaces) && pkg.workspaces.length > 0);
             
-            // 3.2: Root src/ folder in monorepo (WRONG!)
-            if (isMonorepo && await this.checkFileExists('src')) {
+            console.log(`🔍 Monorepo check: ${isMonorepo} (workspaces: ${pkg.workspaces ? JSON.stringify(pkg.workspaces) : 'none'})`);
+            
+            // 3.1: Missing workspaces config (DISABLED - too aggressive)
+            // This check causes false positives, removed
+            
+            // 3.2: Root src/ folder in monorepo
+            // ✅ FIX: Pass targetCwd to checkFileExists
+            if (isMonorepo && await this.checkFileExists('src', targetCwd)) {
                 mistakes.push({
                     type: 'WRONG_MONOREPO_STRUCTURE',
-                    severity: 'CRITICAL',
+                    severity: 'WARNING',  // ✅ Downgraded from CRITICAL
                     file: 'src/',
                     reason: 'Root src/ folder detected in monorepo - should only exist in workspaces',
                     current: 'Root has src/ folder but workspaces (server/, client/) should contain their own src/'
                 });
+                // ❌ REMOVED: DELETE_FOLDER fix (too dangerous!)
                 fixes.push({
-                    action: 'DELETE_FOLDER',
-                    path: 'src',
-                    reason: 'Remove root src/ folder - monorepo workspaces have their own src/ folders'
+                    action: 'LOG_WARNING',
+                    message: 'Consider moving src/ into workspace folders',
+                    reason: 'Monorepo best practice: each workspace has its own src/'
                 });
             }
             
@@ -10286,7 +10290,7 @@ Success: ${successCount} | Failed: ${failCount}
             if (isMonorepo && pkg.scripts?.build?.includes('webpack') && !pkg.scripts.build.includes('workspaces')) {
                 mistakes.push({
                     type: 'WRONG_BUILD_SCRIPT',
-                    severity: 'CRITICAL',
+                    severity: 'HIGH',
                     file: 'package.json',
                     reason: 'Root build script uses webpack but should delegate to workspaces',
                     current: pkg.scripts.build
@@ -10314,8 +10318,11 @@ Success: ${successCount} | Failed: ${failCount}
             { path: 'server/tsconfig.json', type: 'TypeScript config', project: 'TypeScript' }
         ];
 
+        // ✅ FIX: Use targetCwd from previous section
+        const targetCwd = this.workingDirectory || this.cwd || this.getWorkspaceRoot({ mode: "active" });
+        
         for (const file of criticalFiles) {
-            const exists = await this.checkFileExists(file.path);
+            const exists = await this.checkFileExists(file.path, targetCwd);  // ✅ Pass targetCwd
             if (!exists && orders.steps.some(s => s.args?.path?.includes(file.project.toLowerCase()))) {
                 mistakes.push({
                     type: 'MISSING_CRITICAL_FILE',
@@ -10363,6 +10370,8 @@ Success: ${successCount} | Failed: ${failCount}
                 
                 // 🎯 AUTO-FIX: Apply fixes automatically
                 const autoFixEnabled = true; // TODO: Make this configurable
+                let appliedFixes = 0;  // ✅ Track actually applied fixes
+                
                 if (autoFixEnabled && fixes.length > 0) {
                     this.addChatMessage('system', '🔧 Applying auto-fixes...');
                     
@@ -10371,9 +10380,11 @@ Success: ${successCount} | Failed: ${failCount}
                             if (fix.action === 'CREATE_FILE' && fix.content) {
                                 await this.createFileWithAgent(fix.path, fix.content);
                                 this.addChatMessage('system', `✅ Created: ${fix.path}`);
+                                appliedFixes++;  // ✅ Count successful fix
                             } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
                                 const result = await this.runCommandWithAgent(fix.cmd);
                                 this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
+                                appliedFixes++;  // ✅ Count successful fix
                             } else if (fix.action === 'UPDATE_FILE' && fix.path && fix.changes) {
                                 // Read current file
                                 const currentContent = await this.readFileWithAgent(fix.path);
@@ -10385,17 +10396,29 @@ Success: ${successCount} | Failed: ${failCount}
                                 // Write updated file
                                 await this.createFileWithAgent(fix.path, JSON.stringify(updated, null, 2));
                                 this.addChatMessage('system', `✅ Updated: ${fix.path}`);
+                                appliedFixes++;  // ✅ Count successful fix
+                            } else if (fix.action === 'LOG_WARNING') {
+                                // ✅ NEW: Just log warnings, don't count as fix
+                                console.warn(`⚠️ ${fix.message}: ${fix.reason}`);
                             } else if (fix.action === 'DELETE_FOLDER' && fix.path) {
-                                // Use MCP to delete folder
-                                await this.runCommandWithAgent(`rm -rf ${fix.path}`);
-                                this.addChatMessage('system', `✅ Deleted: ${fix.path}/`);
+                                // ❌ DISABLED: Too dangerous! Don't auto-delete folders
+                                console.warn(`⚠️ DELETE_FOLDER suggested but disabled for safety: ${fix.path}/`);
+                                this.addChatMessage('system', `⚠️ Suggested: Delete ${fix.path}/ (manual action required)`);
+                            } else {
+                                // Unknown action
+                                console.warn(`⚠️ Unknown fix action: ${fix.action}`);
                             }
                         } catch (e) {
                             this.addChatMessage('system', `⚠️ Auto-fix failed for ${fix.path || fix.cmd}: ${e.message}`);
                         }
                     }
                     
-                    this.addChatMessage('ai', '✅ Auto-fixes applied! Continuing...');
+                    // ✅ FIX: Only show success if fixes were actually applied!
+                    if (appliedFixes > 0) {
+                        this.addChatMessage('ai', `✅ Applied ${appliedFixes} auto-fix${appliedFixes > 1 ? 'es' : ''}! Continuing...`);
+                    } else {
+                        this.addChatMessage('system', '⚠️ No fixes were applied (all suggestions require manual action)');
+                    }
                 }
             }
 
@@ -11721,10 +11744,20 @@ ${matrix}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     }
 
-    async checkFileExists(filePath) {
+    async checkFileExists(filePath, targetCwd = null) {
         try {
             // ✅ KAPTAN YAMASI: Merkezi path çözümleme
-            const fullPath = this.resolvePath(filePath);
+            // 🔧 FIX: Use targetCwd if provided, otherwise use current workspace
+            let fullPath;
+            if (targetCwd) {
+                // Use explicit target CWD (for Reflexion checking target project)
+                fullPath = this.path.isAbsolute(filePath) 
+                    ? filePath 
+                    : this.path.resolve(targetCwd, filePath);
+            } else {
+                // Use current workspace root (normal operation)
+                fullPath = this.resolvePath(filePath);
+            }
 
             if (typeof electronAPI !== 'undefined' && electronAPI.readFile) {
                 await electronAPI.readFile(fullPath);
