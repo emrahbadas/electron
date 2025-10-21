@@ -1545,7 +1545,7 @@ class KodCanavari {
                         this.workspaceRoot = defaultWorkspace;
                         this.currentWorkingDirectory = defaultWorkspace;
                         window.__CURRENT_FOLDER__ = defaultWorkspace;
-                        localStorage.setItem('workspaceRoot', defaultWorkspace);
+                        localStorage.setItem('currentFolder', defaultWorkspace);  // ✅ FIX: Use consistent key
                     })
                     .catch(err => {
                         console.error('❌ Default workspace not found, user must select folder:', err);
@@ -1627,17 +1627,14 @@ class KodCanavari {
             throw new Error('❌ Cannot resolve path: Workspace root not set. User must select folder via "Klasör Seç" button.');
         }
 
-        if (!baseRoot) {
-            throw new Error('❌ No workspace root set - cannot resolve path');
-        }
-
+        // ✅ FIX: Use this.path (class property) instead of require('path')
         // Absolute path ise olduğu gibi dön
-        if (require('path').isAbsolute(relativePath)) {
+        if (this.path.isAbsolute(relativePath)) {
             return relativePath;
         }
 
         // Relative path'i base root'tan çöz
-        const resolved = require('path').resolve(baseRoot, relativePath);
+        const resolved = this.path.resolve(baseRoot, relativePath);
         console.log(`📍 Path resolved: ${relativePath} → ${resolved}`);
         return resolved;
     }
