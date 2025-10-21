@@ -27,6 +27,54 @@ import { CognitiveDivergenceLayer } from './cognitive-divergence-layer.js';
 import { SelfDivergenceProtocol } from './self-divergence-protocol.js';
 
 export class LumaSuprimeAgent {
+    /**
+     * 🔧 Safe JSON stringifier - prevents circular reference errors
+     * @param {*} obj - Object to stringify
+     * @param {number} maxDepth - Maximum recursion depth
+     * @returns {string} - Safe JSON string
+     */
+    static safeStringify(obj, maxDepth = 5) {
+        const seen = new WeakSet();
+        const cache = new Set();
+        
+        const stringify = (value, depth = 0) => {
+            // Handle primitives
+            if (value === null) return null;
+            if (typeof value !== 'object') return value;
+            
+            // Max depth check
+            if (depth > maxDepth) return '[Max Depth Reached]';
+            
+            // Circular reference check
+            if (seen.has(value)) return '[Circular]';
+            seen.add(value);
+            
+            // Handle arrays
+            if (Array.isArray(value)) {
+                return value.map(item => stringify(item, depth + 1));
+            }
+            
+            // Handle objects
+            const result = {};
+            for (const key in value) {
+                if (value.hasOwnProperty(key)) {
+                    try {
+                        result[key] = stringify(value[key], depth + 1);
+                    } catch (e) {
+                        result[key] = '[Error: ' + e.message + ']';
+                    }
+                }
+            }
+            return result;
+        };
+        
+        try {
+            return JSON.stringify(stringify(obj));
+        } catch (e) {
+            return JSON.stringify({ error: 'Serialization failed: ' + e.message });
+        }
+    }
+
     constructor(options = {}) {
         // Core systems
         this.lumaCore = options.lumaCore || new LumaCore();
@@ -233,19 +281,19 @@ export class LumaSuprimeAgent {
                     {
                         type: 'decision',
                         path: context.session?.currentProject?.path || '',
-                        content: JSON.stringify(decision),
+                        content: LumaSuprimeAgent.safeStringify(decision),
                         reasoning: decision.reasoning || ''
                     },
                     {
                         type: 'task',
                         path: context.session?.currentProject?.path || '',
-                        content: JSON.stringify(prioritized),
+                        content: LumaSuprimeAgent.safeStringify(prioritized),
                         reasoning: prioritized.replayGuidance || ''
                     },
                     {
                         type: 'result',
                         path: context.session?.currentProject?.path || '',
-                        content: JSON.stringify(result),
+                        content: LumaSuprimeAgent.safeStringify(result),
                         reasoning: success ? 'Execution completed successfully' : 'Execution failed'
                     }
                 ],
