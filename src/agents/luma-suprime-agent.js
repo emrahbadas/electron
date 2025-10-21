@@ -171,6 +171,17 @@ export class LumaSuprimeAgent {
             console.log(`🧠 Supreme Decision:`, decision);
             this.emitSuprimeEvent('DECISION_MADE', { decision });
             
+            // ✅ EARLY RETURN: Skip execution for greetings
+            if (decision.skipExecution) {
+                console.log('💬 Greeting detected - skipping agent execution');
+                return {
+                    type: 'greeting',
+                    decision,
+                    message: decision.message,
+                    skipExecution: true
+                };
+            }
+            
             // 🧠 v2.1 INTEGRATION POINT 2: Cognitive Divergence (Novelty Detection)
             console.log('🔍 v2.1: Activating Cognitive Divergence Layer...');
             const projectContext = {

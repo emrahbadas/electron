@@ -31,6 +31,11 @@ export class LumaCore {
     analyzeIntent(message) {
         const text = message.toLowerCase();
         
+        // ✅ Greeting signals (selamlaşma)
+        if (text.match(/^(selam|merhaba|hey|hi|hello|günaydın|iyi akşamlar|nasılsın|naber)[\s!.?]*$/i)) {
+            return "greeting";
+        }
+        
         // Reflection signals
         if (text.includes("hata") || 
             text.includes("neden") || 
@@ -72,6 +77,8 @@ export class LumaCore {
      */
     reason(intent, payload) {
         switch (intent) {
+            case "greeting":
+                return this.respondToGreeting(payload);
             case "idea":
                 return this.brainstorm(payload);
             case "command":
@@ -83,6 +90,38 @@ export class LumaCore {
             default:
                 return this.brainstorm(payload);
         }
+    }
+    
+    /**
+     * Selamlaşma yanıtı
+     * @param {Object} data - Mesaj verisi
+     * @returns {Object} - Selamlaşma yanıtı
+     */
+    respondToGreeting(data) {
+        const { prompt } = data;
+        
+        const greetings = [
+            "👋 Selam! Sana nasıl yardımcı olabilirim?",
+            "🐉 Merhaba! Ben KayraDeniz, Kod Canavarı. Ne yapmak istersin?",
+            "✨ Hey! Bugün hangi projeyi hayata geçirelim?",
+            "💻 Selam kaptan! Kodlamaya hazırım!"
+        ];
+        
+        const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+        
+        return {
+            type: "dialogue",
+            intent: "greeting",
+            mood: "friendly",
+            approved: true,
+            message: randomGreeting,
+            reasoning: "Basit bir selamlama - agent çağırmaya gerek yok.",
+            skipExecution: true,  // 🔑 ANAHTAR: Execution'ı atla!
+            metadata: {
+                greeting: true,
+                timestamp: Date.now()
+            }
+        };
     }
     
     /**
