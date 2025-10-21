@@ -524,17 +524,30 @@ export class LumaCore {
         
         // 🧠 Use intentData if available
         const skipTools = intentData?.requiresTools === false;
+        const nature = intentData?.nature;
+        
+        // ✅ FIX: Route simple_chat to brainstorm instead!
+        if (nature === "simple_chat") {
+            return this.brainstorm(data, intentData);
+        }
+        
+        // ✅ FIX: Special message for how-to questions
+        const isHowTo = nature === "how_to_question";
+        const message = isHowTo
+            ? `📝 "${prompt}" hakkında adım adım açıklayayım...\n\n[Sohbet modunda açıklama yapacağım, kod üretmeyeceğim]`
+            : `📚 "${prompt}" hakkında bilgi vereyim kaptan...`;
         
         return {
             type: "explanation",
             intent: "exploration",
             mood: "educational",
             approved: true,
-            message: `📚 "${prompt}" hakkında bilgi vereyim kaptan...`,
+            message,
             reasoning: intentData?.reasoning || "Bu bir öğrenme ve keşif isteği.",
             skipExecution: skipTools,  // 🔑 Bilgi soruları tool gerektirmez
             metadata: {
                 educationalContent: true,
+                tutorialMode: isHowTo,
                 timestamp: Date.now()
             }
         };
