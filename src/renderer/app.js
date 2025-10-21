@@ -3254,7 +3254,9 @@ class KodCanavari {
                             role: supremeResult.agent.toLowerCase().replace('agent', ''), // "ExecutorAgent" → "executor"
                             mode: 'action',
                             confidence: 1.0,
-                            reasoning: supremeResult.decision?.message || 'Luma Supreme decision'
+                            reasoning: supremeResult.decision?.message || 'Luma Supreme decision',
+                            // 🔄 PHASE CONTEXT: Attach phase information to route
+                            phaseContext: supremeContext.phaseContext
                         };
                         
                         // Wrap with hierarchy (Level 0 = Orchestrator = FINAL)
@@ -3264,6 +3266,7 @@ class KodCanavari {
                         console.log('   Level:', lumaRoute._hierarchy.level, '(ORCHESTRATOR)');
                         console.log('   Is Final:', lumaRoute._hierarchy.isFinal, '🔒');
                         console.log('   Agent:', lumaRoute._hierarchy.agent);
+                        console.log('   Phase Context:', lumaRoute.phaseContext);
                         
                         await this.executeUnifiedAgentTask(contextAwarePrompt, lumaRoute);
                         
@@ -8237,6 +8240,9 @@ AKILLI ÖRNEKLER:
         };
 
         const roleContext = route ? roleContexts[route.role] : "Sen KayraDeniz Kod Canavarı'sın! Çok yetenekli bir yazılım geliştirici asistanısın. Samimi ve yardımsever bir dille konuşuyorsun.";
+        
+        // 🔄 PHASE CONTEXT: Extract from route if passed by hierarchy system
+        const phaseInfo = route?._hierarchy?.phaseContext || route?.phaseContext || {};
 
         // Get workspace context
         let workspaceContext = '';
@@ -8284,6 +8290,26 @@ ${recentContext}
 - Özellikler: ${features}`;
         }
 
+        // 🔄 PHASE CONTEXT: Add phase information if available
+        let phaseContextText = '';
+        if (phaseInfo && phaseInfo.currentPhase) {
+            phaseContextText = `\n\n🔄 **MULTI-PHASE PROJECT STATUS**:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 CURRENT PHASE: ${phaseInfo.currentPhase}/${phaseInfo.totalPhases || '?'}
+${phaseInfo.lastMission ? `📋 Last Mission: ${phaseInfo.lastMission}` : ''}
+${phaseInfo.projectContinuation ? '🔄 PROJECT CONTINUATION DETECTED - DO NOT RESET TO PHASE 1!' : ''}
+${phaseInfo.completedFiles && phaseInfo.completedFiles.length > 0 ? 
+`✅ Completed Files (${phaseInfo.completedFiles.length}): ${phaseInfo.completedFiles.join(', ')}` : ''}
+
+⚠️ CRITICAL: User is continuing an EXISTING project!
+- DO NOT start from Phase 1 again
+- DO NOT create package.json/README.md/etc if already completed
+- CONTINUE from Phase ${phaseInfo.currentPhase} exactly
+- Check "KONUŞMA GEÇMİŞİ" above for project context
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+        }
+
         const analysisPrompt = `
 🚨 CRITICAL: RESPOND WITH PURE JSON ONLY! NO GREETINGS, NO EXPLANATIONS, NO MARKDOWN!
 Start your response with { and end with }. Do NOT wrap in \`\`\`json or add any text before/after JSON.
@@ -8293,17 +8319,19 @@ ${roleContext}
 Kullanıcı İsteği: "${userRequest}"
 ${route ? `Seçilen Rol: ${route.role}` : ''}
 ${route ? `Öncelikli Tool: ${route.force_tool}` : ''}${workspaceContext}${conversationContextText}
-${projectContextText}
+${projectContextText}${phaseContextText}
 
 ⚠️ **CRITICAL CONTEXT WARNING**:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚫 DO NOT IGNORE CONVERSATION HISTORY!
 🚫 DO NOT SWITCH PROJECT CONTEXT RANDOMLY!
 🚫 DO NOT USE EXAMPLE PROJECTS FROM PROMPT!
+${phaseInfo && phaseInfo.currentPhase ? `🚫 DO NOT RESET TO PHASE 1 - WE ARE IN PHASE ${phaseInfo.currentPhase}!` : ''}
 
 ✅ READ "KONUŞMA GEÇMİŞİ" ABOVE CAREFULLY!
 ✅ STICK TO "CURRENT PROJECT" IF SPECIFIED!
 ✅ USER REQUEST IS THE PRIMARY SOURCE OF TRUTH!
+${phaseInfo && phaseInfo.projectContinuation ? '✅ THIS IS A PROJECT CONTINUATION - KEEP PHASE NUMBER!' : ''}
 
 If user says "evet" or "devam et", continue with THE SAME PROJECT from conversation history.
 Example projects (blog, monorepo) are ONLY templates - DO NOT use them unless user explicitly requests them!
