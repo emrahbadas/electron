@@ -10,6 +10,48 @@ const {
     logDecisionChain 
 } = require('../agents/agent-hierarchy.js');
 
+// ===== ASYNC MUTEX PATTERN (Race Condition Prevention) =====
+// Proper mutex implementation to prevent double execution
+class AsyncMutex {
+    constructor(name = 'unnamed') {
+        this._queue = [];
+        this._locked = false;
+        this._name = name;
+    }
+    
+    async acquire() {
+        return new Promise((resolve) => {
+            if (!this._locked) {
+                this._locked = true;
+                console.log(`🔒 [${this._name}] Mutex acquired`);
+                resolve();
+            } else {
+                console.log(`⏸️ [${this._name}] Mutex busy, queuing (${this._queue.length + 1} in queue)`);
+                this._queue.push(resolve);
+            }
+        });
+    }
+    
+    release() {
+        if (this._queue.length > 0) {
+            const resolve = this._queue.shift();
+            console.log(`🔓 [${this._name}] Mutex released, next in queue (${this._queue.length} remaining)`);
+            resolve();
+        } else {
+            this._locked = false;
+            console.log(`🔓 [${this._name}] Mutex released, no queue`);
+        }
+    }
+    
+    isLocked() {
+        return this._locked;
+    }
+    
+    queueLength() {
+        return this._queue.length;
+    }
+}
+
 // ===== KAYRA TOOLS SYSTEM =====
 // KayraToolsIntegration is loaded via ES module in index.html
 // It will be available on window object after module loads
@@ -1118,15 +1160,19 @@ class KodCanavari {
         this.defaultTemplates = this.buildDefaultTemplates();
         this.customTemplateEscHandler = null;
 
-        // Rate limiting queue
+        // ✅ ASYNC MUTEX SYSTEM (Race Condition Prevention)
+        // Proper mutex implementation replaces old flag-based system
+        this.messageMutex = new AsyncMutex('ChatMessage');
+        this.nightOrdersMutex = new AsyncMutex('NightOrders');
+        
+        // DEPRECATED: Old flag system removed (replaced by mutex)
+        // this.isProcessingMessage = false;
+        // this.lastMessageTime = 0;
+        
+        // Rate limiting (kept for different purpose - API throttling)
         this.requestQueue = [];
         this.activeRequests = 0;
-        this.maxConcurrentRequests = 1; // Only 1 concurrent request at a time
-
-        // Double submit guard - RESET to safe state
-        this.isProcessingMessage = false;
-        this.lastMessageTime = 0;
-        this.debounceDelay = 1000; // 1 second debounce
+        this.maxConcurrentRequests = 1;
 
         // Production Agent: Tool-First Policy (2 messages without tool = force tool)
         this.consecutiveNoToolMessages = 0;
@@ -1141,16 +1187,8 @@ class KodCanavari {
             sessionStart: Date.now()
         };
 
-        // Emergency reset function for debugging
-        setInterval(() => {
-            if (this.isProcessingMessage) {
-                const timeSinceLastMessage = Date.now() - this.lastMessageTime;
-                if (timeSinceLastMessage > 30000) { // 30 seconds timeout
-                    console.warn('⚠️ Emergency reset: isProcessingMessage stuck, resetting...');
-                    this.isProcessingMessage = false;
-                }
-            }
-        }, 5000); // Check every 5 seconds
+        // REMOVED: Emergency reset timer (no longer needed with proper mutex)
+        // Old system had race condition - new mutex is atomic
 
         // Initialize the new tool system - DISABLED for troubleshooting
         // this.toolsSystem = new KayraToolsIntegration(this);
@@ -1892,9 +1930,21 @@ class KodCanavari {
     // Emergency reset function for debugging - can be called from console
     emergencyReset() {
         console.log('🚨 Emergency reset called');
-        this.isProcessingMessage = false;
-        this.lastMessageTime = 0;
-        console.log('✅ Processing state reset');
+        
+        // ✅ NEW: Force release all mutexes
+        if (this.messageMutex && this.messageMutex.isLocked()) {
+            console.warn('⚠️ Force releasing messageMutex');
+            this.messageMutex._locked = false;
+            this.messageMutex._queue = [];
+        }
+        
+        if (this.nightOrdersMutex && this.nightOrdersMutex.isLocked()) {
+            console.warn('⚠️ Force releasing nightOrdersMutex');
+            this.nightOrdersMutex._locked = false;
+            this.nightOrdersMutex._queue = [];
+        }
+        
+        console.log('✅ All mutexes reset');
 
         // Re-enable send button if it exists
         const sendBtn = document.getElementById('sendChatBtn');
@@ -3069,33 +3119,25 @@ class KodCanavari {
     }
 
     async sendChatMessage() {
-        // Double submit guard with debouncing
-        const now = Date.now();
-
-        if (this.isProcessingMessage) {
-            return;
-        }
-
-        if (now - this.lastMessageTime < this.debounceDelay) {
-            return;
-        }
-
-        this.isProcessingMessage = true;
-        this.lastMessageTime = now;
-
-        // Get UI elements and variables at method scope
-        const chatInput = document.getElementById('chatInput');
-        const sendBtn = document.getElementById('sendChatBtn');
-
-        // Define variables that will be used across try blocks
-        let message, chatMode, contextAwarePrompt, displayMessage, conversationContext;
-
+        // ✅ NEW: Proper mutex-based atomic execution
+        // Replaces old flag-based system with guaranteed atomic operations
+        await this.messageMutex.acquire();
+        
         try {
-            if (!chatInput || !chatInput.value.trim()) return;
+            // Get UI elements and variables at method scope
+            const chatInput = document.getElementById('chatInput');
+            const sendBtn = document.getElementById('sendChatBtn');
 
-            message = chatInput.value.trim();
+            // Define variables that will be used across try blocks
+            let message, chatMode, contextAwarePrompt, displayMessage, conversationContext;      
             
-            // 🔄 SMART PHASE RESET: Only reset if NEW project detected
+            // Early return #1: Empty input check
+            if (!chatInput || !chatInput.value.trim()) {
+                this.messageMutex.release(); // Release mutex before early return!
+                return;
+            }
+
+            message = chatInput.value.trim();            // 🔄 SMART PHASE RESET: Only reset if NEW project detected
             // Keywords indicating continuation: "devam", "phase", "adım", "sonraki"
             const isContinuation = /\b(devam|phase|adım|sonraki|kaldığı|tamamla)\b/i.test(message);
             
@@ -3115,6 +3157,7 @@ class KodCanavari {
             // Check for project commands if we have an active project
             if (this.currentProjectData && this.detectProjectCommand(message)) {
                 await this.processProjectCommand(message);
+                this.messageMutex.release(); // Early return #2: Release mutex!
                 return;
             }
 
@@ -3208,7 +3251,7 @@ class KodCanavari {
                                 sendBtn.disabled = false;
                                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
                             }
-                            this.isProcessingMessage = false;
+                            this.messageMutex.release(); // Early return #3: Release mutex!
                             return;
                         }
                         
@@ -3223,7 +3266,7 @@ class KodCanavari {
                                 sendBtn.disabled = false;
                                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
                             }
-                            this.isProcessingMessage = false;
+                            this.messageMutex.release(); // Early return #4: Release mutex!
                             return;
                         }
                         
@@ -3286,7 +3329,7 @@ class KodCanavari {
                                         sendBtn.disabled = false;
                                         sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
                                     }
-                                    this.isProcessingMessage = false;
+                                    this.messageMutex.release(); // Early return #5: Release mutex!
                                     return;
                                 }
                             }
@@ -3394,8 +3437,8 @@ class KodCanavari {
                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
             }
         } finally {
-            // Always reset processing guard
-            this.isProcessingMessage = false;
+            // ✅ NEW: Always release mutex (guaranteed atomic release)
+            this.messageMutex.release();
         }
     }
 
