@@ -112,7 +112,7 @@ export class LumaCore {
 
         // 🧠 INTROSPECTION FALLBACK: "Ne? Neden? Niçin?" sistemi
         let intent = intentMap[nature.type] || "exploration";
-        let responseMode = this.determineResponseMode(nature, cognitiveIntent);
+        let responseMode = this.determineResponseMode(message, nature);  // ✅ FIX: Correct parameter order
         let confidence = nature.confidence || this.calculateConfidence(text, nature);
         
         // ✅ FIX: Intent mapping boşluklarını doldur
@@ -205,14 +205,16 @@ export class LumaCore {
         // 0️⃣ SIMPLE CHAT (Basit tek kelime yanıtlar)
         const simpleResponsePatterns = [
             /^(evet|hayır|tamam|olur|peki|ok|okay|yok|var)[\s!.?]*$/i,
-            /^(adın|ismin|kim|kimsin|ne yapıyorsun)[\s!.?]*$/i
+            /^(adın|ismin|kim|kimsin|ne yapıyorsun)[\s!.?]*$/i,
+            /^(adın ne|ismin ne|sen kimsin)[\s!.?]*$/i  // ✅ FIX: "adın ne" için özel pattern
         ];
         
-        // ✅ Context-aware: "evet phase 2" değil sadece "evet"
+        // ✅ Context-aware: "evet phase 2" değil sadece "evet" VEYA specific simple chat phrases
         const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
         const hasContext = wordCount > 1;
+        const isSpecificSimpleChat = /^(adın ne|ismin ne|sen kimsin)[\s!.?]*$/i.test(text);
         
-        if (simpleResponsePatterns.some(p => p.test(text)) && !hasContext) {
+        if (simpleResponsePatterns.some(p => p.test(text)) && (!hasContext || isSpecificSimpleChat)) {
             return {
                 type: "simple_chat",
                 needsTools: false,

@@ -10612,7 +10612,7 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
 
                 // Re-trigger with SPECIFIC phase 2 prompt
                 setTimeout(() => {
-                    this.handleUserMessage(phase2Prompt, false);
+                    window.kodCanavari.chatMessage(phase2Prompt, false);
                 }, 3000);
             } else if (isPhase2) {
                 // Phase 2 completed, don't loop again!
