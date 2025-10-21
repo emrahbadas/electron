@@ -15,6 +15,7 @@ class ToolBridge {
         this.registerFileSystemTools();
         this.registerTerminalTools();
         this.registerReflexionTools();
+        this.registerCognitiveTools(); // 🧠 NEW: ChatGPT önerisi
         
         console.log(`🔧 Tool Bridge initialized with ${this.supportedTools.size} tools`);
     }
@@ -227,6 +228,169 @@ class ToolBridge {
                 results 
             };
         });
+    }
+
+    /**
+     * 🧠 Register Cognitive Tools (ChatGPT önerisi)
+     * intent.analyze, dialog.context, cognitive.replay
+     */
+    registerCognitiveTools() {
+        // 🧭 intent.analyze - Prompt'un amacını belirler
+        this.supportedTools.set('intent.analyze', async (args) => {
+            const { prompt } = args;
+            
+            try {
+                // Simple intent analysis (geliştirilecek)
+                const isQuestion = /\?|nasıl|neden|ne|kim|hangi/.test(prompt.toLowerCase());
+                const isCommand = /yap|oluştur|başlat|çalıştır|kur/.test(prompt.toLowerCase());
+                const isExploration = /açıkla|anlat|göster|bilgi/.test(prompt.toLowerCase());
+                
+                let intentType = "unclear";
+                let confidence = 0.5;
+                
+                if (isCommand) {
+                    intentType = "directive";
+                    confidence = 0.8;
+                } else if (isQuestion) {
+                    intentType = "exploratory";
+                    confidence = 0.7;
+                } else if (isExploration) {
+                    intentType = "informational";
+                    confidence = 0.6;
+                }
+                
+                const result = {
+                    type: intentType,
+                    confidence,
+                    isQuestion,
+                    isCommand,
+                    isExploration,
+                    emotionalTone: prompt.includes("!") ? "excited" : "neutral"
+                };
+                
+                this.log('intent.analyze', prompt, 'SUCCESS', `Detected: ${intentType} (${confidence})`);
+                return { success: true, result };
+                
+            } catch (error) {
+                this.log('intent.analyze', prompt, 'FAILED', error.message);
+                return { success: false, error: error.message };
+            }
+        });
+
+        // 💬 dialog.context - Önceki konuşma tınısını okur
+        this.supportedTools.set('dialog.context', async (args) => {
+            const { lastMessages = [], currentPrompt } = args;
+            
+            try {
+                // Simple context analysis
+                const hasPhaseContext = lastMessages.some(msg => 
+                    msg.includes("phase") || msg.includes("faz") || msg.includes("adım")
+                );
+                
+                const isFollowUp = lastMessages.length > 0 && (
+                    currentPrompt.includes("evet") || 
+                    currentPrompt.includes("devam") ||
+                    currentPrompt.includes("tamam")
+                );
+                
+                const conversationFlow = {
+                    isFollowUp,
+                    hasPhaseContext,
+                    messageCount: lastMessages.length,
+                    tone: this.analyzeConversationalTone(lastMessages),
+                    contextType: hasPhaseContext ? "project_execution" : "general_chat"
+                };
+                
+                this.log('dialog.context', `${lastMessages.length} messages`, 'SUCCESS', 
+                    `Context: ${conversationFlow.contextType}`);
+                return { success: true, context: conversationFlow };
+                
+            } catch (error) {
+                this.log('dialog.context', 'context analysis', 'FAILED', error.message);
+                return { success: false, error: error.message };
+            }
+        });
+
+        // 🔄 cognitive.replay - Son aksiyonları yeniden oynatır
+        this.supportedTools.set('cognitive.replay', async (args) => {
+            const { actionCount = 5 } = args;
+            
+            try {
+                // Get last N actions from execution log
+                const recentActions = this.executionLog
+                    .slice(-actionCount)
+                    .map(entry => ({
+                        tool: entry.tool,
+                        target: entry.target,
+                        status: entry.status,
+                        timestamp: entry.timestamp,
+                        details: entry.details
+                    }));
+                
+                // Analyze pattern
+                const analysis = {
+                    actionCount: recentActions.length,
+                    successRate: recentActions.filter(a => a.status === 'SUCCESS').length / recentActions.length,
+                    toolUsage: this.groupBy(recentActions, 'tool'),
+                    recentPattern: this.detectPattern(recentActions),
+                    suggestions: this.generateSuggestions(recentActions)
+                };
+                
+                this.log('cognitive.replay', `${actionCount} actions`, 'SUCCESS', 
+                    `Success rate: ${(analysis.successRate * 100).toFixed(1)}%`);
+                return { success: true, actions: recentActions, analysis };
+                
+            } catch (error) {
+                this.log('cognitive.replay', 'replay analysis', 'FAILED', error.message);
+                return { success: false, error: error.message };
+            }
+        });
+    }
+
+    /**
+     * Helper methods for cognitive tools
+     */
+    analyzeConversationalTone(messages) {
+        if (!messages.length) return "neutral";
+        
+        const lastMessage = messages[messages.length - 1]?.toLowerCase() || "";
+        if (lastMessage.includes("!")) return "excited";
+        if (lastMessage.includes("?")) return "questioning";
+        if (lastMessage.includes("hata") || lastMessage.includes("problem")) return "concerned";
+        return "neutral";
+    }
+    
+    groupBy(array, key) {
+        return array.reduce((groups, item) => {
+            const group = groups[item[key]] || [];
+            group.push(item);
+            groups[item[key]] = group;
+            return groups;
+        }, {});
+    }
+    
+    detectPattern(actions) {
+        if (actions.length < 3) return "insufficient_data";
+        
+        const tools = actions.map(a => a.tool);
+        if (tools.includes("fs.write") && tools.includes("terminal.exec")) {
+            return "code_and_test";
+        }
+        if (tools.filter(t => t.includes("fs.")).length > 2) {
+            return "file_intensive";
+        }
+        return "mixed_operations";
+    }
+    
+    generateSuggestions(actions) {
+        const failedActions = actions.filter(a => a.status === 'FAILED');
+        if (failedActions.length > 1) {
+            return ["Consider checking error patterns", "Verify prerequisites"];
+        }
+        if (actions.every(a => a.tool === "fs.write")) {
+            return ["Consider running tests", "Verify file contents"];
+        }
+        return ["Continue current workflow"];
     }
 
     /**

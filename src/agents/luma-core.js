@@ -28,7 +28,7 @@ export class LumaCore {
      * @param {string} message - Kullanıcı mesajı
      * @returns {Object} - { intent, nature, requiresTools, conversational }
      */
-    analyzeIntent(message) {
+    async analyzeIntent(message) {
         const text = message.toLowerCase();
         
         console.log('🔍 [DEBUG] analyzeIntent() called with:', message);
@@ -37,6 +37,20 @@ export class LumaCore {
         const nature = this.classifyRequestNature(text);
         
         console.log('🔍 [DEBUG] classifyRequestNature() returned:', nature);
+        
+        // 🧭 NEW: ChatGPT önerisi - intent.analyze tool kullan
+        let cognitiveIntent = null;
+        if (window.toolBridge) {
+            try {
+                const intentResult = await window.toolBridge.executeTool('intent.analyze', { prompt: message });
+                if (intentResult.success) {
+                    cognitiveIntent = intentResult.result;
+                    console.log('🧭 [DEBUG] Cognitive intent analysis:', cognitiveIntent);
+                }
+            } catch (error) {
+                console.warn('⚠️ Cognitive intent analysis failed:', error);
+            }
+        }
         
         // ✅ FIX: Nature → Intent mapping
         const intentMap = {
@@ -122,7 +136,9 @@ export class LumaCore {
             reasoning: nature.reasoning,
             // 🧠 NEW: Adaptive Reasoning Mode (ChatGPT önerisi)
             responseMode: this.determineResponseMode(text, nature),
-            confidence: this.calculateConfidence(text, nature)
+            confidence: this.calculateConfidence(text, nature),
+            // 🧭 NEW: Cognitive analysis results
+            cognitiveIntent: cognitiveIntent
         };
         
         console.log('🔍 [DEBUG] analyzeIntent() returning:', finalIntent);

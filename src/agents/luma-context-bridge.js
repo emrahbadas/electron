@@ -61,7 +61,7 @@ export class LumaContextBridge {
     async processMessage(message, options = {}) {
         try {
             // 1. Intent analizi
-            const intent = this.luma.analyzeIntent(message);
+            const intent = await this.luma.analyzeIntent(message);
             
             // Usta Modu'na bildir
             this.emitNarration('LUMA_THINKING', {

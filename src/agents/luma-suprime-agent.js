@@ -132,7 +132,8 @@ export class LumaSuprimeAgent {
             // 🔍 STEP 1: Intent Analysis (Luma Core)
             this.emitSuprimeEvent('THINKING_START', { input, timestamp: startTime });
             
-            const intent = this.lumaCore.analyzeIntent(input);
+            // STEP 1: Analyze intent with cognitive enhancement
+            const intent = await this.lumaCore.analyzeIntent(input);
             console.log(`🧠 Supreme Agent: Intent detected → ${intent}`);
             
             // 🎯 STEP 2: Context Gathering (SessionContext + LearningStore)
