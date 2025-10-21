@@ -9765,23 +9765,8 @@ Now provide the CORRECTED response (pure JSON only):`;
     }
 
     async executeNightOrders(orders, approvalToken = null) {
-        // 🔒 CRITICAL: Execution Mutex - Prevent double Night Orders execution
-        if (this.isExecutingNightOrders) {
-            console.warn('⚠️ Night Orders already executing! Queuing this mission...');
-            console.log('📋 Queued Mission:', orders.mission);
-            
-            if (!this.nightOrdersQueue) {
-                this.nightOrdersQueue = [];
-            }
-            
-            this.nightOrdersQueue.push({ orders, approvalToken });
-            
-            this.addChatMessage('ai', `⏳ **Mission Queued**\n\n${orders.mission}\n\n_Waiting for current mission to complete..._`);
-            return;
-        }
-        
-        // Set execution flag
-        this.isExecutingNightOrders = true;
+        // ✅ NEW: Proper mutex-based atomic execution (replaces old flag system)
+        await this.nightOrdersMutex.acquire();
         
         try {
             console.log('🧭 NIGHT ORDERS PROTOCOL ACTIVATED!');
@@ -10133,11 +10118,12 @@ Success: ${successCount} | Failed: ${failCount}
         this.refreshExplorer();
         
         } finally {
-            // 🔒 CRITICAL: Release execution mutex
-            this.isExecutingNightOrders = false;
+            // ✅ NEW: Release mutex (proper atomic execution)
+            this.nightOrdersMutex.release();
             console.log('🔓 Night Orders execution mutex released');
             
-            // 🔄 CRITICAL: Process queued missions
+            // 🔄 CRITICAL: Process queued missions (legacy queue support)
+            // NOTE: AsyncMutex handles internal queue, but this maintains backward compatibility
             if (this.nightOrdersQueue && this.nightOrdersQueue.length > 0) {
                 const nextMission = this.nightOrdersQueue.shift();
                 console.log(`🔄 Executing queued mission: ${nextMission.orders.mission}`);
