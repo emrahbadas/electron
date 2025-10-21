@@ -62,6 +62,7 @@ export class LumaCore {
             "analysis": "analysis",
             "discussion": "idea",
             "action": "command",               // ✅ NEW: Context-aware commands
+            "context_required": "context_analysis",  // ✅ NEW: Context analysis required
             "unclear": "exploration"
         };
         
@@ -174,12 +175,24 @@ export class LumaCore {
      * @returns {Object} - { type, needsTools, reasoning }
      */
     classifyRequestNature(text) {
+        // 🔍 CONTEXT-REQUIRED COMMANDS (User feedback önerisi)
+        if (/projeye?\s+(devam|tamamla)|yarım\s+kal|tamamla/.test(text)) {
+            return {
+                type: "context_required", 
+                needsTools: true,
+                reasoning: "Proje devamı - önce mevcut proje analizi gerekli",
+                confidence: 0.8,
+                requiresContextAnalysis: true
+            };
+        }
+        
         // 🎯 ÖNCE COMMAND/EXECUTION KONTROLÜ (ChatGPT önerisi)
         if (/başlat|tamamla|phase|oluştur|çalıştır|yap|üret|hazırla|kur|setup|devam\s+et/.test(text)) {
             return {
                 type: "action",
                 needsTools: true,
-                reasoning: "Aksiyon komutu - execution gerekli"
+                reasoning: "Aksiyon komutu - execution gerekli",
+                confidence: 0.8
             };
         }
         
@@ -477,6 +490,10 @@ export class LumaCore {
             case "idea":
                 console.log('🔍 [DEBUG] Routing to brainstorm() via idea case');
                 return this.brainstorm(payload, intentData);
+            
+            case "context_analysis":  // ✅ NEW: Context-required commands
+                console.log('🔍 [DEBUG] Routing to analyzeContext()');
+                return this.analyzeContext(payload, intentData);
             
             case "command":
                 console.log('🔍 [DEBUG] Routing to evaluateExecution()');
@@ -814,6 +831,9 @@ export class LumaCore {
         switch (questionType) {
             case 'ne':
                 // Intent belirleme fallback
+                if (text.includes('projeye') && (text.includes('devam') || text.includes('tamamla'))) {
+                    return 'context_analysis';
+                }
                 if (text.includes('oluştur') || text.includes('yap') || text.includes('başlat')) {
                     return 'creation';
                 }
@@ -875,6 +895,47 @@ export class LumaCore {
             return "Standart npm komutlarını kullanmalıyız";
         }
         return "Context'i düzeltelim";
+    }
+    
+    /**
+     * 🔍 Context Analysis: Mevcut projeyi analiz et
+     * User feedback önerisi: "projeye devam et" dediğinde önce context analizi
+     * @param {Object} data - Mesaj verisi  
+     * @param {Object} intentData - Intent analiz sonucu
+     * @returns {Object} - Context analiz yanıtı
+     */
+    async analyzeContext(data, intentData = null) {
+        const { prompt } = data;
+        
+        console.log('🔍 [DEBUG] analyzeContext() called with prompt:', prompt);
+        
+        const message = `🔍 **Mevcut projeyi analiz ediyorum...**
+        
+Kaptan, "${prompt}" talebiniz için önce mevcut projeyi incelemem gerekiyor.
+
+📂 **Workspace analizi yapıyorum:**
+• Mevcut dosyaları tarıyorum
+• Proje tipini belirliyorum  
+• Teknolojileri tespit ediyorum
+• Yarım kalan kısımları buluyorum
+
+⏳ Bir saniye, analiz sonuçlarını hazırlıyorum...`;
+
+        return {
+            type: "context_analysis",
+            intent: "context_analysis", 
+            mood: "analytical",
+            approved: true,
+            message,
+            reasoning: intentData?.reasoning || "Context analizi gerekli - mevcut proje durumu belirlenmeli",
+            requiresFollowUp: true,  // Bu önemli: devam eden analysis olacak
+            metadata: {
+                requiresContextAnalysis: true,
+                originalPrompt: prompt,
+                analysisType: "project_continuation",
+                timestamp: Date.now()
+            }
+        };
     }
 }
 
