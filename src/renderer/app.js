@@ -7890,14 +7890,14 @@ Please consider the conversation context when responding. Reference previous dis
         // Store with enhanced context
         this.chatHistory.push(contextEntry);
 
-        // 🧠 ChatGPT FIX: Add to Context Memory System
+        // 🧠 Context Memory System with Auto-Summarization
         if (this.contextMemory) {
             this.contextMemory.addMessage({
                 role: type === 'user' ? 'user' : 'assistant',
                 content: content,
                 timestamp: now,
                 metadata: metadata
-            });
+            }, this.callLLM.bind(this)); // Pass callLLM for Context Summarizer Agent
         }
 
         // Also display in UI
@@ -8197,7 +8197,55 @@ Please consider the conversation context when responding. Reference previous dis
 
             // Step 4: Execute with real-time updates using selected role
             // Pass approval token to execution (for token-gated operations)
-            await this.executeWithLiveUpdates(analysis, route, approvalToken);
+            const executionStartTime = Date.now();
+            let executionSuccess = false;
+            let executionError = null;
+            
+            try {
+                await this.executeWithLiveUpdates(analysis, route, approvalToken);
+                executionSuccess = true;
+            } catch (error) {
+                executionSuccess = false;
+                executionError = error.message;
+                throw error; // Re-throw for outer catch
+            } finally {
+                // 🎯 META-REFLECTION ENGINE: Track RouterAgent + AnalyzerAgent performance
+                if (this.contextMemory) {
+                    const executionDuration = Date.now() - executionStartTime;
+                    
+                    // Track RouterAgent (intent routing)
+                    this.contextMemory.trackAgentPerformance({
+                        agentName: 'RouterAgent',
+                        taskType: route?.role || 'unknown',
+                        success: executionSuccess,
+                        duration: executionDuration,
+                        errorType: executionSuccess ? null : (executionError || 'execution_failed'),
+                        metadata: {
+                            userRequest: userRequest.substring(0, 100),
+                            confidence: route?.confidence || 0,
+                            reasoning: route?.reasoning
+                        }
+                    });
+                    
+                    // Track AnalyzerAgent (plan generation)
+                    if (analysis) {
+                        this.contextMemory.trackAgentPerformance({
+                            agentName: 'AnalyzerAgent',
+                            taskType: analysis.plan_type || 'unknown',
+                            success: executionSuccess,
+                            duration: executionDuration,
+                            errorType: executionSuccess ? null : (executionError || 'execution_failed'),
+                            metadata: {
+                                toolsUsed: analysis.tools?.map(t => t.tool).join(', '),
+                                planType: analysis.plan_type,
+                                totalSteps: analysis.tools?.length || 0
+                            }
+                        });
+                    }
+                    
+                    console.log('📊 RouterAgent & AnalyzerAgent performance tracked');
+                }
+            }
 
         } catch (error) {
             this.addChatMessage('ai', `❌ Hata: ${error.message}`);
@@ -10308,6 +10356,28 @@ Success: ${successCount} | Failed: ${failCount}
             
             // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
             await this.sendFeedbackToLLM(orders, verificationResults, executionErrors);
+        }
+
+        // 🎯 META-REFLECTION ENGINE: Track execution performance
+        if (this.contextMemory && executionMetrics) {
+            const executionSuccess = successCount > failCount;
+            const executionDuration = Date.now() - executionMetrics.startTime;
+            
+            this.contextMemory.trackAgentPerformance({
+                agentName: 'ExecutorAgent',
+                taskType: orders.mission ? orders.mission.split(' ')[0] : 'unknown',
+                success: executionSuccess,
+                duration: executionDuration,
+                errorType: executionSuccess ? null : (executionErrors[0] || 'unknown_error'),
+                metadata: {
+                    mission: orders.mission,
+                    totalSteps: orders.steps.length,
+                    successCount: successCount,
+                    failCount: failCount,
+                    verificationResults: verificationResults
+                }
+            });
+            console.log('📊 ExecutorAgent performance tracked in Meta-Reflection Engine');
         }
 
         this.refreshExplorer();

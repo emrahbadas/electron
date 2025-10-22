@@ -27,6 +27,11 @@ class ContextMemorySystem {
         this.missionSummaries = new Map(); // missionId → summary
         this.currentMissionId = null;
 
+        // 🎯 Meta-Reflection Engine: Agent performance tracking
+        this.agentPerformanceStats = new Map(); // agentName → stats
+        this.agentExecutionHistory = []; // Ordered list of agent executions
+        this.learningEnabled = true;
+
         // 🔄 Context refresh tracking
         this.lastRefreshTimestamp = Date.now();
         this.refreshInterval = 60000; // 1 minute
@@ -48,8 +53,9 @@ class ContextMemorySystem {
     /**
      * Add message to short-term buffer
      * @param {Object} message - Message object {role, content, timestamp, metadata}
+     * @param {Function} llmCall - Optional LLM call function for auto-summarization
      */
-    addMessage(message) {
+    addMessage(message, llmCall = null) {
         const enrichedMessage = {
             ...message,
             timestamp: message.timestamp || Date.now(),
@@ -62,7 +68,15 @@ class ContextMemorySystem {
 
         this.shortTermBuffer.push(enrichedMessage);
 
-        // Keep buffer at reasonable size
+        // Auto-summarize every 20 messages (Context Summarizer Agent)
+        if (llmCall && this.shortTermBuffer.length >= 20 && this.shortTermBuffer.length % 20 === 0) {
+            // Don't await - run in background
+            this.summarizeOldMessages(llmCall).catch(err => {
+                console.error('❌ Auto-summarization failed:', err);
+            });
+        }
+
+        // Keep buffer at reasonable size (fallback protection)
         if (this.shortTermBuffer.length > 50) {
             this.shortTermBuffer = this.shortTermBuffer.slice(-50);
         }
@@ -365,6 +379,131 @@ ${userRequest}
         };
     }
 
+    // ===== CONTEXT SUMMARIZER AGENT =====
+
+    /**
+     * Summarize old messages into condensed format
+     * Called automatically every 20 messages or manually
+     * @param {Function} llmCall - LLM call function for summarization
+     * @returns {Object} Summarization result
+     */
+    async summarizeOldMessages(llmCall = null) {
+        // Only summarize if we have enough messages
+        if (this.shortTermBuffer.length < 20) {
+            console.log('⏭️ Not enough messages to summarize (need 20+)');
+            return { summarized: false, reason: 'insufficient_messages' };
+        }
+
+        // Get messages to summarize (oldest 10 messages)
+        const messagesToSummarize = this.shortTermBuffer.slice(0, 10);
+        
+        if (!llmCall) {
+            console.warn('⚠️ No LLM call function provided, using simple summarization');
+            // Fallback: Simple text concatenation
+            const summary = this.simpleMessageSummary(messagesToSummarize);
+            return { summarized: true, method: 'simple', summary };
+        }
+
+        try {
+            // Build summarization prompt
+            const summaryPrompt = this.buildSummarizationPrompt(messagesToSummarize);
+            
+            // Call LLM for intelligent summarization
+            const llmSummary = await llmCall([
+                { role: 'user', content: summaryPrompt }
+            ], {
+                temperature: 0.3,
+                maxTokens: 150
+            });
+
+            // Store summary in long-term memory
+            const summaryId = `summary_${Date.now()}`;
+            const summaryEntry = {
+                id: summaryId,
+                timestamp: Date.now(),
+                originalMessages: messagesToSummarize.length,
+                summary: llmSummary,
+                messageRange: {
+                    first: messagesToSummarize[0].timestamp,
+                    last: messagesToSummarize[messagesToSummarize.length - 1].timestamp
+                }
+            };
+
+            // Remove summarized messages from short-term buffer
+            this.shortTermBuffer = this.shortTermBuffer.slice(10);
+
+            console.log(`📝 Context Summarizer: ${messagesToSummarize.length} messages → summary`);
+            
+            return { 
+                summarized: true, 
+                method: 'llm', 
+                summary: llmSummary,
+                messagesRemoved: messagesToSummarize.length 
+            };
+
+        } catch (error) {
+            console.error('❌ Context summarization failed:', error);
+            return { summarized: false, reason: 'llm_error', error: error.message };
+        }
+    }
+
+    /**
+     * Build summarization prompt for LLM
+     * @param {Array} messages - Messages to summarize
+     * @returns {string} Summarization prompt
+     */
+    buildSummarizationPrompt(messages) {
+        const messageText = messages.map((msg, idx) => 
+            `${idx + 1}. ${msg.role}: ${msg.content.substring(0, 200)}`
+        ).join('\n');
+
+        return `
+You are a context summarization assistant. Your job is to condense conversation history into 2-3 concise sentences.
+
+**Messages to summarize:**
+${messageText}
+
+**Instructions:**
+- Create a 2-3 sentence summary capturing the essence
+- Focus on: main topics, key decisions, important outcomes
+- Use past tense (e.g., "User requested...", "System created...")
+- Be factual and concise
+- DO NOT include greetings or meta-commentary
+
+**Summary:**`.trim();
+    }
+
+    /**
+     * Simple fallback summarization (no LLM)
+     * @param {Array} messages - Messages to summarize
+     * @returns {string} Simple summary
+     */
+    simpleMessageSummary(messages) {
+        const userMessages = messages.filter(m => m.role === 'user');
+        const topics = [...new Set(userMessages.map(m => {
+            // Extract key words (simple heuristic)
+            const words = m.content.split(' ').filter(w => w.length > 5);
+            return words[0] || 'unknown';
+        }))];
+
+        return `Conversation covered ${messages.length} messages about: ${topics.join(', ')}. Last update: ${new Date(messages[messages.length - 1].timestamp).toLocaleTimeString()}.`;
+    }
+
+    /**
+     * Check if summarization is needed and trigger automatically
+     * @param {Function} llmCall - LLM call function
+     * @returns {boolean} Whether summarization was triggered
+     */
+    async autoSummarizeIfNeeded(llmCall = null) {
+        // Trigger every 20 messages
+        if (this.shortTermBuffer.length >= 20 && this.shortTermBuffer.length % 20 === 0) {
+            console.log('🤖 Auto-summarization triggered (20 message threshold)');
+            await this.summarizeOldMessages(llmCall);
+            return true;
+        }
+        return false;
+    }
+
     // ===== MAINTENANCE & CLEANUP =====
 
     /**
@@ -375,10 +514,221 @@ ${userRequest}
         if (now - this.lastRefreshTimestamp > this.refreshInterval) {
             console.log('🔄 Context memory auto-refresh triggered');
             this.lastRefreshTimestamp = now;
-            
-            // Could trigger summarization here
-            // this.summarizeOldMessages();
         }
+    }
+
+    // ===== META-REFLECTION ENGINE =====
+
+    /**
+     * Track agent execution performance
+     * @param {Object} execution - Agent execution result
+     */
+    trackAgentPerformance(execution) {
+        if (!this.learningEnabled) return;
+
+        const { agentName, taskType, success, duration, errorType, metadata } = execution;
+
+        // Initialize agent stats if not exists
+        if (!this.agentPerformanceStats.has(agentName)) {
+            this.agentPerformanceStats.set(agentName, {
+                totalExecutions: 0,
+                successCount: 0,
+                failureCount: 0,
+                averageDuration: 0,
+                taskTypeStats: new Map(),
+                errorPatterns: new Map(),
+                lastExecution: null,
+                successRate: 0
+            });
+        }
+
+        const stats = this.agentPerformanceStats.get(agentName);
+
+        // Update execution counts
+        stats.totalExecutions++;
+        if (success) {
+            stats.successCount++;
+        } else {
+            stats.failureCount++;
+        }
+
+        // Update success rate
+        stats.successRate = (stats.successCount / stats.totalExecutions) * 100;
+
+        // Update average duration
+        const totalDuration = stats.averageDuration * (stats.totalExecutions - 1) + duration;
+        stats.averageDuration = totalDuration / stats.totalExecutions;
+
+        // Track task type performance
+        if (!stats.taskTypeStats.has(taskType)) {
+            stats.taskTypeStats.set(taskType, { attempts: 0, successes: 0 });
+        }
+        const taskStats = stats.taskTypeStats.get(taskType);
+        taskStats.attempts++;
+        if (success) taskStats.successes++;
+
+        // Track error patterns
+        if (!success && errorType) {
+            const errorCount = stats.errorPatterns.get(errorType) || 0;
+            stats.errorPatterns.set(errorType, errorCount + 1);
+        }
+
+        // Update last execution
+        stats.lastExecution = {
+            timestamp: Date.now(),
+            success,
+            duration,
+            taskType,
+            metadata
+        };
+
+        // Add to execution history
+        this.agentExecutionHistory.push({
+            agentName,
+            taskType,
+            success,
+            duration,
+            timestamp: Date.now(),
+            errorType,
+            metadata
+        });
+
+        // Keep history manageable (last 100 executions)
+        if (this.agentExecutionHistory.length > 100) {
+            this.agentExecutionHistory = this.agentExecutionHistory.slice(-100);
+        }
+
+        console.log(`📊 Meta-Reflection: ${agentName} tracked (${stats.successRate.toFixed(1)}% success)`);
+    }
+
+    /**
+     * Get agent performance statistics
+     * @param {string} agentName - Agent name to get stats for
+     * @returns {Object} Agent performance stats
+     */
+    getAgentStats(agentName) {
+        if (!this.agentPerformanceStats.has(agentName)) {
+            return null;
+        }
+
+        const stats = this.agentPerformanceStats.get(agentName);
+        
+        return {
+            agentName,
+            totalExecutions: stats.totalExecutions,
+            successRate: stats.successRate.toFixed(2) + '%',
+            averageDuration: Math.round(stats.averageDuration) + 'ms',
+            taskTypePerformance: Array.from(stats.taskTypeStats.entries()).map(([type, data]) => ({
+                taskType: type,
+                attempts: data.attempts,
+                successRate: ((data.successes / data.attempts) * 100).toFixed(1) + '%'
+            })),
+            topErrors: Array.from(stats.errorPatterns.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([error, count]) => ({ error, count })),
+            lastExecution: stats.lastExecution
+        };
+    }
+
+    /**
+     * Get all agent performance stats
+     * @returns {Array} Array of agent stats
+     */
+    getAllAgentStats() {
+        return Array.from(this.agentPerformanceStats.keys())
+            .map(agentName => this.getAgentStats(agentName))
+            .sort((a, b) => parseFloat(b.successRate) - parseFloat(a.successRate));
+    }
+
+    /**
+     * Get best performing agent for a specific task type
+     * @param {string} taskType - Task type to find best agent for
+     * @returns {string} Best agent name
+     */
+    getBestAgentForTask(taskType) {
+        let bestAgent = null;
+        let bestSuccessRate = 0;
+
+        for (const [agentName, stats] of this.agentPerformanceStats.entries()) {
+            const taskStats = stats.taskTypeStats.get(taskType);
+            if (taskStats && taskStats.attempts >= 3) { // Need at least 3 attempts
+                const successRate = (taskStats.successes / taskStats.attempts) * 100;
+                if (successRate > bestSuccessRate) {
+                    bestSuccessRate = successRate;
+                    bestAgent = agentName;
+                }
+            }
+        }
+
+        return bestAgent || 'RouterAgent'; // Default to RouterAgent
+    }
+
+    /**
+     * Get learning insights for Luma Supreme
+     * @returns {Object} Learning insights
+     */
+    getLearningInsights() {
+        const recentExecutions = this.agentExecutionHistory.slice(-20);
+        const recentFailures = recentExecutions.filter(e => !e.success);
+
+        return {
+            totalAgents: this.agentPerformanceStats.size,
+            totalExecutions: this.agentExecutionHistory.length,
+            recentSuccessRate: recentExecutions.length > 0 
+                ? ((recentExecutions.filter(e => e.success).length / recentExecutions.length) * 100).toFixed(1) + '%'
+                : 'N/A',
+            mostReliableAgent: this.getAllAgentStats()[0]?.agentName || 'None',
+            commonErrorPatterns: this.getCommonErrorPatterns(),
+            recommendations: this.generateRecommendations(recentFailures)
+        };
+    }
+
+    /**
+     * Get common error patterns across all agents
+     * @returns {Array} Common error patterns
+     */
+    getCommonErrorPatterns() {
+        const allErrors = new Map();
+        
+        for (const stats of this.agentPerformanceStats.values()) {
+            for (const [error, count] of stats.errorPatterns.entries()) {
+                allErrors.set(error, (allErrors.get(error) || 0) + count);
+            }
+        }
+
+        return Array.from(allErrors.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([error, count]) => ({ error, occurrences: count }));
+    }
+
+    /**
+     * Generate recommendations based on recent failures
+     * @param {Array} recentFailures - Recent failed executions
+     * @returns {Array} Recommendations
+     */
+    generateRecommendations(recentFailures) {
+        const recommendations = [];
+
+        if (recentFailures.length > 5) {
+            recommendations.push('High failure rate detected. Consider reviewing agent prompts.');
+        }
+
+        const errorCounts = new Map();
+        recentFailures.forEach(f => {
+            if (f.errorType) {
+                errorCounts.set(f.errorType, (errorCounts.get(f.errorType) || 0) + 1);
+            }
+        });
+
+        for (const [error, count] of errorCounts.entries()) {
+            if (count >= 3) {
+                recommendations.push(`Recurring error pattern: ${error} (${count} times). Needs attention.`);
+            }
+        }
+
+        return recommendations;
     }
 
     /**
@@ -388,9 +738,11 @@ ${userRequest}
         this.shortTermBuffer = [];
         this.phaseSnapshots.clear();
         this.missionSummaries.clear();
+        this.agentPerformanceStats.clear();
+        this.agentExecutionHistory = [];
         this.currentPhaseId = null;
         this.currentMissionId = null;
-        console.log('🧹 Context memory cleared');
+        console.log('🧹 Context memory cleared (including agent performance stats)');
     }
 
     /**
@@ -404,7 +756,12 @@ ${userRequest}
             missionSummaries: this.missionSummaries.size,
             currentPhaseId: this.currentPhaseId,
             currentMissionId: this.currentMissionId,
-            memoryAge: Date.now() - this.lastRefreshTimestamp
+            memoryAge: Date.now() - this.lastRefreshTimestamp,
+            agentPerformance: {
+                totalAgents: this.agentPerformanceStats.size,
+                totalExecutions: this.agentExecutionHistory.length,
+                trackingEnabled: this.learningEnabled
+            }
         };
     }
 }
