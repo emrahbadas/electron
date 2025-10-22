@@ -3294,10 +3294,16 @@ class KodCanavari {
                         }
                         
                         // Success - show Supreme Agent decision and result
+                        
+                        // FIX: Convert intent object to string if needed
+                        const intentDisplay = typeof supremeResult.intent === 'object' 
+                            ? (supremeResult.intent.intentType || supremeResult.intent.type || JSON.stringify(supremeResult.intent))
+                            : supremeResult.intent;
+                        
                         const summaryMessage = `
 🌌 **Supreme Agent Decision**
 
-**Intent:** ${supremeResult.intent}
+**Intent:** ${intentDisplay}
 **Agent Assigned:** ${supremeResult.agent}
 **Task Priority:** ${supremeResult.task?.priority || 'N/A'}/10
 
@@ -10655,7 +10661,8 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
 
                 // Re-trigger with SPECIFIC phase 2 prompt
                 setTimeout(() => {
-                    window.kodCanavari.chatMessage(phase2Prompt, false);
+                    // FIX: Use sendChatMessage instead of chatMessage
+                    this.sendChatMessage(phase2Prompt);
                 }, 3000);
             } else if (isPhase2) {
                 // Phase 2 completed, don't loop again!
