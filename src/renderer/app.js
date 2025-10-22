@@ -3133,6 +3133,15 @@ class KodCanavari {
             }
 
             message = chatInput.value.trim();
+            
+            // 🛑 ChatGPT Fix: Update session context with user input
+            if (this.sessionContext) {
+                this.sessionContext.updateLastUserInput(message);
+                // Clear previous abort state for new user commands unless they contain abort keywords
+                if (!message.includes("hayır") && !message.includes("iptal") && !message.includes("dur")) {
+                    this.sessionContext.clearUserAbort();
+                }
+            }
 
             // 🔄 SMART PHASE RESET: Only reset if NEW project detected
             // Keywords indicating continuation: "devam", "phase", "adım", "sonraki"
@@ -9779,6 +9788,16 @@ Now provide the CORRECTED response (pure JSON only):`;
     }
 
     async executeNightOrders(orders, approvalToken = null) {
+        // 🛑 ChatGPT Fix: Check for user abort before execution
+        if (this.sessionContext?.userAbort === true) {
+            console.log("🛑 NightOrders aborted by user.");
+            return {
+                success: false,
+                reason: "User cancelled execution",
+                aborted: true
+            };
+        }
+        
         // ✅ NEW: Proper mutex-based atomic execution (replaces old flag system)
         await this.nightOrdersMutex.acquire();
         

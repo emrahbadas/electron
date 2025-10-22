@@ -1,7 +1,6 @@
 {
   "name": "kayradeniz-kod-canavari",
   "version": "1.0.0",
-  "type": "module",
   "description": "KayraDeniz Kod Canavarı - AI Powered Code Assistant",
   "main": "src/main/main.js",
   "scripts": {
