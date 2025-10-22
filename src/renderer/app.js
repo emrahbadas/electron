@@ -5901,6 +5901,16 @@ Not:
                 content: systemPrompt || defaultSystemPrompt
             }];
 
+            // 🐛 DEBUG: Check chatHistory state
+            console.log('📜 chatHistory exists?', !!this.chatHistory);
+            console.log('📜 chatHistory is array?', Array.isArray(this.chatHistory));
+            console.log('📜 chatHistory length:', this.chatHistory?.length);
+            
+            if (!this.chatHistory) {
+                console.warn('⚠️ chatHistory is undefined, initializing...');
+                this.chatHistory = [];
+            }
+
             const recentHistory = this.chatHistory.slice(-10);
             recentHistory.forEach(msg => {
                 if (msg.type === 'user') {
