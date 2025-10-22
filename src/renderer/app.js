@@ -1818,6 +1818,46 @@ class KodCanavari {
             await this.checkMCPAvailability();
         }, 1000);
 
+        // 🔧 ChatGPT FIX: Event Bus Reflexion Bridge
+        // Listen for PHASE 2 auto-trigger events from Reflexion module
+        if (this.eventBus) {
+            console.log('🎯 Setting up EventBus Reflexion Bridge...');
+            
+            this.eventBus.on('executor:start', async (payload) => {
+                console.log('🚀 [EventBus] executor:start event received:', payload);
+                
+                try {
+                    if (payload && payload.orders) {
+                        // Validate orders structure
+                        if (!payload.orders.mission || !payload.orders.steps) {
+                            console.error('❌ Invalid Night Orders structure:', payload.orders);
+                            return;
+                        }
+                        
+                        // Mark as Phase 2 if coming from reflexion
+                        if (payload.isPhase2) {
+                            this.phaseContext.currentPhase = 2;
+                            this.phaseContext.lastMission = payload.orders.mission;
+                        }
+                        
+                        // Direct execution via executeNightOrders (bypasses UI mutex)
+                        console.log('⚙️ [EventBus] Executing Night Orders directly...');
+                        await this.executeNightOrders(payload.orders, payload.options || {});
+                        
+                    } else {
+                        console.warn('⚠️ [EventBus] executor:start payload missing orders');
+                    }
+                } catch (error) {
+                    console.error('❌ [EventBus] executor:start handler failed:', error);
+                    this.addChatMessage('system', `❌ Otomatik yürütme hatası: ${error.message}`);
+                }
+            });
+            
+            console.log('✅ EventBus Reflexion Bridge initialized');
+        } else {
+            console.warn('⚠️ EventBus not available, skipping Reflexion Bridge setup');
+        }
+
         console.log('✅ Uygulama başarıyla başlatıldı!');
     }
 
@@ -3144,8 +3184,9 @@ class KodCanavari {
             }
 
             // 🔄 SMART PHASE RESET: Only reset if NEW project detected
-            // Keywords indicating continuation: "devam", "phase", "adım", "sonraki"
-            isContinuation = /\b(devam|phase|adım|sonraki|kaldığı|tamamla)\b/i.test(message);
+            // Keywords indicating continuation: "devam", "phase", "adım", "sonraki", "düzelt", "otomatik"
+            // ChatGPT Fix: Added "düzelt", "otomatik", "eksik" to prevent reset during auto-fix
+            isContinuation = /\b(devam|phase|adım|sonraki|kaldığı|tamamla|düzelt|otomatik|eksik|phase\s*2)\b/i.test(message);
             
             if (!isContinuation) {
                 // New project - reset phase context
@@ -3154,7 +3195,7 @@ class KodCanavari {
                 this.phaseContext.lastMission = null;
                 console.log('🔄 Phase context reset - NEW PROJECT detected');
             } else {
-                console.log('➡️ Phase continuation detected - keeping phase context');
+                console.log('➡️ Phase continuation detected - keeping phase context (phase:', this.phaseContext.currentPhase, ')');
             }
             
             chatInput.value = '';
@@ -10659,17 +10700,17 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
 ⚠️ DİKKAT: Bu bir PHASE 2 görevi! Tekrar Phase 1 yapma, sadek eksikleri tamamla!
 `;
 
-                // CRITICAL FIX: Execute PHASE 2 directly via executeUnifiedAgentTask
-                // NOT via sendChatMessage (which starts new conversation and loses phase context)
+                // 🔧 ChatGPT FIX: Use EventBus + Direct execution (hybrid approach)
+                // This ensures execution even if EventBus fails
                 setTimeout(async () => {
                     try {
-                        console.log('🚀 [PHASE 2] Auto-executing via unified agent task...');
+                        console.log('🚀 [PHASE 2] Triggering auto-execution...');
                         
                         // Mark as phase 2 in session context
                         this.phaseContext.currentPhase = 2;
                         this.phaseContext.lastMission = orders.mission;
                         
-                        // Execute via unified agent system (preserves phase context)
+                        // PRIMARY: Direct execution (most reliable)
                         await this.executeUnifiedAgentTask(phase2Prompt);
                         
                     } catch (error) {
