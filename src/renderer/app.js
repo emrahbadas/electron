@@ -5849,6 +5849,11 @@ Not:
 
         let messages = [];
 
+        // 🐛 DEBUG: Log input type and value
+        console.log('📥 callLLM input type:', typeof message);
+        console.log('📥 callLLM input value:', message);
+        console.log('📥 Is array?', Array.isArray(message));
+
         if (Array.isArray(message)) {
             // Pre-constructed message list (e.g., agent mode)
             messages = message.map(msg => {
@@ -5906,6 +5911,15 @@ Not:
             });
 
             messages.push({ role: 'user', content: message });
+        }
+
+        // 🐛 DEBUG: Validate messages before deduplication
+        console.log('📋 Messages before dedup:', messages);
+        console.log('📋 Messages is array?', Array.isArray(messages));
+        
+        if (!Array.isArray(messages)) {
+            console.error('❌ CRITICAL: messages is not an array!', messages);
+            throw new Error(`messages.map is not a function - messages type: ${typeof messages}`);
         }
 
         // CRITICAL: Deduplicate messages to prevent rate limiting
