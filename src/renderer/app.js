@@ -10,6 +10,9 @@ const {
     logDecisionChain 
 } = require('../agents/agent-hierarchy.js');
 
+// ===== DYNAMIC CONTEXT MEMORY SYSTEM (ChatGPT Fix for 10-message limit) =====
+const { ContextMemorySystem, getContextMemory } = require('./context-memory.js');
+
 // ===== ASYNC MUTEX PATTERN (Race Condition Prevention) =====
 // Proper mutex implementation to prevent double execution
 class AsyncMutex {
@@ -1315,6 +1318,15 @@ class KodCanavari {
         console.log('✅ Session Context initialized');
         if (!window.kodCanavari) window.kodCanavari = {};
         window.kodCanavari.sessionContext = this.sessionContext;
+        
+        // 🧠 DYNAMIC CONTEXT MEMORY (ChatGPT Fix: 3-tier memory architecture)
+        this.contextMemory = getContextMemory();
+        console.log('✅ Context Memory System initialized');
+        window.kodCanavari.contextMemory = this.contextMemory;
+        const memStats = this.contextMemory.getStats();
+        console.log(`   - Short-term: ${memStats.shortTermMessages} messages`);
+        console.log(`   - Phase snapshots: ${memStats.phaseSnapshots}`);
+        console.log(`   - Mission summaries: ${memStats.missionSummaries}`);
         
         // 🔍 AGENT TRACE SYSTEM (OpenAI Agents SDK style tracing)
         this.traceSystem = new AgentTraceSystem(this.eventBus);
@@ -7861,7 +7873,7 @@ Please consider the conversation context when responding. Reference previous dis
         return contextPrompt;
     }
 
-    // Enhanced storage with context
+    // Enhanced storage with context + Context Memory integration
     addContextualChatMessage(type, content, metadata = {}) {
         const now = new Date();
         const contextEntry = {
@@ -7878,6 +7890,16 @@ Please consider the conversation context when responding. Reference previous dis
         // Store with enhanced context
         this.chatHistory.push(contextEntry);
 
+        // 🧠 ChatGPT FIX: Add to Context Memory System
+        if (this.contextMemory) {
+            this.contextMemory.addMessage({
+                role: type === 'user' ? 'user' : 'assistant',
+                content: content,
+                timestamp: now,
+                metadata: metadata
+            });
+        }
+
         // Also display in UI
         this.addChatMessage(type, content);
 
@@ -7890,6 +7912,23 @@ Please consider the conversation context when responding. Reference previous dis
     async executeUnifiedAgentTask(userRequest, preAssignedRoute = null) {
         // Clear any previous agent state
         this.clearAgentState();
+
+        // 🧠 ChatGPT FIX: Start new mission tracking
+        const missionId = `mission_${Date.now()}`;
+        if (this.contextMemory) {
+            this.contextMemory.saveMissionSummary({
+                missionId,
+                mission: userRequest,
+                intent: 'analyzing',
+                startTime: Date.now(),
+                outcome: 'in-progress',
+                phases: [],
+                totalPhases: 0,
+                completedPhases: 0,
+                condensedSummary: `Mission started: ${userRequest.substring(0, 100)}`
+            });
+            console.log(`📚 Mission tracking started: ${missionId}`);
+        }
 
         // Check if user is responding to a pending action
         if (this.pendingAction && (userRequest.toLowerCase().includes('evet') || userRequest.toLowerCase().includes('yes'))) {
@@ -8396,6 +8435,28 @@ AKILLI ÖRNEKLER:
         // User reported: Agent forgets "hesap makinesi" request and returns to "blog platform"
         const recentContext = this.getConversationContext(10);
 
+        // 🧠 ChatGPT FIX: Dynamic Context Injection (3-tier memory)
+        let dynamicContextText = '';
+        if (this.contextMemory) {
+            const dynamicContext = this.contextMemory.getDynamicContext({
+                includeShortTerm: true,
+                shortTermLimit: 10,
+                includePhaseSnapshot: true,
+                includeMissionSummary: true
+            });
+            
+            const formattedContext = this.contextMemory.formatContextForPrompt(dynamicContext);
+            if (formattedContext) {
+                dynamicContextText = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧠 **DYNAMIC CONTEXT MEMORY** (ChatGPT 3-Tier Architecture):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${formattedContext}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ This context supersedes the 10-message limit - use ALL information above!
+`;
+            }
+        }
+
         let conversationContextText = '';
         if (recentContext) {
             // 🔧 FIX #7: Extract project name from topics to prevent context pollution
@@ -8455,7 +8516,7 @@ ${roleContext}
 
 Kullanıcı İsteği: "${userRequest}"
 ${route ? `Seçilen Rol: ${route.role}` : ''}
-${route ? `Öncelikli Tool: ${route.force_tool}` : ''}${workspaceContext}${conversationContextText}
+${route ? `Öncelikli Tool: ${route.force_tool}` : ''}${workspaceContext}${dynamicContextText}${conversationContextText}
 ${projectContextText}${phaseContextText}
 
 ⚠️ **CRITICAL CONTEXT WARNING**:
@@ -10231,6 +10292,20 @@ Success: ${successCount} | Failed: ${failCount}
         if (orders.currentPhase && orders.totalPhases) {
             await this.handlePhaseTransition(orders.currentPhase, orders.totalPhases, successCount, failCount);
         } else {
+            // 🧠 ChatGPT FIX: Capture phase snapshot BEFORE feedback
+            if (this.contextMemory && this.phaseContext) {
+                this.contextMemory.capturePhaseSnapshot({
+                    currentPhase: this.phaseContext.currentPhase,
+                    mission: orders.mission,
+                    completedFiles: this.phaseContext.completedFiles,
+                    status: successCount > failCount ? 'success' : 'partial',
+                    orders: orders,
+                    verificationResults: verificationResults,
+                    analysisReport: null // Will be filled after sendFeedbackToLLM
+                });
+                console.log('📸 Phase snapshot captured for context memory');
+            }
+            
             // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
             await this.sendFeedbackToLLM(orders, verificationResults, executionErrors);
         }
