@@ -3423,17 +3423,17 @@ class KodCanavari {
                     await this.executeUnifiedAgentTask(contextAwarePrompt);
                 }
             } else {
-                // ✨ Enhanced Ask Mode - Unified LLM call (OpenAI or Claude)
+                // ✨ Enhanced Ask Mode - Unified LLM call (OpenAI or Claude) WITH MEMORY
                 const enhancedPrompt = this.addExecutionContext(contextAwarePrompt);
 
-                // Convert to messages format for unified LLM interface
-                const messages = [
-                    { role: 'user', content: enhancedPrompt }
-                ];
-
+                // 🧠 CRITICAL FIX: Pass as STRING to trigger chatHistory inclusion in callLLM
+                // When callLLM receives a string, it automatically adds last 10 messages from this.chatHistory
+                // This enables conversation memory in ASK mode
+                
                 // Use unified LLM interface (routes to OpenAI or Claude)
                 const response = await this.queueOpenAIRequest(async () => {
-                    return await this.callLLM(messages, {
+                    // Pass enhancedPrompt as STRING, not array - this triggers history inclusion
+                    return await this.callLLM(enhancedPrompt, {
                         temperature: 0.7,
                         maxTokens: 4096
                     });
