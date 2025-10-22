@@ -163,8 +163,21 @@ function validateOverride(existingDecision, newAgentName, newDecision) {
     
     const existingAgent = existingDecision._hierarchy.agent;
     
-    // Orchestrator (Luma) kararı ASLA override edilemez
+    // Orchestrator (Luma) kararı ASLA override edilemez - ANCAK kullanıcı iptal ederse override edilir
     if (existingDecision._hierarchy.isFinal) {
+        // 🛑 ChatGPT Fix: Kullanıcı "hayır" veya "iptal" derse override et
+        const sessionContext = window.kodCanavari?.sessionContext || {};
+        const lastUserInput = sessionContext.lastUserInput || '';
+        
+        if (lastUserInput.includes("hayır") || lastUserInput.includes("iptal") || lastUserInput.includes("dur")) {
+            console.log('🛑 User abort detected - overriding FINAL decision');
+            return {
+                allowed: true,
+                decision: { override: true, reason: "UserAbort", userCancelled: true },
+                reason: "User explicitly cancelled - FINAL decision overridden"
+            };
+        }
+        
         return {
             allowed: false,
             decision: existingDecision, // Eski kararı koru

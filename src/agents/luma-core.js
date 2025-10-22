@@ -66,7 +66,7 @@ export class LumaCore {
             "unclear": "exploration"
         };
         
-        console.log('🔍 [DEBUG] Intent mapped:', intentMap[nature.type]);
+        console.log('🔍 [DEBUG] Intent mapped:', intentMap[nature.type] || 'unmapped');
         
         // ✅ Greeting signals (selamlaşma)
         if (text.match(/^(selam|merhaba|hey|hi|hello|günaydın|iyi akşamlar|nasılsın|naber)[\s!.?]*$/i)) {
@@ -113,7 +113,7 @@ export class LumaCore {
 
         // 🧠 INTROSPECTION FALLBACK: "Ne? Neden? Niçin?" sistemi
         let intent = intentMap[nature.type] || "exploration";
-        let responseMode = this.determineResponseMode(message, nature);  // ✅ FIX: Correct parameter order
+        let responseMode = this.determineResponseMode(message, String(nature.type || 'unknown'));  // ✅ FIX: Cast to string
         let confidence = nature.confidence || this.calculateConfidence(text, nature);
         
         // ✅ FIX: Intent mapping boşluklarını doldur
@@ -152,7 +152,7 @@ export class LumaCore {
         // ✅ FIX: Use intentMap for default routing
         const finalIntent = {
             intent: intent,  // ✅ Updated intent with fallback
-            nature: nature.type,
+            nature: String(nature.type || nature.intentType || 'unknown'),  // 🛠️ ChatGPT Fix: Cast to string
             requiresTools: nature.needsTools,
             conversational: nature.type === "discussion" || nature.type === "simple_chat",
             reasoning: nature.reasoning,
@@ -163,7 +163,7 @@ export class LumaCore {
             cognitiveIntent: cognitiveIntent
         };
         
-        console.log('🔍 [DEBUG] analyzeIntent() returning:', finalIntent);
+        console.log('🔍 [DEBUG] analyzeIntent() returning finalIntent with nature:', finalIntent.nature);
         
         return finalIntent;
     }

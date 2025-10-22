@@ -71,6 +71,36 @@ class CognitiveDivergenceLayer {
      */
     async decideStrategy(projectContext) {
         console.log('🤔 Cognitive Divergence: Analyzing project...');
+        
+        // 🛠️ ChatGPT Fix: Workspace analizi ekle eğer projectType undefined ise
+        if (!projectContext.projectType || !projectContext.description) {
+            console.log('⚙️ Missing project context - analyzing workspace...');
+            
+            const workspaceRoot = window.kodCanavari?.workspaceRoot || './';
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                
+                const files = fs.readdirSync(workspaceRoot);
+                console.log('📁 Files found:', files.slice(0, 10));
+                
+                if (files.length > 0) {
+                    projectContext.projectType = this._detectProjectType(files);
+                    projectContext.description = this._summarizeProject(files, workspaceRoot);
+                    console.log('🔍 Auto-detected project type:', projectContext.projectType);
+                    console.log('📝 Auto-generated description:', projectContext.description?.substring(0, 100));
+                } else {
+                    console.log('📂 Empty workspace detected');
+                    projectContext.projectType = "empty";
+                    projectContext.description = "Empty workspace - new project";
+                }
+            } catch (error) {
+                console.warn('⚠️ Workspace analysis failed:', error.message);
+                projectContext.projectType = "unknown";
+                projectContext.description = "Could not analyze workspace";
+            }
+        }
+        
         console.log('   Project Type:', projectContext.projectType);
         console.log('   Description:', projectContext.description?.substring(0, 100));
         
@@ -372,6 +402,95 @@ class CognitiveDivergenceLayer {
         }
         
         console.log(`📝 Decision recorded: ${decision.strategy}`);
+    }
+
+    /**
+     * 🔍 ChatGPT Fix: Dosyalardan proje tipini tespit et
+     */
+    _detectProjectType(files) {
+        const fileNames = files.join(' ').toLowerCase();
+        
+        // Dosya bazlı tespit
+        if (files.includes('package.json')) {
+            const content = this._readFileContent('package.json');
+            if (content.includes('react')) return 'react-app';
+            if (content.includes('express')) return 'api-server';
+            if (content.includes('electron')) return 'desktop-app';
+            return 'nodejs-project';
+        }
+        
+        if (files.includes('index.html') && files.includes('script.js')) {
+            const content = this._readFileContent('index.html') + this._readFileContent('script.js');
+            if (/hesap\s*makinesi|calculator/i.test(content)) return 'calculator';
+            if (/game|oyun|guess/i.test(content)) return 'game';
+            if (/todo|görev/i.test(content)) return 'todo-app';
+            return 'web-app';
+        }
+        
+        if (files.includes('README.md')) {
+            const content = this._readFileContent('README.md');
+            if (/blog|makale/i.test(content)) return 'blog-platform';
+            if (/e-commerce|shop|mağaza/i.test(content)) return 'e-commerce';
+            if (/portfolio|cv|resume/i.test(content)) return 'portfolio';
+        }
+        
+        return 'unknown-project';
+    }
+
+    /**
+     * 📝 ChatGPT Fix: Proje özetini oluştur
+     */
+    _summarizeProject(files, workspaceRoot) {
+        let summary = `Proje dosyaları: ${files.length} dosya. `;
+        
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            
+            // README.md varsa oku
+            if (files.includes('README.md')) {
+                const readmeContent = fs.readFileSync(path.join(workspaceRoot, 'README.md'), 'utf-8');
+                summary += `README: ${readmeContent.substring(0, 200)}...`;
+                return summary;
+            }
+            
+            // package.json varsa oku
+            if (files.includes('package.json')) {
+                const packageContent = fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf-8');
+                const pkg = JSON.parse(packageContent);
+                summary += `Paket: ${pkg.name || 'unnamed'}, Açıklama: ${pkg.description || 'no description'}`;
+                return summary;
+            }
+            
+            // index.html varsa oku
+            if (files.includes('index.html')) {
+                const htmlContent = fs.readFileSync(path.join(workspaceRoot, 'index.html'), 'utf-8');
+                const titleMatch = htmlContent.match(/<title>(.*?)<\/title>/i);
+                if (titleMatch) {
+                    summary += `HTML başlık: ${titleMatch[1]}`;
+                    return summary;
+                }
+            }
+            
+        } catch (error) {
+            console.warn('⚠️ Could not read project files:', error.message);
+        }
+        
+        return summary + "Dosya içeriği okunamadı.";
+    }
+
+    /**
+     * 📄 Helper: Dosya içerik okuma
+     */
+    _readFileContent(fileName) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const workspaceRoot = window.kodCanavari?.workspaceRoot || './';
+            return fs.readFileSync(path.join(workspaceRoot, fileName), 'utf-8');
+        } catch (error) {
+            return '';
+        }
     }
 }
 

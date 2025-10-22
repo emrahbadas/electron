@@ -19,7 +19,11 @@ class SessionContext {
             startedAt: Date.now(),
             lastUpdated: Date.now(),
             
-            // 📍 Current State
+            // � ChatGPT Fix: User abort control
+            userAbort: false,
+            lastUserInput: "",
+            
+            // �📍 Current State
             currentProject: {
                 name: null,
                 path: null,
@@ -290,6 +294,29 @@ class SessionContext {
         };
         
         console.log('🗑️ Session context reset');
+    }
+    
+    /**
+     * 🛑 ChatGPT Fix: User abort controls
+     */
+    setUserAbort(value = true) {
+        this.context.userAbort = value;
+        this.context.lastUpdated = Date.now();
+        console.log(`🛑 User abort set to: ${value}`);
+    }
+    
+    updateLastUserInput(input) {
+        this.context.lastUserInput = input || "";
+        this.context.lastUpdated = Date.now();
+        
+        // Auto-detect abort keywords
+        if (input && (input.includes("hayır") || input.includes("iptal") || input.includes("dur"))) {
+            this.setUserAbort(true);
+        }
+    }
+    
+    clearUserAbort() {
+        this.setUserAbort(false);
     }
     
     /**
