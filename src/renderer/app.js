@@ -10656,13 +10656,26 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
 - Her dosya en az 100 satır olmalı (gerçek, çalışan kod)
 - TODO veya placeholder bırakma, TAM ÇALIŞAN kod yaz
 
-⚠️ DİKKAT: Bu bir PHASE 2 görevi! Tekrar Phase 1 yapma, sadece eksikleri tamamla!
+⚠️ DİKKAT: Bu bir PHASE 2 görevi! Tekrar Phase 1 yapma, sadek eksikleri tamamla!
 `;
 
-                // Re-trigger with SPECIFIC phase 2 prompt
-                setTimeout(() => {
-                    // FIX: Use sendChatMessage instead of chatMessage
-                    this.sendChatMessage(phase2Prompt);
+                // CRITICAL FIX: Execute PHASE 2 directly via executeUnifiedAgentTask
+                // NOT via sendChatMessage (which starts new conversation and loses phase context)
+                setTimeout(async () => {
+                    try {
+                        console.log('🚀 [PHASE 2] Auto-executing via unified agent task...');
+                        
+                        // Mark as phase 2 in session context
+                        this.phaseContext.currentPhase = 2;
+                        this.phaseContext.lastMission = orders.mission;
+                        
+                        // Execute via unified agent system (preserves phase context)
+                        await this.executeUnifiedAgentTask(phase2Prompt);
+                        
+                    } catch (error) {
+                        console.error('❌ [PHASE 2] Auto-execution failed:', error);
+                        this.addChatMessage('system', `❌ PHASE 2 başlatılamadı: ${error.message}`);
+                    }
                 }, 3000);
             } else if (isPhase2) {
                 // Phase 2 completed, don't loop again!
