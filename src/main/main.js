@@ -1636,3 +1636,299 @@ ipcMain.handle('continue-stop', async (event) => {
     return { success: false, error: error.message };
   }
 });
+
+// ============================================
+// MCP ROUTER - DUAL AI SYSTEM (OpenAI + Claude)
+// ============================================
+const MCPRouter = require('../ai/mcp-router');
+let mcpRouter = null;
+
+// MCP Router'ı başlat
+ipcMain.handle('mcp-router:initialize', async (event, config) => {
+  try {
+    if (!mcpRouter) {
+      mcpRouter = new MCPRouter();
+      
+      // Events'i main window'a forward et
+      mcpRouter.on('claude:streamingChunk', (chunk) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('claude:streamingChunk', chunk);
+        }
+      });
+      
+      mcpRouter.on('claude:toolUsed', (tool) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('claude:toolUsed', tool);
+        }
+      });
+      
+      mcpRouter.on('claude:messageComplete', (data) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('claude:messageComplete', data);
+        }
+      });
+      
+      mcpRouter.on('providerSwitched', (data) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('mcp-router:providerSwitched', data);
+        }
+      });
+    }
+    
+    const result = await mcpRouter.initialize(config);
+    console.log('[Main] MCP Router initialized:', result);
+    return result;
+  } catch (error) {
+    console.error('[Main] MCP Router initialization error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// AI provider değiştir (OpenAI ↔ Claude)
+ipcMain.handle('mcp-router:switch-provider', async (event, provider) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    const result = mcpRouter.switchProvider(provider);
+    console.log(`[Main] Provider switched to: ${provider}`);
+    return result;
+  } catch (error) {
+    console.error('[Main] Provider switch error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Mesaj gönder (aktif provider'a route edilir)
+ipcMain.handle('mcp-router:send-message', async (event, message, context) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    console.log(`[Main] Sending message via ${mcpRouter.activeProvider}...`);
+    const result = await mcpRouter.sendMessage(message, context);
+    return result;
+  } catch (error) {
+    console.error('[Main] Send message error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Tool çalıştır (aktif provider'a route edilir)
+ipcMain.handle('mcp-router:execute-tool', async (event, toolName, params) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    console.log(`[Main] Executing tool: ${toolName} via ${mcpRouter.activeProvider}`);
+    const result = await mcpRouter.executeTool(toolName, params);
+    return result;
+  } catch (error) {
+    console.error('[Main] Execute tool error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Available tools listele
+ipcMain.handle('mcp-router:list-tools', async (event) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    const result = mcpRouter.listTools();
+    return result;
+  } catch (error) {
+    console.error('[Main] List tools error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Conversation history temizle
+ipcMain.handle('mcp-router:clear-history', async (event) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    const result = mcpRouter.clearHistory();
+    console.log(`[Main] History cleared for ${mcpRouter.activeProvider}`);
+    return result;
+  } catch (error) {
+    console.error('[Main] Clear history error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Router status
+ipcMain.handle('mcp-router:get-status', async (event) => {
+  try {
+    if (!mcpRouter) {
+      return { initialized: false };
+    }
+    
+    const status = mcpRouter.getStatus();
+    return { success: true, ...status };
+  } catch (error) {
+    console.error('[Main] Get status error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Router istatistikleri
+ipcMain.handle('mcp-router:get-stats', async (event) => {
+  try {
+    if (!mcpRouter) {
+      return { success: false, error: 'Not initialized' };
+    }
+    
+    const stats = mcpRouter.getStats();
+    return { success: true, stats: stats };
+  } catch (error) {
+    console.error('[Main] Get stats error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Claude model değiştir
+ipcMain.handle('mcp-router:set-claude-model', async (event, model) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    const result = mcpRouter.setClaudeModel(model);
+    return result;
+  } catch (error) {
+    console.error('[Main] Set Claude model error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// OpenAI model değiştir
+ipcMain.handle('mcp-router:set-openai-model', async (event, model) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    const result = mcpRouter.setOpenAIModel(model);
+    return result;
+  } catch (error) {
+    console.error('[Main] Set OpenAI model error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Claude API key güncelle (runtime'da)
+ipcMain.handle('mcp-router:update-claude-key', async (event, apiKey) => {
+  try {
+    if (!mcpRouter) {
+      throw new Error('MCP Router not initialized');
+    }
+    
+    const result = await mcpRouter.updateClaudeApiKey(apiKey);
+    console.log('[Main] Claude API key updated');
+    return result;
+  } catch (error) {
+    console.error('[Main] Update Claude API key error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// API KEY MANAGEMENT HANDLERS
+// ============================================
+
+/**
+ * Save API keys to encrypted electron-store
+ */
+ipcMain.handle('save-api-keys', async (event, { openaiKey, claudeKey }) => {
+  try {
+    if (openaiKey) {
+      store.set('openaiApiKey', openaiKey);
+      console.log('[Main] 💾 OpenAI API key saved');
+    }
+    if (claudeKey) {
+      store.set('claudeApiKey', claudeKey);
+      console.log('[Main] 💾 Claude API key saved');
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('[Main] ❌ Save API keys error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Load API keys from electron-store
+ */
+ipcMain.handle('load-api-keys', async (event) => {
+  try {
+    const openaiKey = store.get('openaiApiKey', '');
+    const claudeKey = store.get('claudeApiKey', '');
+    
+    console.log('[Main] 📥 API keys loaded:', {
+      openai: openaiKey ? 'SET' : 'NOT SET',
+      claude: claudeKey ? 'SET' : 'NOT SET'
+    });
+    
+    return {
+      success: true,
+      openaiKey: openaiKey,
+      claudeKey: claudeKey
+    };
+  } catch (error) {
+    console.error('[Main] ❌ Load API keys error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Test Claude connection with API key
+ */
+ipcMain.handle('test-claude-connection', async (event, apiKey) => {
+  try {
+    if (!apiKey || !apiKey.startsWith('sk-ant-')) {
+      throw new Error('Invalid Claude API key format. Must start with sk-ant-');
+    }
+    
+    // Initialize Claude service temporarily for test
+    const ClaudeMCPService = require('../ai/claude-mcp-service');
+    const testService = new ClaudeMCPService();
+    
+    await testService.initialize(apiKey, app.getPath('userData'));
+    
+    console.log('[Main] ✅ Claude connection test successful');
+    return { success: true, message: 'Claude API key verified successfully' };
+  } catch (error) {
+    console.error('[Main] ❌ Claude connection test failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Clear all API keys from store
+ */
+ipcMain.handle('clear-api-keys', async (event) => {
+  try {
+    store.delete('openaiApiKey');
+    store.delete('claudeApiKey');
+    console.log('[Main] 🗑️  API keys cleared');
+    return { success: true };
+  } catch (error) {
+    console.error('[Main] ❌ Clear API keys error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// END API KEY MANAGEMENT HANDLERS
+// ============================================
+
+// ============================================
+// END MCP ROUTER HANDLERS
+// ============================================

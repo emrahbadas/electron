@@ -1,0 +1,24 @@
+* {
+    box-sizing: border-box;
+}
+body {
+    background-color: #0a2342;
+    color: #e6f0f3;
+    font-family: Arial, sans-serif;
+}
+#calculator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+button {
+    background-color: #155e75;
+    border: none;
+    color: #e6f0f3;
+    padding: 15px;
+    margin: 5px;
+    cursor: pointer;
+}
+button:hover {
+    transform: scale(1.1);
+}

@@ -36,7 +36,7 @@
                     <!-- Window controls will be handled by Electron -->
                 </div>
 
-                <!-- Top AI Controls (API Key, Model, Temperature) -->
+                <!-- Top AI Controls (API Key Only) -->
                 <div class="top-ai-controls" id="topAiControls">
                     <!-- ✨ OpenAI API Key -->
                     <div class="top-ai-item">
@@ -54,30 +54,6 @@
                         <button class="save-btn" id="topSaveClaudeApiKey" title="Kaydet Claude Key">
                             <i class="fas fa-save"></i>
                         </button>
-                    </div>
-
-                    <div class="top-ai-item">
-                        <select id="topModelSelect" class="config-select" aria-label="OpenAI modeli seç"
-                            title="OpenAI modeli seç">
-                            <!-- 💰 Ekonomik Modeller (Test & Development) -->
-                            <optgroup label="💰 Ekonomik - Test/Geliştirme">
-                                <option value="gpt-4o-mini">GPT-4o Mini ⚡ (Çok Ucuz)</option>
-                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo 💰 (Ekonomik)</option>
-                            </optgroup>
-                            
-                            <!-- 🚀 Production Modeller -->
-                            <optgroup label="🚀 Production - Güçlü Modeller">
-                                <option value="gpt-4o">GPT-4o (Hızlı & Güçlü)</option>
-                                <option value="gpt-4-turbo">GPT-4 Turbo (Dengeli)</option>
-                                <option value="gpt-4">GPT-4 (Klasik)</option>
-                            </optgroup>
-                        </select>
-                    </div>
-
-                    <div class="top-ai-item">
-                        <input type="range" id="topTemperature" min="0" max="1" step="0.1" value="0.7"
-                            class="slider top-slider" aria-label="Yaratıcılık" title="Yaratıcılık">
-                        <span class="slider-value" id="topTempValue">0.7</span>
                     </div>
                 </div>
             </div>
@@ -444,82 +420,78 @@
                         </div>
 
                         <div class="chat-input-container">
-                            <div class="chat-input-left">
-                                <!-- ✨ Provider Selection (OpenAI / Claude) -->
-                                <div class="provider-dropdown">
-                                    <select id="llmProviderSelect" title="AI Provider">
-                                        <option value="openai">🤖 OpenAI</option>
-                                        <option value="anthropic">🧠 Claude</option>
-                                    </select>
-                                </div>
-                                
-                                <!-- ✨ Model Selection -->
-                                <div class="model-dropdown">
-                                    <select id="llmModelSelect" title="Model">
-                                        <!-- OpenAI Models -->
-                                        <optgroup label="🤖 OpenAI - Ekonomik" id="openaiEconomicGroup">
-                                            <option value="gpt-4o-mini">GPT-4o Mini ⚡</option>
-                                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo 💰</option>
-                                        </optgroup>
-                                        <optgroup label="🤖 OpenAI - Production" id="openaiProductionGroup">
-                                            <option value="gpt-4o">GPT-4o</option>
-                                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                                            <option value="gpt-4">GPT-4</option>
-                                        </optgroup>
-                                        
-                                        <!-- Claude Models -->
-                                        <optgroup label="🧠 Claude - Ekonomik" id="claudeEconomicGroup" class="hidden">
-                                            <option value="claude-3-haiku-20240307">Claude 3 Haiku ⚡</option>
-                                        </optgroup>
-                                        <optgroup label="🧠 Claude - Dengeli" id="claudeBalancedGroup" class="hidden">
-                                            <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet 🎯</option>
-                                            <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
-                                        </optgroup>
-                                        <optgroup label="🧠 Claude - Production" id="claudeProductionGroup" class="hidden">
-                                            <option value="claude-3-opus-20240229">Claude 3 Opus 🚀</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
-                                
-                                <!-- ✨ Tools Toggle -->
-                                <div class="tools-toggle">
-                                    <label title="Enable MCP Tools (File, Shell, Git)">
-                                        <input type="checkbox" id="toolsEnabledCheckbox" />
-                                        <span class="toggle-label">🔧 Tools</span>
-                                    </label>
-                                </div>
-                                
-                                <!-- AI Mode Dropdown (moved into chat area) -->
-                                <div class="ai-mode-dropdown">
-                                    <select id="chatAiModeSelect" title="AI Modu">
-                                        <option value="ask">Ask Mode</option>
-                                        <option value="agent">Agent Mode</option>
-                                    </select>
-                                </div>
-
-                                <!-- AG2-Inspired Agent Role Selector -->
-                                <div class="agent-role-dropdown hidden" id="agentRoleDropdown">
-                                    <select id="agentRoleSelect" title="Agent Rolü">
-                                        <option value="coordinator">🎯 Koordinatör</option>
-                                        <option value="analyzer">🔍 Kod Analiz</option>
-                                        <option value="generator">⚡ Kod Üretim</option>
-                                        <option value="documentation">📚 Dokümantasyon</option>
-                                        <option value="artist">🎨 Görsel İçerik</option>
-                                    </select>
-                                </div>
-                            </div>
-
                             <div class="chat-input-wrapper">
                                 <textarea id="chatInput" placeholder="AI'ya bir soru sorun..." rows="2"></textarea>
-                                <div class="prompt-actions">
-                                    <div class="router-status" id="routerStatus"
-                                        title="Router Agent - Otomatik Rol Seçimi">
+                                <button class="send-btn" id="sendChatBtn" title="Gönder">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Chat Controls Bar -->
+                            <div class="chat-controls-row">
+                                <div class="chat-controls-left">
+                                    <!-- Model Selection (Dynamic based on MCP Server) -->
+                                    <div class="model-selector">
+                                        <select id="chatModelSelect" title="AI Model">
+                                            <!-- OpenAI Models (when Mini MCP Server selected) -->
+                                            <optgroup label="🤖 OpenAI - Ekonomik" id="openaiEconomicGroup">
+                                                <option value="gpt-4o-mini">GPT-4o Mini ⚡</option>
+                                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                            </optgroup>
+                                            <optgroup label="🤖 OpenAI - Production" id="openaiProductionGroup">
+                                                <option value="gpt-4o">GPT-4o</option>
+                                                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                                <option value="gpt-4">GPT-4</option>
+                                            </optgroup>
+                                            
+                                            <!-- Claude Models (when Claude MCP Server selected) -->
+                                            <optgroup label="🧠 Claude - Ekonomik" id="claudeEconomicGroup" class="hidden">
+                                                <option value="claude-3-haiku-20240307">Claude 3 Haiku ⚡</option>
+                                            </optgroup>
+                                            <optgroup label="🧠 Claude - Dengeli" id="claudeBalancedGroup" class="hidden">
+                                                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet 🎯</option>
+                                                <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                                            </optgroup>
+                                            <optgroup label="🧠 Claude - Production" id="claudeProductionGroup" class="hidden">
+                                                <option value="claude-3-opus-20240229">Claude 3 Opus 🚀</option>
+                                            </optgroup>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- AI Mode Dropdown -->
+                                    <div class="ai-mode-dropdown">
+                                        <select id="chatAiModeSelect" title="AI Modu">
+                                            <option value="ask">💬 Ask Mode</option>
+                                            <option value="agent">🤖 Agent Mode</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- MCP Server + Agent Role Selector -->
+                                    <div class="agent-role-dropdown" id="agentRoleDropdown">
+                                        <select id="agentRoleSelect" title="MCP Server / Agent Rolü">
+                                            <!-- MCP Server Options -->
+                                            <optgroup label="🔧 MCP Server">
+                                                <option value="mcp:mini">🤖 Mini MCP Server</option>
+                                                <option value="mcp:claude">🧠 Claude MCP Server</option>
+                                            </optgroup>
+                                            
+                                            <!-- Agent Roles (visible only in agent mode) -->
+                                            <optgroup label="🎯 Agent Roles" id="agentRolesGroup" class="hidden">
+                                                <option value="coordinator">🎯 Koordinatör</option>
+                                                <option value="analyzer">🔍 Kod Analiz</option>
+                                                <option value="generator">⚡ Kod Üretim</option>
+                                                <option value="documentation">📚 Dokümantasyon</option>
+                                                <option value="artist">🎨 Görsel İçerik</option>
+                                            </optgroup>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="chat-controls-right">
+                                    <div class="router-status" id="routerStatus" title="Router Agent - Otomatik Rol Seçimi">
                                         <i class="fas fa-robot"></i>
                                         <span id="currentRole">Auto</span>
                                     </div>
-                                    <button class="send-btn" id="sendChatBtn" title="Gönder">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
                                 </div>
                             </div>
                         </div>

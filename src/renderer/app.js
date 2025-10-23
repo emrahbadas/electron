@@ -1686,7 +1686,7 @@ class KodCanavari {
         }
     }
 
-    init() {
+    async init() {
         console.log('🐉 KayraDeniz Kod Canavarı başlatılıyor...');
 
         // Expose app instance for onclick handlers in terminal links
@@ -1790,6 +1790,9 @@ class KodCanavari {
 
         // Load settings from localStorage
         this.loadSettings();
+        
+        // Load API keys from electron-store
+        await this.loadApiKeys();
 
         // Initialize theme
         this.initializeTheme();
@@ -2047,6 +2050,9 @@ class KodCanavari {
     }
 
     initializeUI() {
+        // Initialize AI Selector (Claude vs OpenAI switch) - DISABLED, using chat controls instead
+        // this.initAISelector();
+        
         // Initialize model select
         const modelSelect = document.getElementById('modelSelect');
         if (modelSelect) {
@@ -2153,34 +2159,6 @@ class KodCanavari {
             console.log('🧠 Save Claude API key clicked');
             this.saveClaudeApiKey();
         });
-
-        // Provider selection
-        const providerSelect = document.getElementById('llmProviderSelect');
-        if (providerSelect) {
-            providerSelect.addEventListener('change', (e) => {
-                console.log('🔄 Provider changed:', e.target.value);
-                this.onProviderChange(e.target.value);
-            });
-        }
-
-        // Model selection
-        const modelSelect = document.getElementById('llmModelSelect');
-        if (modelSelect) {
-            modelSelect.addEventListener('change', (e) => {
-                console.log('🤖 Model changed:', e.target.value);
-                this.onModelChange(e.target.value);
-            });
-        }
-
-        // Tools toggle
-        const toolsCheckbox = document.getElementById('toolsEnabledCheckbox');
-        if (toolsCheckbox) {
-            toolsCheckbox.addEventListener('change', (e) => {
-                console.log('🔧 Tools enabled:', e.target.checked);
-                this.settings.toolsEnabled = e.target.checked;
-                this.saveSettings();
-            });
-        }
 
         // ===== END CLAUDE AI + MCP UI =====
 
@@ -2319,18 +2297,98 @@ class KodCanavari {
         const promptAction = document.getElementById('promptActionSelect');
         const chatAiMode = document.getElementById('chatAiModeSelect');
         const agentRoleDropdown = document.getElementById('agentRoleDropdown');
+        const agentRoleSelect = document.getElementById('agentRoleSelect');
+        const chatModelSelect = document.getElementById('chatModelSelect');
+        const agentRolesGroup = document.getElementById('agentRolesGroup');
+        const currentServerSpan = document.getElementById('currentServer');
 
-        // Show/hide agent role selector based on AI mode
+        // MCP Server + Agent Role selection handler
+        if (agentRoleSelect) {
+            // Set initial value from settings (default to mini MCP)
+            agentRoleSelect.value = this.settings.mcpServer || 'mcp:mini';
+            
+            agentRoleSelect.addEventListener('change', async (e) => {
+                const value = e.target.value;
+                console.log('🔄 Selection changed to:', value);
+                
+                // Check if it's MCP server selection
+                if (value.startsWith('mcp:')) {
+                    const mcpType = value.split(':')[1]; // 'mini' or 'claude'
+                    const provider = mcpType === 'claude' ? 'claude' : 'openai';
+                    
+                    console.log('🔧 Switching MCP Server to:', mcpType);
+                    
+                    // Show notification
+                    const serverName = mcpType === 'claude' ? 'Claude MCP Server' : 'Mini MCP Server (OpenAI)';
+                    this.showNotification(`🔄 Switching to ${serverName}...`, 'info');
+                    
+                    // Update settings
+                    this.settings.mcpServer = value;
+                    this.settings.llmProvider = provider;
+                    this.saveSettings();
+                    
+                    // Update UI - switch model groups
+                    this.switchModelGroups(provider);
+                    
+                    // Update server indicator
+                    if (currentServerSpan) {
+                        currentServerSpan.textContent = mcpType === 'claude' ? 'Claude MCP' : 'Mini MCP';
+                    }
+                    
+                    // Notify MCP Router
+                    try {
+                        if (window.electronAPI) {
+                            const result = await window.electronAPI.ipcRenderer.invoke('mcp-router:switch-provider', provider);
+                            
+                            if (result && result.success) {
+                                this.showNotification(`✅ Switched to ${serverName}`, 'success');
+                                console.log('✅ MCP Server switched successfully');
+                            } else {
+                                this.showNotification(`❌ Failed: ${result?.error || 'Unknown error'}`, 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ MCP switch error:', error);
+                        this.showNotification(`❌ Error: ${error.message}`, 'error');
+                    }
+                } else {
+                    // It's an agent role selection
+                    console.log('🎯 Agent role selected:', value);
+                    this.settings.agentRole = value;
+                    this.saveSettings();
+                }
+            });
+        }
+
+        // AI Mode change - show/hide agent roles in dropdown
         if (chatAiMode) {
             chatAiMode.value = this.aiMode.current || 'ask';
             chatAiMode.addEventListener('change', (e) => {
-                if (agentRoleDropdown) {
-                    if (e.target.value === 'agent') {
-                        agentRoleDropdown.classList.remove('hidden');
+                const mode = e.target.value;
+                
+                if (agentRolesGroup) {
+                    if (mode === 'agent') {
+                        // Show agent roles group
+                        agentRolesGroup.classList.remove('hidden');
                     } else {
-                        agentRoleDropdown.classList.add('hidden');
+                        // Hide agent roles group, reset to MCP server
+                        agentRolesGroup.classList.add('hidden');
+                        if (agentRoleSelect) {
+                            const currentMcpServer = this.settings.mcpServer || 'mcp:mini';
+                            agentRoleSelect.value = currentMcpServer;
+                        }
                     }
                 }
+            });
+        }
+
+        // Model selection handler
+        if (chatModelSelect) {
+            chatModelSelect.addEventListener('change', (e) => {
+                const model = e.target.value;
+                console.log('🤖 Model changed to:', model);
+                this.settings.currentModel = model;
+                this.saveSettings();
             });
         }
 
@@ -2431,6 +2489,36 @@ class KodCanavari {
         const path = require('path');
         this.ipc = ipcRenderer;
         this.path = path;
+        
+        // ===== CLAUDE MCP STREAMING EVENT LISTENERS =====
+        
+        // Claude streaming chunk
+        ipcRenderer.on('claude:streamingChunk', (event, chunk) => {
+            this.appendStreamingChunk(chunk);
+        });
+        
+        // Claude message complete
+        ipcRenderer.on('claude:messageComplete', (event, data) => {
+            this.finalizeStreamingMessage();
+            console.log('✅ Claude message complete:', data);
+        });
+        
+        // Claude tool used
+        ipcRenderer.on('claude:toolUsed', (event, toolData) => {
+            console.log('🔧 Claude tool used:', toolData.name);
+            // Optional: Show real-time tool badge
+        });
+        
+        // MCP Router provider switched
+        ipcRenderer.on('mcp-router:providerSwitched', (event, provider) => {
+            console.log('🔄 Provider switched:', provider);
+            if (this.aiSelector) {
+                this.aiSelector.activeProvider = provider;
+                this.updateChatProviderIndicator(provider);
+            }
+        });
+        
+        console.log('✅ Claude MCP IPC listeners registered');
     }
 
     showWelcomeScreen() {
@@ -3260,19 +3348,39 @@ class KodCanavari {
         }
 
         try {
-            // Check if API key is set for current provider
-            const provider = this.settings.llmProvider || 'openai';
-
-            if (provider === 'openai' && !this.settings.apiKey) {
+            // ===== MCP ROUTER INTEGRATION: Check active provider =====
+            // Read provider from settings (set by MCP server selection)
+            const activeProvider = this.settings.llmProvider || 'openai';
+            
+            console.log('🎯 Active provider:', activeProvider);
+            
+            // Check if API key is set for current provider BEFORE routing
+            if (activeProvider === 'openai' && !this.settings.apiKey) {
                 throw new Error('OpenAI API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
-            } else if (provider === 'anthropic' && !this.settings.claudeApiKey) {
+            } else if (activeProvider === 'claude' && !this.settings.claudeApiKey) {
                 throw new Error('Claude API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
             }
+            
+            // If Claude is selected, route through MCP Router
+            if (activeProvider === 'claude') {
+                console.log('🧠 Routing to Claude via MCP Router');
+                await this.sendMessageViaMCPRouter(message, chatMode);
+                
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                }
+                this.messageMutex.release();
+                return;
+            }
+            
+            // ===== EXISTING OPENAI FLOW CONTINUES BELOW =====
 
             // Agent mode ile unified system kullan (context-aware)
             if (chatMode === 'agent') {
-                // 🌌 LUMA SUPRIME AGENT EXECUTION
-                if (this.lumaSuprimeAgent) {
+                // 🌌 LUMA SUPRIME AGENT EXECUTION - DISABLED for provider routing
+                // Provider-based routing takes priority over Luma
+                if (false && this.lumaSuprimeAgent) {
                     try {
                         console.log('🌌 Supreme Agent processing:', message);
                         
@@ -3724,38 +3832,105 @@ Daha sonra "Kaydedilen Projeler" bölümünden erişebilirsin.`;
         }
     }
 
-    addChatMessage(type, content) {
+    /**
+     * Append streaming chunk for Claude real-time response
+     */
+    appendStreamingChunk(chunk) {
         const chatMessages = document.getElementById('chatMessages');
         if (!chatMessages) return;
 
-        const message = document.createElement('div');
-        message.className = `chat-message ${type}`;
+        // Find or create streaming message
+        let streamingMsg = chatMessages.querySelector('.chat-message.streaming');
+        
+        if (!streamingMsg) {
+            // Create new streaming message
+            streamingMsg = document.createElement('div');
+            streamingMsg.className = 'chat-message ai streaming';
+            
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('tr-TR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            streamingMsg.innerHTML = `
+                <div class="message-content">
+                    <i class="fas fa-dragon streaming-icon"></i>
+                    <div class="message-text"></div>
+                </div>
+                <div class="message-time">${timeStr}</div>
+            `;
+            
+            chatMessages.appendChild(streamingMsg);
+        }
+        
+        // Append chunk to message text
+        const textDiv = streamingMsg.querySelector('.message-text');
+        if (textDiv) {
+            textDiv.textContent += chunk;
+        }
+        
+        // Scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 
+    /**
+     * Finalize streaming message (remove streaming class)
+     */
+    finalizeStreamingMessage() {
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages) return;
+
+        const streamingMsg = chatMessages.querySelector('.chat-message.streaming');
+        if (streamingMsg) {
+            streamingMsg.classList.remove('streaming');
+            
+            // Store in chat history
+            const textDiv = streamingMsg.querySelector('.message-text');
+            if (textDiv) {
+                const content = textDiv.textContent;
+                this.chatHistory.push({ 
+                    type: 'ai', 
+                    content: content, 
+                    timestamp: new Date() 
+                });
+            }
+        }
+    }
+
+    /**
+     * Show tool usage notification in chat
+     */
+    showToolUsageNotification(tools) {
+        const chatMessages = document.getElementById('chatMessages');
+        if (!chatMessages || !tools || tools.length === 0) return;
+
+        const notification = document.createElement('div');
+        notification.className = 'chat-message tool-usage';
+        
         const now = new Date();
         const timeStr = now.toLocaleTimeString('tr-TR', {
             hour: '2-digit',
             minute: '2-digit'
         });
 
-        const icon = type === 'user' ? 'fa-user' :
-            type === 'ai' ? 'fa-dragon' : 'fa-info-circle';
+        const toolList = tools.map(t => `<li><code>${t.name}</code></li>`).join('');
 
-        // Process content for code blocks
-        const processedContent = this.processMessageContent(content);
+        notification.innerHTML = `
+            <div class="message-content">
+                <i class="fas fa-tools"></i>
+                <div>
+                    <strong>🔧 Kullanılan Tool'lar:</strong>
+                    <ul class="tool-list">
+                        ${toolList}
+                    </ul>
+                </div>
+            </div>
+            <div class="message-time">${timeStr}</div>
+        `;
 
-        message.innerHTML = `
-      <div class="message-content">
-        <i class="fas ${icon}"></i>
-        ${processedContent}
-      </div>
-      <div class="message-time">${timeStr}</div>
-    `;
-
-        chatMessages.appendChild(message);
+        chatMessages.appendChild(notification);
         chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        // Store in chat history
-        this.chatHistory.push({ type, content, timestamp: now });
     }
 
     processMessageContent(content) {
@@ -4622,37 +4797,198 @@ Not:
 
     // ===== CLAUDE AI + MCP INTEGRATION METHODS =====
 
+    /**
+     * Load API keys from electron-store on startup
+     */
+    async loadApiKeys() {
+        try {
+            const result = await window.electronAPI.ipcRenderer.invoke('load-api-keys');
+            
+            if (result.success) {
+                // OpenAI key
+                if (result.openaiKey) {
+                    this.settings.apiKey = result.openaiKey;
+                    const topApiKeyInput = document.getElementById('topApiKey');
+                    if (topApiKeyInput) {
+                        topApiKeyInput.value = this.maskApiKey(result.openaiKey);
+                    }
+                }
+                
+                // Claude key
+                if (result.claudeKey) {
+                    this.settings.claudeApiKey = result.claudeKey;
+                    const topClaudeKeyInput = document.getElementById('topClaudeApiKey');
+                    if (topClaudeKeyInput) {
+                        topClaudeKeyInput.value = this.maskApiKey(result.claudeKey);
+                    }
+                }
+                
+                console.log('✅ API keys loaded from store');
+            }
+        } catch (error) {
+            console.error('❌ Load API keys error:', error);
+        }
+    }
+
+    /**
+     * Mask API key for display (sk-ant-***...xyz)
+     */
+    maskApiKey(key) {
+        if (!key || key.length < 10) return '';
+        return key.substring(0, 7) + '***...' + key.substring(key.length - 4);
+    }
+
     async saveClaudeApiKey() {
         const claudeKeyInput = document.getElementById('topClaudeApiKey');
         if (!claudeKeyInput) return;
 
         const apiKey = claudeKeyInput.value.trim();
 
+        // Skip if masked (already saved)
+        if (apiKey.includes('***')) {
+            this.showNotification('ℹ️ API key zaten kaydedilmiş', 'info');
+            return;
+        }
+
         if (!apiKey) {
             this.showNotification('❌ Claude API anahtarı boş olamaz', 'error');
             return;
         }
 
+        if (!apiKey.startsWith('sk-ant-')) {
+            this.showNotification('❌ Geçersiz Claude API key! sk-ant- ile başlamalı', 'error');
+            return;
+        }
+
         try {
-            // Send API key to main process (memory-only storage)
-            const result = await window.electronAPI.ipcRenderer.invoke('llm:set-api-key', {
-                provider: 'anthropic',
-                apiKey: apiKey
+            // Save to encrypted electron-store
+            const saveResult = await window.electronAPI.ipcRenderer.invoke('save-api-keys', {
+                claudeKey: apiKey
             });
 
-            if (result.success) {
+            if (!saveResult.success) {
+                throw new Error(saveResult.error);
+            }
+
+            // Test connection
+            this.showNotification('🔄 Claude bağlantısı test ediliyor...', 'info');
+            const testResult = await window.electronAPI.ipcRenderer.invoke('test-claude-connection', apiKey);
+
+            if (testResult.success) {
+                // Update settings
                 this.settings.claudeApiKey = apiKey;
                 this.saveSettings();
-                this.updateStatus('Claude API anahtarı kaydedildi');
-                this.addChatMessage('system', '✅ Claude API anahtarı başarıyla ayarlandı!');
-                this.showNotification('✅ Claude API key saved', 'success');
+                
+                // Mask the key in input
+                claudeKeyInput.value = this.maskApiKey(apiKey);
+                
+                // Initialize MCP Router
+                await this.initializeMCPRouter();
+                
+                this.updateStatus('Claude API anahtarı kaydedildi ve test edildi');
+                this.addChatMessage('system', '✅ Claude API anahtarı başarıyla ayarlandı ve test edildi!');
+                this.showNotification('✅ Claude API key saved & tested!', 'success');
             } else {
-                throw new Error(result.error || 'Failed to set API key');
+                throw new Error(testResult.error || 'Connection test failed');
             }
 
         } catch (error) {
             console.error('❌ Claude API key save error:', error);
             this.showNotification(`❌ Hata: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Initialize AI Selector UI (OpenAI ↔ Claude switch)
+     */
+    async initAISelector() {
+        try {
+            // Import AI Selector UI
+            const AISelectorUI = require('./ai-selector-ui.js');
+            this.aiSelector = new AISelectorUI();
+            
+            // Find chat header controls
+            const chatHeader = document.querySelector('.chat-header-controls');
+            if (!chatHeader) {
+                console.warn('⚠️ Chat header not found, AI Selector skipped');
+                return;
+            }
+            
+            // Append to chat header
+            this.aiSelector.appendTo(chatHeader);
+            
+            // Provider change callback
+            this.aiSelector.onProviderChange = (provider) => {
+                console.log(`🔄 AI Provider switched to: ${provider}`);
+                this.currentAIProvider = provider;
+                
+                // Update chat header indicator
+                this.updateChatProviderIndicator(provider);
+                
+                // Store preference
+                this.settings.activeAIProvider = provider;
+                this.saveSettings();
+            };
+            
+            // Streaming callback (for Claude)
+            this.aiSelector.onStreamingChunk = (chunk) => {
+                this.appendStreamingChunk(chunk);
+            };
+            
+            console.log('✅ AI Selector initialized');
+            
+            // Auto-initialize MCP Router if Claude key exists
+            if (this.settings.claudeApiKey) {
+                await this.initializeMCPRouter();
+            }
+            
+        } catch (error) {
+            console.error('❌ AI Selector init error:', error);
+        }
+    }
+
+    /**
+     * Update chat header to show active AI provider
+     */
+    updateChatProviderIndicator(provider) {
+        const header = document.querySelector('.ai-chat-panel h3');
+        if (!header) return;
+        
+        const icon = provider === 'claude' ? '🧠' : '🤖';
+        const name = provider === 'claude' ? 'Claude' : 'OpenAI';
+        const badge = `<span class="provider-badge ${provider}">${icon} ${name}</span>`;
+        
+        header.innerHTML = `<i class="fas fa-comments"></i> AI Chat ${badge}`;
+    }
+
+    /**
+     * Initialize MCP Router with API keys
+     */
+    async initializeMCPRouter() {
+        try {
+            console.log('🚀 Initializing MCP Router...');
+            
+            const result = await window.electronAPI.ipcRenderer.invoke('mcp-router:initialize', {
+                workspacePath: this.projectFolder || process.cwd(),
+                anthropicApiKey: this.settings.claudeApiKey
+            });
+
+            if (result.success) {
+                console.log('✅ MCP Router initialized:', result.services);
+                
+                // Update AI Selector status if exists
+                if (this.aiSelector) {
+                    await this.aiSelector.refreshStatus();
+                }
+                
+                return true;
+            } else {
+                console.error('❌ MCP Router init failed:', result.error);
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ MCP Router error:', error);
+            return false;
         }
     }
 
@@ -4677,6 +5013,123 @@ Not:
         }
 
         this.updateStatus(`Provider değiştirildi: ${provider === 'anthropic' ? 'Claude' : 'OpenAI'}`);
+    }
+
+    /**
+     * Send message via MCP Router (Claude or OpenAI)
+     */
+    async sendMessageViaMCPRouter(message, chatMode = 'ask') {
+        try {
+            // Get selected code context
+            const selectedCode = this.monaco?.getModel()?.getValueInRange(
+                this.monaco.getSelection()
+            );
+            
+            const context = {
+                selectedCode: selectedCode,
+                language: this.currentLanguage,
+                filePath: this.currentFilePath,
+                chatMode: chatMode,
+                workspacePath: this.projectFolder || process.cwd()
+            };
+            
+            // Add user message to chat
+            this.addChatMessage('user', message);
+            
+            // Show loading indicator
+            const loadingId = Date.now();
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'chat-message ai loading';
+            loadingMsg.id = `loading-${loadingId}`;
+            loadingMsg.innerHTML = `
+                <div class="message-content">
+                    <i class="fas fa-dragon"></i>
+                    <span>⏳ Düşünüyorum...</span>
+                </div>
+            `;
+            document.getElementById('chatMessages').appendChild(loadingMsg);
+            
+            // Send to MCP Router
+            const result = await window.electronAPI.ipcRenderer.invoke(
+                'mcp-router:send-message', 
+                message, 
+                context
+            );
+            
+            // Remove loading indicator
+            const loadingElement = document.getElementById(`loading-${loadingId}`);
+            if (loadingElement) {
+                loadingElement.remove();
+            }
+            
+            if (result.success) {
+                // Response already streamed via IPC events (for Claude streaming)
+                // For OpenAI (non-streaming), add response if not already added
+                if (result.response && !result.streamed) {
+                    // Only add if no streaming message was finalized
+                    const chatMessages = document.getElementById('chatMessages');
+                    const streamingMsg = chatMessages?.querySelector('.chat-message.streaming');
+                    if (!streamingMsg) {
+                        this.addChatMessage('ai', result.response);
+                    }
+                }
+                
+                // Show tool usage if any
+                if (result.toolsUsed && result.toolsUsed.length > 0) {
+                    this.showToolUsageNotification(result.toolsUsed);
+                }
+                
+                console.log('✅ MCP Router response received');
+            } else {
+                this.addChatMessage('system', `❌ Hata: ${result.error}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ MCP Router error:', error);
+            this.addChatMessage('system', `❌ Beklenmeyen hata: ${error.message}`);
+        }
+    }
+
+    /**
+     * Switch model groups based on provider (for chat model select)
+     */
+    switchModelGroups(provider) {
+        const chatModelSelect = document.getElementById('chatModelSelect');
+        if (!chatModelSelect) return;
+
+        const openaiGroups = ['openaiEconomicGroup', 'openaiProductionGroup'];
+        const claudeGroups = ['claudeEconomicGroup', 'claudeBalancedGroup', 'claudeProductionGroup'];
+
+        if (provider === 'openai') {
+            // Show OpenAI groups, hide Claude groups
+            openaiGroups.forEach(id => {
+                const group = chatModelSelect.querySelector(`#${id}`);
+                if (group) group.classList.remove('hidden');
+            });
+            claudeGroups.forEach(id => {
+                const group = chatModelSelect.querySelector(`#${id}`);
+                if (group) group.classList.add('hidden');
+            });
+
+            // Select default OpenAI model
+            chatModelSelect.value = this.settings.currentModel || 'gpt-4o-mini';
+            
+        } else if (provider === 'claude' || provider === 'anthropic') {
+            // Show Claude groups, hide OpenAI groups
+            openaiGroups.forEach(id => {
+                const group = chatModelSelect.querySelector(`#${id}`);
+                if (group) group.classList.add('hidden');
+            });
+            claudeGroups.forEach(id => {
+                const group = chatModelSelect.querySelector(`#${id}`);
+                if (group) group.classList.remove('hidden');
+            });
+
+            // Select default Claude model
+            chatModelSelect.value = this.settings.currentModel || 'claude-3-5-sonnet-20241022';
+        }
+
+        console.log(`✅ Model groups switched for ${provider}`);
     }
 
     async loadModelsForProvider(provider) {
@@ -5789,7 +6242,7 @@ Not:
 
     // ===== END UNIFIED LLM CALL =====
 
-    async callOpenAI(message, systemPrompt = null, options = {}) {
+    async callOpenAI(messages, systemPrompt = null, options = {}) {
         if (!this.settings.apiKey) {
             throw new Error('OpenAI API anahtarı ayarlanmamış');
         }
@@ -5816,7 +6269,7 @@ Not:
         // Rate limiting helper function
         const callWithRetry = async (attempt = 1, maxAttempts = 3) => {
             try {
-                return await this.makeOpenAIRequest(message, enhancedSystemPrompt, options);
+                return await this.makeOpenAIRequest(messages, enhancedSystemPrompt, options);
             } catch (error) {
                 if (error.code === 'OPENAI_INSUFFICIENT_QUOTA') {
                     // Quota aşıldığında tekrar denemenin anlamı yok
@@ -5877,7 +6330,7 @@ Not:
         }
     }
 
-    async makeOpenAIRequest(message, systemPrompt = null, options = {}) {
+    async makeOpenAIRequest(messages, systemPrompt = null, options = {}) {
         if (!this.settings.apiKey) {
             throw new Error('OpenAI API anahtarı ayarlanmamış');
         }
@@ -5906,16 +6359,16 @@ Not:
 
         const defaultSystemPrompt = `Sen KayraDeniz Badaş Kod Canavarı AI asistanısın. Türkçe konuşuyorsun. Kod yazma, açıklama, optimize etme ve hata bulma konularında uzmanısın. Kullanıcıya profesyonel ve yardımsever bir şekilde destek ol.${learningContext}`;
 
-        let messages = [];
+        let messagesList = [];
 
         // 🐛 DEBUG: Log input type and value
-        console.log('📥 callLLM input type:', typeof message);
-        console.log('📥 callLLM input value:', message);
-        console.log('📥 Is array?', Array.isArray(message));
+        console.log('📥 makeOpenAIRequest input type:', typeof messages);
+        console.log('📥 makeOpenAIRequest input value:', messages);
+        console.log('📥 Is array?', Array.isArray(messages));
 
-        if (Array.isArray(message)) {
+        if (Array.isArray(messages)) {
             // Pre-constructed message list (e.g., agent mode)
-            messages = message.map(msg => {
+            messagesList = messages.map(msg => {
                 // VALIDATION: Ensure content is never null/undefined
                 const content = msg.content == null ? "" : String(msg.content);
 
@@ -5943,19 +6396,19 @@ Not:
             });
 
             // Ensure there's at least one system prompt
-            const hasSystem = messages.some(msg => msg.role === 'system');
+            const hasSystem = messagesList.some(msg => msg.role === 'system');
             if (!hasSystem) {
-                messages.unshift({
+                messagesList.unshift({
                     role: 'system',
                     content: systemPrompt || defaultSystemPrompt
                 });
             }
-        } else if (message && typeof message === 'object' && message.role && message.content) {
+        } else if (messages && typeof messages === 'object' && messages.role && messages.content) {
             // Single message object
-            messages = [{ role: 'system', content: systemPrompt || defaultSystemPrompt }, message];
+            messagesList = [{ role: 'system', content: systemPrompt || defaultSystemPrompt }, messages];
         } else {
             // Plain string message with optional system prompt + history
-            messages = [{
+            messagesList = [{
                 role: 'system',
                 content: systemPrompt || defaultSystemPrompt
             }];
@@ -5973,30 +6426,30 @@ Not:
             const recentHistory = this.chatHistory.slice(-10);
             recentHistory.forEach(msg => {
                 if (msg.type === 'user') {
-                    messages.push({ role: 'user', content: msg.content });
+                    messagesList.push({ role: 'user', content: msg.content });
                 } else if (msg.type === 'ai') {
-                    messages.push({ role: 'assistant', content: msg.content });
+                    messagesList.push({ role: 'assistant', content: msg.content });
                 }
             });
 
-            messages.push({ role: 'user', content: message });
+            messagesList.push({ role: 'user', content: messages });
         }
 
         // 🐛 DEBUG: Validate messages before deduplication
-        console.log('📋 Messages before dedup:', messages);
-        console.log('📋 Messages is array?', Array.isArray(messages));
+        console.log('📋 Messages before dedup:', messagesList);
+        console.log('📋 Messages is array?', Array.isArray(messagesList));
         
-        if (!Array.isArray(messages)) {
-            console.error('❌ CRITICAL: messages is not an array!', messages);
-            throw new Error(`messages.map is not a function - messages type: ${typeof messages}`);
+        if (!Array.isArray(messagesList)) {
+            console.error('❌ CRITICAL: messagesList is not an array!', messagesList);
+            throw new Error(`messages.map is not a function - messagesList type: ${typeof messagesList}`);
         }
 
         // CRITICAL: Deduplicate messages to prevent rate limiting
-        messages = this.deduplicateMessages(messages);
+        messagesList = this.deduplicateMessages(messagesList);
 
         const requestBody = {
             model: this.settings.model,
-            messages: messages,
+            messages: messagesList,
             temperature: this.settings.temperature,
             top_p: 0.9,
             max_tokens: this.settings.maxTokens || 4000,
@@ -11846,7 +12299,7 @@ Happy coding! 🚀
 
         switch (checkType) {
             case 'build':
-                // ✅ PRE-CHECK: Verify package.json exists before running build
+                // 🛡️ BUG FIX #1: FAKE BUILD VERIFICATION - Execute real terminal command
                 try {
                     const hasPackageJson = await this.checkFileExists('package.json');
                     if (!hasPackageJson) {
@@ -11854,6 +12307,22 @@ Happy coding! 🚀
                         return 'skip'; // Return special status instead of false
                     }
 
+                    // ✅ BUG FIX: Check if build script exists in package.json
+                    try {
+                        const pkgContent = await this.readFileWithAgent('package.json');
+                        const pkg = JSON.parse(pkgContent.content || pkgContent);
+                        
+                        if (!pkg.scripts || !pkg.scripts.build) {
+                            console.log('⏭️ BUILD skipped: No build script defined in package.json');
+                            return 'skip';
+                        }
+                    } catch (parseError) {
+                        console.warn('⚠️ Could not parse package.json:', parseError.message);
+                        return 'skip';
+                    }
+
+                    // ✅ BUG FIX #1: REAL TERMINAL EXECUTION (NOT SIMULATED!)
+                    console.log('🔨 [BUG FIX #1] Executing REAL terminal command: npm run build');
                     const buildResult = await this.runCommandWithAgent('npm run build');
 
                     // ✅ FIX #4: STRICT VERIFICATION - Exit code must be 0
@@ -11870,15 +12339,19 @@ Happy coding! 🚀
                     
                     const success = exitCode === 0 && !hasErrors;
                     
-                    console.log(`🔍 BUILD verification:`, {
+                    console.log(`🔍 [BUG FIX #1] BUILD verification (REAL EXECUTION):`, {
                         exitCode: exitCode,
                         hasErrors: hasErrors,
                         success: success,
-                        buildResultSuccess: buildResult.success
+                        buildResultSuccess: buildResult.success,
+                        stdout: buildResult.stdout ? buildResult.stdout.substring(0, 200) : 'N/A',
+                        stderr: buildResult.stderr ? buildResult.stderr.substring(0, 200) : 'N/A'
                     });
                     
                     if (!success) {
-                        console.warn(`❌ BUILD FAILED: exitCode=${exitCode}, hasErrors=${hasErrors}`);
+                        console.warn(`❌ BUILD FAILED (REAL EXECUTION): exitCode=${exitCode}, hasErrors=${hasErrors}`);
+                    } else {
+                        console.log('✅ [BUG FIX #1] BUILD SUCCESS (REAL TERMINAL COMMAND EXECUTED!)');
                     }
                     
                     return success;
@@ -12191,20 +12664,27 @@ ${matrix}
             minute: '2-digit'
         });
 
-        const safeContent = this.sanitizeChatContent(content);
+        // Choose icon based on message type
+        const icon = type === 'system' ? 'fa-cog' :
+                     type === 'user' ? 'fa-user' :
+                     type === 'ai' ? 'fa-dragon' : 'fa-robot';
+
+        // Process content for code blocks and formatting
+        const processedContent = this.processMessageContent(content);
 
         message.innerHTML = `
       <div class="message-content">
-        ${type === 'system' ? '<i class="fas fa-cog"></i>' :
-                type === 'user' ? '<i class="fas fa-user"></i>' :
-                    '<i class="fas fa-robot"></i>'}
-        <div class="message-text">${safeContent}</div>
+        <i class="fas ${icon}"></i>
+        ${processedContent}
       </div>
       <div class="message-time">${timeStr}</div>
     `;
 
         chatMessages.appendChild(message);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Store in chat history
+        this.chatHistory.push({ type, content, timestamp: now });
 
         return message; // Return message element for updates
     }

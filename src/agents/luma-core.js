@@ -52,7 +52,7 @@ export class LumaCore {
             }
         }
         
-        // ✅ FIX: Nature → Intent mapping
+        // ✅ FIX: Nature → Intent mapping with null safety
         const intentMap = {
             "simple_chat": "simple_chat",      // ✅ NEW: Direct simple responses
             "how_to_question": "exploration",  // ✅ Informational, not creation
@@ -65,6 +65,17 @@ export class LumaCore {
             "context_required": "context_analysis",  // ✅ NEW: Context analysis required
             "unclear": "exploration"
         };
+        
+        // 🛡️ BUG FIX #2: NULL INTENT DECISION - Ensure nature.type is never undefined
+        if (!nature || !nature.type) {
+            console.error('❌ BUG FIX #2: nature.type is undefined! Defaulting to "exploration"');
+            nature = {
+                type: 'exploration',
+                needsTools: false,
+                reasoning: 'Nature type was undefined, defaulting to safe exploration mode',
+                confidence: 0.3
+            };
+        }
         
         console.log('🔍 [DEBUG] Intent mapped:', intentMap[nature.type] || 'unmapped');
         
@@ -175,7 +186,26 @@ export class LumaCore {
      * @returns {Object} - { type, needsTools, reasoning }
      */
     classifyRequestNature(text) {
-        // 🔍 CONTEXT-REQUIRED COMMANDS (User feedback önerisi)
+        // �️ BUG FIX #2: CONTINUATION PHRASE DETECTION (e.g. "evet phase 2 başla")
+        // Match phrases like: "evet", "evet devam et", "evet phase 2", "evet başla"
+        const continuationPatterns = [
+            /^(evet|tamam|ok|okay|olur|peki)\s+(phase|faz)\s*\d+/i,  // "evet phase 2"
+            /^(evet|tamam|ok|okay|olur|peki)\s+(başla|devam|tamamla|yap)/i,  // "evet başla"
+            /^(devam|başla|tamamla)\s+(et|phase|faz)/i  // "devam et", "başla phase"
+        ];
+        
+        if (continuationPatterns.some(p => p.test(text))) {
+            console.log('🛡️ [BUG FIX #2] Continuation phrase detected:', text);
+            return {
+                type: "action",
+                needsTools: true,
+                reasoning: "Phase continuation command - execution required",
+                confidence: 0.9,
+                isContinuation: true
+            };
+        }
+        
+        // �🔍 CONTEXT-REQUIRED COMMANDS (User feedback önerisi)
         if (/projeye?\s+(devam|tamamla)|yarım\s+kal|tamamla/.test(text)) {
             return {
                 type: "context_required", 

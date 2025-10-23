@@ -2513,6 +2513,8 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 300px;
+    position: relative;
+    z-index: 10;
 }
 
 .chat-content {
@@ -2520,6 +2522,8 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+    z-index: 10;
 }
 
 .chat-messages {
@@ -2528,6 +2532,8 @@ body {
     padding: var(--spacing-md);
     max-height: calc(100vh - 300px);
     min-height: 200px;
+    position: relative;
+    z-index: 10;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -2552,6 +2558,8 @@ body {
 .chat-message {
     margin-bottom: var(--spacing-md);
     animation: messageSlideIn 0.3s ease-out;
+    position: relative;
+    z-index: 10;
 }
 
 .chat-message.system .message-content {
@@ -2574,6 +2582,7 @@ body {
     padding: var(--spacing-md);
     border-radius: 8px;
     position: relative;
+    z-index: 10;
 }
 
 .message-content i {
@@ -2724,6 +2733,29 @@ body {
     gap: var(--spacing-sm);
 }
 
+/* Model Selector */
+.model-selector select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: 6px;
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-width: 150px;
+}
+
+.model-selector select:hover {
+    border-color: var(--primary-color);
+}
+
+.model-selector select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+}
+
 .chat-controls-right {
     display: flex;
     align-items: center;
@@ -2738,7 +2770,7 @@ body {
 
 .chat-input-wrapper {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: var(--spacing-sm);
     position: relative;
     background: var(--bg-secondary);
@@ -5768,3 +5800,169 @@ details summary:hover {
     background: rgba(255, 87, 34, 0.1);
     border-left: 4px solid #ff5722;
 }
+
+/* ================================================================
+   🧠 CLAUDE MCP INTEGRATION STYLES
+   ================================================================ */
+
+/* Provider badge in chat header */
+.provider-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.provider-badge.openai {
+    background: linear-gradient(135deg, #10a37f, #1a7f64);
+    color: white;
+    box-shadow: 0 2px 4px rgba(16, 163, 127, 0.3);
+}
+
+.provider-badge.claude {
+    background: linear-gradient(135deg, #d97757, #c45a34);
+    color: white;
+    box-shadow: 0 2px 4px rgba(217, 119, 87, 0.3);
+}
+
+/* Streaming message animation */
+.chat-message.streaming .message-content {
+    position: relative;
+}
+
+.chat-message.streaming .message-text::after {
+    content: '▊';
+    animation: blink 1s infinite;
+    margin-left: 2px;
+    color: var(--primary-color);
+}
+
+@keyframes blink {
+    0%, 50% {
+        opacity: 1;
+    }
+    51%, 100% {
+        opacity: 0;
+    }
+}
+
+/* Streaming icon animation */
+.streaming-icon {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+/* Tool usage notification */
+.chat-message.tool-usage {
+    background: rgba(42, 42, 42, 0.8);
+    border-left: 3px solid #4CAF50;
+}
+
+.chat-message.tool-usage .message-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.chat-message.tool-usage .fas {
+    color: #4CAF50;
+    font-size: 18px;
+    margin-top: 2px;
+}
+
+.chat-message.tool-usage strong {
+    color: #4CAF50;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.tool-list {
+    margin: 8px 0;
+    padding-left: 20px;
+    list-style: none;
+}
+
+.tool-list li {
+    padding: 4px 0;
+    color: var(--text-secondary);
+}
+
+.tool-list li code {
+    background: rgba(76, 175, 80, 0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: #81C784;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+}
+
+/* Loading message */
+.chat-message.loading {
+    animation: fadeIn 0.3s ease-in;
+}
+
+.chat-message.loading .message-content span {
+    animation: dots 1.5s infinite;
+}
+
+@keyframes dots {
+    0%, 20% {
+        content: '⏳ Düşünüyorum.';
+    }
+    40% {
+        content: '⏳ Düşünüyorum..';
+    }
+    60%, 100% {
+        content: '⏳ Düşünüyorum...';
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Chat header flex layout for AI Selector */
+.chat-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* AI Selector container in chat header */
+.ai-selector-container {
+    margin-right: auto;
+}
+
+/* Claude message styling (optional enhancement) */
+.chat-message.ai[data-provider="claude"] .message-content {
+    border-left: 3px solid #d97757;
+}
+
+.chat-message.ai[data-provider="openai"] .message-content {
+    border-left: 3px solid #10a37f;
+}
+
+/* ================================================================
+   END CLAUDE MCP INTEGRATION STYLES
+   ================================================================ */

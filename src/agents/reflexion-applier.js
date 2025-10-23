@@ -4,24 +4,48 @@
  * Bu modül, Reflexion System'in ürettiği "SUGGESTED FIXES"'leri gerçek dosya
  * işlemlerine çevirir. ChatGPT-5'in tespit ettiği "reflection var ama uygulama yok"
  * sorununu çözer.
+ * 
+ * 🧠 MEMORY INTEGRATION: Now queries Knowledge Graph for past errors/fixes
+ * to avoid repeating mistakes and learn from previous attempts.
  */
 
+// 🌉 Import Learning Store Bridge for Memory access
+const { LearningStoreBridge } = require('../mcp-tools/learning-store-bridge.js');
+const path = require('path');
+
 class ReflexionApplier {
-    constructor(toolBridge) {
+    constructor(toolBridge, options = {}) {
         this.toolBridge = toolBridge;
         this.fixHistory = [];
         this.circuitBreakerThreshold = 3; // Same fix applied 3 times = stop
+        
+        // 🧠 Initialize Memory System connection
+        this.memoryEnabled = options.memoryEnabled !== false;
+        if (this.memoryEnabled) {
+            try {
+                const memoryFile = options.memoryFile || path.join(process.cwd(), 'memory.jsonl');
+                this.memory = new LearningStoreBridge({ memoryFile });
+                console.log('🧠 [ReflexionApplier] Memory System connected');
+            } catch (error) {
+                console.warn('⚠️ [ReflexionApplier] Memory System unavailable:', error.message);
+                this.memoryEnabled = false;
+            }
+        }
     }
 
     /**
      * Check if we're in a fix loop (same fix repeated multiple times)
      */
     checkCircuitBreaker(fix) {
-        const fixSignature = `${fix.type}:${fix.path}:${fix.content?.substring(0, 100)}`;
+        // Use simpler signature: just type + path (ignore content variations)
+        const fixSignature = `${fix.type}:${fix.path}`;
         
         // Count how many times this exact fix was applied recently
         const recentFixes = this.fixHistory.slice(-10); // Last 10 fixes
-        const identicalCount = recentFixes.filter(h => h.signature === fixSignature).length;
+        const identicalCount = recentFixes.filter(h => {
+            const historySignature = `${h.fix.type}:${h.fix.path}`;
+            return historySignature === fixSignature;
+        }).length;
         
         if (identicalCount >= this.circuitBreakerThreshold) {
             console.warn(`⚠️ [ReflexionApplier] Circuit breaker triggered: Same fix attempted ${identicalCount} times`);
@@ -35,9 +59,85 @@ class ReflexionApplier {
     }
 
     /**
+     * 🧠 NEW: Query Memory for past attempts before applying fix
+     */
+    async queryPastAttempts(fix) {
+        if (!this.memoryEnabled || !this.memory) {
+            return null;
+        }
+        
+        try {
+            // Search for similar errors
+            const errorQuery = fix.error || fix.path || fix.type;
+            const pastReflections = await this.memory.getPastReflections(errorQuery);
+            
+            if (pastReflections.errors.length > 0) {
+                console.log(`🔍 [ReflexionApplier] Found ${pastReflections.errors.length} past errors, ${pastReflections.fixes.length} fixes`);
+                
+                // Check if this exact fix was tried before
+                const similarFix = pastReflections.fixes.find(f => {
+                    const observations = f.observations.join(' ');
+                    return observations.includes(fix.type) && observations.includes(fix.path);
+                });
+                
+                if (similarFix) {
+                    console.log(`⚠️ [ReflexionApplier] WARNING: Similar fix was attempted before!`);
+                    console.log(`Previous attempt: ${similarFix.observations[0]}`);
+                }
+                
+                return pastReflections;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('❌ [ReflexionApplier] Memory query failed:', error.message);
+            return null;
+        }
+    }
+    
+    /**
+     * 🧠 NEW: Save fix attempt to Memory for future learning
+     */
+    async saveFixAttemptToMemory(fix, result) {
+        if (!this.memoryEnabled || !this.memory) {
+            return;
+        }
+        
+        try {
+            // Convert to Learning Store reflection format
+            const reflection = {
+                timestamp: Date.now(),
+                mission: fix.mission || 'Unknown Mission',
+                step: fix.stepId || 'Unknown Step',
+                tool: fix.type,
+                error: fix.error || `${fix.type} ${fix.path}`,
+                rootCause: fix.rootCause || 'Auto-detected by Reflexion',
+                fix: fix.content ? `${fix.type} ${fix.path}` : `${fix.type} ${fix.command || fix.path}`,
+                result: result.success ? 'PASS' : 'FAIL',
+                pattern: fix.pattern || null,
+                metadata: {
+                    fixType: fix.type,
+                    path: fix.path,
+                    success: result.success
+                }
+            };
+            
+            // Convert to Knowledge Graph
+            await this.memory.convertReflectionToKG(reflection);
+            console.log(`💾 [ReflexionApplier] Fix attempt saved to Memory`);
+            
+        } catch (error) {
+            console.error('❌ [ReflexionApplier] Failed to save to Memory:', error.message);
+        }
+    }
+    
+    /**
      * Apply a single fix from Reflexion system
      */
     async applySingleFix(fix) {
+        // 🧠 NEW: Query Memory for past attempts
+        const pastAttempts = await this.queryPastAttempts(fix);
+        
         // Circuit breaker check
         const circuitCheck = this.checkCircuitBreaker(fix);
         if (circuitCheck.shouldStop) {
@@ -51,7 +151,7 @@ class ReflexionApplier {
         console.log(`🧠 [ReflexionApplier] Applying fix: ${fix.type} ${fix.path}`);
         
         let result;
-        const fixSignature = `${fix.type}:${fix.path}:${fix.content?.substring(0, 100)}`;
+        const fixSignature = `${fix.type}:${fix.path}`; // Simplified signature
         
         try {
             switch (fix.type) {
@@ -152,6 +252,9 @@ class ReflexionApplier {
             } else {
                 console.warn(`⚠️ [ReflexionApplier] Fix failed: ${fix.type} ${fix.path}`, result.error);
             }
+            
+            // 🧠 NEW: Save fix attempt to Memory
+            await this.saveFixAttemptToMemory(fix, result);
             
             return result;
             
@@ -288,24 +391,36 @@ class ReflexionApplier {
 // Export singleton instance
 let reflexionApplierInstance = null;
 
-export function initializeReflexionApplier(toolBridge) {
+function initializeReflexionApplier(toolBridge) {
     if (!reflexionApplierInstance) {
         reflexionApplierInstance = new ReflexionApplier(toolBridge);
         console.log('🧠 [ReflexionApplier] Initialized');
         
-        // Attach to window for debugging
-        window.reflexionApplier = reflexionApplierInstance;
-        console.log('💡 Debug: Use window.reflexionApplier in console');
+        // Attach to window for debugging (browser only)
+        if (typeof window !== 'undefined') {
+            window.reflexionApplier = reflexionApplierInstance;
+            console.log('💡 Debug: Use window.reflexionApplier in console');
+        }
     }
     
     return reflexionApplierInstance;
 }
 
-export function getReflexionApplier() {
+function getReflexionApplier() {
     if (!reflexionApplierInstance) {
         throw new Error('ReflexionApplier not initialized! Call initializeReflexionApplier() first.');
     }
     return reflexionApplierInstance;
 }
 
-export { ReflexionApplier };
+
+// CommonJS exports
+module.exports = { 
+    ReflexionApplier,
+    initializeReflexionApplier,
+    getReflexionApplier
+};
+
+// ES6 exports for module scripts
+export { ReflexionApplier, initializeReflexionApplier, getReflexionApplier };
+
