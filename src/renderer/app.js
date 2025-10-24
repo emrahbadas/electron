@@ -2,12 +2,12 @@
 // Modern AI-powered code generation and file management
 
 // ===== AGENT HIERARCHY SYSTEM (VS Code Copilot Style) =====
-const { 
-    AGENT_LEVELS, 
-    AGENT_REGISTRY, 
-    wrapDecision, 
+const {
+    AGENT_LEVELS,
+    AGENT_REGISTRY,
+    wrapDecision,
     validateOverride,
-    logDecisionChain 
+    logDecisionChain
 } = require('../agents/agent-hierarchy.js');
 
 // ===== DYNAMIC CONTEXT MEMORY SYSTEM (ChatGPT Fix for 10-message limit) =====
@@ -21,7 +21,7 @@ class AsyncMutex {
         this._locked = false;
         this._name = name;
     }
-    
+
     async acquire() {
         return new Promise((resolve) => {
             if (!this._locked) {
@@ -34,7 +34,7 @@ class AsyncMutex {
             }
         });
     }
-    
+
     release() {
         if (this._queue.length > 0) {
             const resolve = this._queue.shift();
@@ -45,11 +45,11 @@ class AsyncMutex {
             console.log(`🔓 [${this._name}] Mutex released, no queue`);
         }
     }
-    
+
     isLocked() {
         return this._locked;
     }
-    
+
     queueLength() {
         return this._queue.length;
     }
@@ -1167,11 +1167,11 @@ class KodCanavari {
         // Proper mutex implementation replaces old flag-based system
         this.messageMutex = new AsyncMutex('ChatMessage');
         this.nightOrdersMutex = new AsyncMutex('NightOrders');
-        
+
         // DEPRECATED: Old flag system removed (replaced by mutex)
         // this.isProcessingMessage = false;
         // this.lastMessageTime = 0;
-        
+
         // Rate limiting (kept for different purpose - API throttling)
         this.requestQueue = [];
         this.activeRequests = 0;
@@ -1225,28 +1225,51 @@ class KodCanavari {
         this.approvalSystem = typeof ApprovalSystem !== 'undefined' ? new ApprovalSystem() : null;
         this.policyEngine = typeof PolicyEngine !== 'undefined' ? new PolicyEngine() : null;
         this.eventBus = typeof EventBus !== 'undefined' ? new EventBus() : null;
-        
+
         // 🔓 Developer Mode (auto-approve all operations)
         this.developerMode = localStorage.getItem('developerMode') === 'true' || false;
         console.log(`🔓 Developer Mode: ${this.developerMode ? 'ENABLED (auto-approve all)' : 'DISABLED'}`);
-        
-        // � PHASE CONTEXT TRACKING (Prevents loops, duplicates, context loss)
-        this.phaseContext = {
-            currentPhase: 0,
-            phaseHistory: [],
-            completedFiles: new Set(),
-            lastMission: null,
-            phaseStartTime: Date.now(),
-            totalPhases: 0
-        };
-        console.log('🎯 Phase Context Tracker initialized');
-        
+
+        // 🔒 PHASE CONTEXT TRACKING (Thread-safe file duplication prevention)
+        // ChatGPT-5 Audit Fix: Race condition protection with per-file locks
+        import('./phase-context.js').then(({ getPhaseContext }) => {
+            this.phaseContext = getPhaseContext();
+            console.log('✅ Phase Context with file locks initialized');
+        }).catch(() => {
+            // Fallback to old system if import fails
+            this.phaseContext = {
+                currentPhase: 0,
+                phaseHistory: [],
+                completedFiles: new Set(),
+                lastMission: null,
+                phaseStartTime: Date.now(),
+                totalPhases: 0,
+                hasFile: (p) => this.phaseContext.completedFiles.has(p),
+                markFileCompleted: (p) => this.phaseContext.completedFiles.add(p)
+            };
+            console.log('🎯 Phase Context Tracker initialized (legacy mode)');
+        });
+
+        // 🔄 REFLEXION QUEUE (Prevents concurrent reflexion race conditions)
+        // ChatGPT-5 Audit Fix: Sequential reflexion execution
+        import('./reflexion-queue.js').then(({ getReflexionQueue }) => {
+            this.reflexionQueue = getReflexionQueue();
+            console.log('✅ Reflexion Queue initialized');
+        }).catch(() => {
+            // Fallback: simple queue
+            this.reflexionQueue = {
+                enqueue: async (fn) => await fn(),
+                getStats: () => ({ pending: 0, completed: 0 })
+            };
+            console.log('🔄 Reflexion Queue initialized (fallback mode)');
+        });
+
         // �🎨 Update UI button on startup
         setTimeout(() => {
             const btn = document.getElementById('developerModeBtn');
             const statusSpan = btn?.querySelector('.dev-mode-status');
             const icon = btn?.querySelector('i');
-            
+
             if (btn && statusSpan && icon) {
                 if (this.developerMode) {
                     btn.classList.add('dev-mode-active');
@@ -1297,13 +1320,13 @@ class KodCanavari {
             const { getLearningStore } = require('./learning-store');
             this.learningStore = getLearningStore();
             console.log('✅ Learning Store initialized');
-            
+
             // Expose to window for Learning Dashboard
             if (!window.kodCanavari) {
                 window.kodCanavari = {};
             }
             window.kodCanavari.learningStore = this.learningStore;
-            
+
             // Display stats
             const stats = this.learningStore.getStats();
             console.log(`   - ${stats.totalReflections} reflections`);
@@ -1318,7 +1341,7 @@ class KodCanavari {
         console.log('✅ Session Context initialized');
         if (!window.kodCanavari) window.kodCanavari = {};
         window.kodCanavari.sessionContext = this.sessionContext;
-        
+
         // 🧠 DYNAMIC CONTEXT MEMORY (ChatGPT Fix: 3-tier memory architecture)
         this.contextMemory = getContextMemory();
         console.log('✅ Context Memory System initialized');
@@ -1327,17 +1350,17 @@ class KodCanavari {
         console.log(`   - Short-term: ${memStats.shortTermMessages} messages`);
         console.log(`   - Phase snapshots: ${memStats.phaseSnapshots}`);
         console.log(`   - Mission summaries: ${memStats.missionSummaries}`);
-        
+
         // 🔍 AGENT TRACE SYSTEM (OpenAI Agents SDK style tracing)
         this.traceSystem = new AgentTraceSystem(this.eventBus);
         console.log('✅ Agent Trace System initialized');
         window.kodCanavari.traceSystem = this.traceSystem;
-        
+
         // 🚪 ARTIFACT GATING SYSTEM (Verify artifacts before handoffs)
         this.gatingSystem = new ArtifactGatingSystem(this.workspaceRoot, window.electronAPI);
         console.log('✅ Artifact Gating System initialized');
         window.kodCanavari.gatingSystem = this.gatingSystem;
-        
+
         // 🤝 MULTI-AGENT COORDINATOR (Agent orchestration)
         this.multiAgentCoordinator = new MultiAgentCoordinator({
             traceSystem: this.traceSystem,
@@ -1347,12 +1370,12 @@ class KodCanavari {
         });
         console.log('✅ Multi-Agent Coordinator initialized');
         window.kodCanavari.multiAgentCoordinator = this.multiAgentCoordinator;
-        
+
         // 🌌 LUMA CORE (Cognitive reasoning engine)
         this.lumaCore = null;
         this.lumaBridge = null;
         this.lumaSuprimeAgent = null; // Supreme Agent - Üst Akıl
-        
+
         try {
             // Import Luma modules dynamically
             import('../agents/luma-core.js').then(({ LumaCore }) => {
@@ -1361,7 +1384,7 @@ class KodCanavari {
                         // Initialize Luma Core
                         this.lumaCore = new LumaCore();
                         console.log('🌌 Luma Core initialized');
-                        
+
                         // Initialize Luma Bridge
                         this.lumaBridge = new LumaContextBridge({
                             sessionContext: this.sessionContext,
@@ -1369,7 +1392,7 @@ class KodCanavari {
                             eventBus: this.eventBus
                         });
                         console.log('🌉 Luma Context Bridge initialized');
-                        
+
                         // Initialize SUPRIME AGENT (Üst Akıl)
                         this.lumaSuprimeAgent = new LumaSuprimeAgent({
                             lumaCore: this.lumaCore,
@@ -1382,15 +1405,15 @@ class KodCanavari {
                         });
                         console.log('� ✨ LUMA SUPRIME AGENT INITIALIZED ✨');
                         console.log('   → KayraDeniz artık düşünen bir üst akıl sistemine sahip!');
-                        
+
                         // Connect Bridge to Supreme Agent
                         this.lumaBridge.lumaSuprimeAgent = this.lumaSuprimeAgent;
-                        
+
                         // Expose to window
                         window.kodCanavari.lumaCore = this.lumaCore;
                         window.kodCanavari.lumaBridge = this.lumaBridge;
                         window.kodCanavari.lumaSuprimeAgent = this.lumaSuprimeAgent;
-                        
+
                         // Emit init event
                         this.eventBus.emit('SUPRIME_INITIALIZED', {
                             timestamp: Date.now(),
@@ -1406,15 +1429,25 @@ class KodCanavari {
         // 👨‍🏫 NARRATOR AGENT (Live commentary)
         // Initialize after EventBus and UI are ready
         this.narratorAgent = null;
-        
+
         // Defer narrator initialization until UI is ready
         setTimeout(() => {
-            if (typeof NarratorAgent !== 'undefined' && this.eventBus && window.elysionUI) {
-                this.narratorAgent = new NarratorAgent(this.eventBus, window.elysionUI);
-                console.log('✅ Narrator Agent initialized');
-            } else {
-                console.warn('⚠️ Narrator Agent not available (dependencies missing)');
-            }
+            // ✅ Import and initialize new NarratorAgent
+            import('../agents/narrator-agent.js').then(({ NarratorAgent }) => {
+                if (this.eventBus) {
+                    this.narratorAgent = new NarratorAgent();
+
+                    // Expose globally for EventBus access
+                    if (!window.kodCanavari) window.kodCanavari = {};
+                    window.kodCanavari.narratorAgent = this.narratorAgent;
+
+                    console.log('✅ Narrator Agent initialized (USTA MODU)');
+                } else {
+                    console.warn('⚠️ Narrator Agent skipped (EventBus missing)');
+                }
+            }).catch(error => {
+                console.warn('⚠️ Narrator Agent import failed:', error.message);
+            });
         }, 1000);
 
         // 🔬 CRITIC AGENT (Root cause analysis & fix generation)
@@ -1431,11 +1464,11 @@ class KodCanavari {
         this.currentProjectData = null;
         this.workflowProgress = [];
         this.currentMission = null; // PR-3: Track current mission for learning store
-        
+
         // 🔧 CRITICAL: Initialize path module BEFORE using it
         this.path = require('path');
         this.os = require('os');
-        
+
         // Start in user's Desktop directory by default
         this.currentWorkingDirectory = this.path.join(this.os.homedir(), 'OneDrive', 'Desktop');
 
@@ -1530,12 +1563,12 @@ class KodCanavari {
         const savedRoot = window.localStorage.getItem('currentFolder');
         if (savedRoot) {
             const normalized = this.path.normalize(savedRoot);
-            
+
             window.__CURRENT_FOLDER__ = normalized;
             this.currentWorkingDirectory = normalized;
             this.initialWorkspaceRoot = normalized;  // Only for telemetry/reporting
             this.workspaceRoot = normalized;
-            
+
             // 🔑 CRITICAL: Sync with main process (SSOT)
             if (window.electronAPI && window.electronAPI.setCwd) {
                 window.electronAPI.setCwd(normalized)
@@ -1548,7 +1581,7 @@ class KodCanavari {
             // 🔧 TRY DEFAULT WORKSPACE (Developer convenience)
             const defaultWorkspace = 'C:\\Users\\emrah badas\\OneDrive\\Desktop\\kodlama\\Yeni klasör (5)\\deneme';
             console.log('⚠️ Workspace root not set in localStorage, trying default:', defaultWorkspace);
-            
+
             // Check if default exists via electronAPI
             if (window.electronAPI && window.electronAPI.setCwd) {
                 window.electronAPI.setCwd(defaultWorkspace)
@@ -1634,7 +1667,7 @@ class KodCanavari {
     resolvePath(relativePath) {
         // Always use active root for file operations (NOT initial!)
         const baseRoot = this.getWorkspaceRoot({ mode: "active" });
-        
+
         if (!baseRoot) {
             throw new Error('❌ Cannot resolve path: Workspace root not set. User must select folder via "Klasör Seç" button.');
         }
@@ -1692,8 +1725,92 @@ class KodCanavari {
         // Expose app instance for onclick handlers in terminal links
         window.app = this;
 
-        // Setup electronAPI for IPC communication (nodeIntegration enabled)
-        if (typeof require !== 'undefined') {
+        // Setup electronAPI for IPC communication
+        // ✅ SECURITY FIX: Use preload.js contextBridge (window.kayra) when available
+        // 🔄 FALLBACK: Legacy require('electron') for backward compatibility
+        if (window.kayra) {
+            // ✅ SECURE MODE: Using preload.js contextBridge
+            console.log('✅ Using secure contextBridge API (window.kayra)');
+
+            window.electronAPI = {
+                // Core IPC
+                invoke: window.kayra.invoke,
+                send: window.kayra.send,
+                on: window.kayra.on,
+
+                // Platform Detection API
+                getPlatform: () => window.kayra.invoke('get-platform'),
+
+                // 🔑 Workspace Root API (SSOT in main process)
+                setCwd: (absolutePath) => window.kayra.invoke('cwd:set', absolutePath),
+                getCwd: () => window.kayra.invoke('cwd:get'),
+
+                // File System API'leri
+                readDirectory: (dirPath) => window.kayra.invoke('read-directory', dirPath),
+                readFile: (filePath) => window.kayra.invoke('read-file', filePath),
+                writeFile: (filePath, content) => window.kayra.invoke('write-file', filePath, content),
+                createDirectory: (dirPath) => window.kayra.invoke('create-directory', dirPath),
+                runCommand: (command, cwd) => window.kayra.invoke('run-command', command, cwd),
+                openFileDialog: () => window.kayra.invoke('open-file-dialog'),
+                openFolderDialog: () => window.kayra.invoke('open-folder-dialog'),
+                saveFileDialog: () => window.kayra.invoke('save-file-dialog'),
+
+                // MCP API'leri (Old - keep for compatibility)
+                mcpStatus: () => window.kayra.invoke('mcp-status'),
+                mcpListTools: () => window.kayra.invoke('mcp-list-tools'),
+                mcpTest: () => window.kayra.invoke('mcp-test'),
+                mcpCreateFile: (filePath, content, workingDirectory) => window.kayra.invoke('mcp-create-file', filePath, content, workingDirectory),
+                mcpWriteCode: (filePath, content, language, workingDirectory) => window.kayra.invoke('mcp-write-code', filePath, content, language, workingDirectory),
+                mcpReadFile: (filePath) => window.kayra.invoke('mcp-read-file', filePath),
+                mcpListFiles: (directoryPath) => window.kayra.invoke('mcp-list-files', directoryPath),
+                mcpGenerateProject: (projectName, projectType, basePath, workingDirectory) => window.kayra.invoke('mcp-generate-project', projectName, projectType, basePath, workingDirectory),
+                mcpCallTool: (toolName, args) => window.kayra.invoke('mcp-call-tool', toolName, args),
+
+                // MCP API'leri (New - Claude Integration)
+                mcpNewListTools: () => window.kayra.invoke('mcp-new:list-tools'),
+                mcpNewCallTool: (toolName, args) => window.kayra.invoke('mcp-new:call-tool', toolName, args),
+                mcpNewGetStatus: () => window.kayra.invoke('mcp-new:get-status'),
+                mcpNewGetLog: () => window.kayra.invoke('mcp-new:get-log'),
+                mcpNewSetFileWhitelist: (rootPath) => window.kayra.invoke('mcp-new:set-file-whitelist', rootPath),
+
+                // LLM API'leri (Unified OpenAI + Claude)
+                llmAsk: (provider, messages, options) => window.kayra.invoke('llm:ask', { provider, messages, options }),
+                llmSetApiKey: (provider, apiKey) => window.kayra.invoke('llm:set-api-key', { provider, apiKey }),
+                llmGetModels: (provider) => window.kayra.invoke('llm:get-models', { provider }),
+                llmSetModel: (provider, model) => window.kayra.invoke('llm:set-model', { provider, model }),
+
+                // Claude Agent API'leri
+                claudeGetStatus: () => window.kayra.invoke('claude:get-status'),
+                claudeClearHistory: () => window.kayra.invoke('claude:clear-history'),
+
+                // AI (GitHub Models API) API'leri
+                aiInitialize: (workspacePath) => window.kayra.invoke('ai-initialize', workspacePath),
+                aiChat: (message, options) => window.kayra.invoke('ai-chat', message, options),
+                aiAnalyzeCode: (code, language, request) => window.kayra.invoke('ai-analyze-code', code, language, request),
+                aiGenerateCode: (prompt, language) => window.kayra.invoke('ai-generate-code', prompt, language),
+                aiRefreshWorkspace: (workspacePath) => window.kayra.invoke('ai-refresh-workspace', workspacePath),
+                aiStatus: () => window.kayra.invoke('ai-status'),
+                aiSetModel: (modelName) => window.kayra.invoke('ai-set-model', modelName),
+
+                // Continue Agent API'leri
+                continueChat: (message, config) => window.kayra.invoke('continue:chat', message, config),
+                continueGetStatus: () => window.kayra.invoke('continue:get-status'),
+                continueSetConfig: (config) => window.kayra.invoke('continue:set-config', config),
+
+                // MCP Router API'leri (Unified Multi-Provider)
+                mcpRouterSwitchProvider: (provider) => window.kayra.invoke('mcp-router:switch-provider', provider),
+                mcpRouterGetStatus: () => window.kayra.invoke('mcp-router:get-status'),
+                mcpRouterListTools: () => window.kayra.invoke('mcp-router:list-tools'),
+                mcpRouterCallTool: (toolName, args) => window.kayra.invoke('mcp-router:call-tool', toolName, args),
+                mcpRouterSendMessage: (message, options) => window.kayra.invoke('mcp-router:send-message', message, options),
+
+                // System utilities
+                openExternal: (url) => window.kayra.invoke('open-external', url)
+            };
+        } else if (typeof require !== 'undefined') {
+            // 🔄 LEGACY MODE: Using require('electron') - DEPRECATED
+            console.warn('⚠️ Using legacy require("electron") mode - Security risk! Update to contextBridge.');
+
             const { ipcRenderer } = require('electron');
             window.electronAPI = {
                 // Expose ipcRenderer for advanced usage
@@ -1769,7 +1886,7 @@ class KodCanavari {
                 // MCP Proxy Management
                 restartMCPProxy: () => ipcRenderer.invoke('restart-mcp-proxy')
             };
-            console.log('✅ electronAPI initialized with IPC communication');
+            console.log('✅ electronAPI initialized with IPC communication (LEGACY MODE)');
 
             // ===== STREAMING PROCESS EVENT LISTENERS =====
             // Setup event listeners for streaming process output
@@ -1786,11 +1903,13 @@ class KodCanavari {
             });
 
             console.log('✅ Streaming process event listeners registered');
+        } else {
+            console.error('❌ No IPC mechanism available! App may not function properly.');
         }
 
         // Load settings from localStorage
         this.loadSettings();
-        
+
         // Load API keys from electron-store
         await this.loadApiKeys();
 
@@ -1837,10 +1956,10 @@ class KodCanavari {
         // Listen for PHASE 2 auto-trigger events from Reflexion module
         if (this.eventBus) {
             console.log('🎯 Setting up EventBus Reflexion Bridge...');
-            
+
             this.eventBus.on('executor:start', async (payload) => {
                 console.log('🚀 [EventBus] executor:start event received:', payload);
-                
+
                 try {
                     if (payload && payload.orders) {
                         // Validate orders structure
@@ -1848,17 +1967,17 @@ class KodCanavari {
                             console.error('❌ Invalid Night Orders structure:', payload.orders);
                             return;
                         }
-                        
+
                         // Mark as Phase 2 if coming from reflexion
                         if (payload.isPhase2) {
                             this.phaseContext.currentPhase = 2;
                             this.phaseContext.lastMission = payload.orders.mission;
                         }
-                        
+
                         // Direct execution via executeNightOrders (bypasses UI mutex)
                         console.log('⚙️ [EventBus] Executing Night Orders directly...');
                         await this.executeNightOrders(payload.orders, payload.options || {});
-                        
+
                     } else {
                         console.warn('⚠️ [EventBus] executor:start payload missing orders');
                     }
@@ -1867,7 +1986,7 @@ class KodCanavari {
                     this.addChatMessage('system', `❌ Otomatik yürütme hatası: ${error.message}`);
                 }
             });
-            
+
             console.log('✅ EventBus Reflexion Bridge initialized');
         } else {
             console.warn('⚠️ EventBus not available, skipping Reflexion Bridge setup');
@@ -1982,20 +2101,20 @@ class KodCanavari {
     // Emergency reset function for debugging - can be called from console
     emergencyReset() {
         console.log('🚨 Emergency reset called');
-        
+
         // ✅ NEW: Force release all mutexes
         if (this.messageMutex && this.messageMutex.isLocked()) {
             console.warn('⚠️ Force releasing messageMutex');
             this.messageMutex._locked = false;
             this.messageMutex._queue = [];
         }
-        
+
         if (this.nightOrdersMutex && this.nightOrdersMutex.isLocked()) {
             console.warn('⚠️ Force releasing nightOrdersMutex');
             this.nightOrdersMutex._locked = false;
             this.nightOrdersMutex._queue = [];
         }
-        
+
         console.log('✅ All mutexes reset');
 
         // Re-enable send button if it exists
@@ -2052,7 +2171,7 @@ class KodCanavari {
     initializeUI() {
         // Initialize AI Selector (Claude vs OpenAI switch) - DISABLED, using chat controls instead
         // this.initAISelector();
-        
+
         // Initialize model select
         const modelSelect = document.getElementById('modelSelect');
         if (modelSelect) {
@@ -2131,7 +2250,7 @@ class KodCanavari {
             console.log('ℹ️ About button clicked');
             this.showAbout();
         });
-        
+
         // 🔓 Developer Mode Toggle
         document.getElementById('developerModeBtn')?.addEventListener('click', () => {
             console.log('🔓 Developer Mode button clicked');
@@ -2306,40 +2425,40 @@ class KodCanavari {
         if (agentRoleSelect) {
             // Set initial value from settings (default to mini MCP)
             agentRoleSelect.value = this.settings.mcpServer || 'mcp:mini';
-            
+
             agentRoleSelect.addEventListener('change', async (e) => {
                 const value = e.target.value;
                 console.log('🔄 Selection changed to:', value);
-                
+
                 // Check if it's MCP server selection
                 if (value.startsWith('mcp:')) {
                     const mcpType = value.split(':')[1]; // 'mini' or 'claude'
                     const provider = mcpType === 'claude' ? 'claude' : 'openai';
-                    
+
                     console.log('🔧 Switching MCP Server to:', mcpType);
-                    
+
                     // Show notification
                     const serverName = mcpType === 'claude' ? 'Claude MCP Server' : 'Mini MCP Server (OpenAI)';
                     this.showNotification(`🔄 Switching to ${serverName}...`, 'info');
-                    
+
                     // Update settings
                     this.settings.mcpServer = value;
                     this.settings.llmProvider = provider;
                     this.saveSettings();
-                    
+
                     // Update UI - switch model groups
                     this.switchModelGroups(provider);
-                    
+
                     // Update server indicator
                     if (currentServerSpan) {
                         currentServerSpan.textContent = mcpType === 'claude' ? 'Claude MCP' : 'Mini MCP';
                     }
-                    
+
                     // Notify MCP Router
                     try {
                         if (window.electronAPI) {
                             const result = await window.electronAPI.ipcRenderer.invoke('mcp-router:switch-provider', provider);
-                            
+
                             if (result && result.success) {
                                 this.showNotification(`✅ Switched to ${serverName}`, 'success');
                                 console.log('✅ MCP Server switched successfully');
@@ -2365,7 +2484,7 @@ class KodCanavari {
             chatAiMode.value = this.aiMode.current || 'ask';
             chatAiMode.addEventListener('change', (e) => {
                 const mode = e.target.value;
-                
+
                 if (agentRolesGroup) {
                     if (mode === 'agent') {
                         // Show agent roles group
@@ -2489,26 +2608,26 @@ class KodCanavari {
         const path = require('path');
         this.ipc = ipcRenderer;
         this.path = path;
-        
+
         // ===== CLAUDE MCP STREAMING EVENT LISTENERS =====
-        
+
         // Claude streaming chunk
         ipcRenderer.on('claude:streamingChunk', (event, chunk) => {
             this.appendStreamingChunk(chunk);
         });
-        
+
         // Claude message complete
         ipcRenderer.on('claude:messageComplete', (event, data) => {
             this.finalizeStreamingMessage();
             console.log('✅ Claude message complete:', data);
         });
-        
+
         // Claude tool used
         ipcRenderer.on('claude:toolUsed', (event, toolData) => {
             console.log('🔧 Claude tool used:', toolData.name);
             // Optional: Show real-time tool badge
         });
-        
+
         // MCP Router provider switched
         ipcRenderer.on('mcp-router:providerSwitched', (event, provider) => {
             console.log('🔄 Provider switched:', provider);
@@ -2517,7 +2636,7 @@ class KodCanavari {
                 this.updateChatProviderIndicator(provider);
             }
         });
-        
+
         console.log('✅ Claude MCP IPC listeners registered');
     }
 
@@ -3264,7 +3383,7 @@ class KodCanavari {
         // ✅ NEW: Proper mutex-based atomic execution
         // Replaces old flag-based system with guaranteed atomic operations
         await this.messageMutex.acquire();
-        
+
         try {
             // Early return #1: Empty input check
             if (!chatInput || !chatInput.value.trim()) {
@@ -3273,7 +3392,7 @@ class KodCanavari {
             }
 
             message = chatInput.value.trim();
-            
+
             // 🛑 ChatGPT Fix: Update session context with user input
             if (this.sessionContext) {
                 this.sessionContext.updateLastUserInput(message);
@@ -3287,7 +3406,7 @@ class KodCanavari {
             // Keywords indicating continuation: "devam", "phase", "adım", "sonraki", "düzelt", "otomatik"
             // ChatGPT Fix: Added "düzelt", "otomatik", "eksik" to prevent reset during auto-fix
             isContinuation = /\b(devam|phase|adım|sonraki|kaldığı|tamamla|düzelt|otomatik|eksik|phase\s*2)\b/i.test(message);
-            
+
             if (!isContinuation) {
                 // New project - reset phase context
                 this.phaseContext.currentPhase = 0;
@@ -3297,7 +3416,7 @@ class KodCanavari {
             } else {
                 console.log('➡️ Phase continuation detected - keeping phase context (phase:', this.phaseContext.currentPhase, ')');
             }
-            
+
             chatInput.value = '';
             chatInput.style.height = 'auto';
 
@@ -3351,21 +3470,21 @@ class KodCanavari {
             // ===== MCP ROUTER INTEGRATION: Check active provider =====
             // Read provider from settings (set by MCP server selection)
             const activeProvider = this.settings.llmProvider || 'openai';
-            
+
             console.log('🎯 Active provider:', activeProvider);
-            
+
             // Check if API key is set for current provider BEFORE routing
             if (activeProvider === 'openai' && !this.settings.apiKey) {
                 throw new Error('OpenAI API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
             } else if (activeProvider === 'claude' && !this.settings.claudeApiKey) {
                 throw new Error('Claude API anahtarı ayarlanmamış. Lütfen üst bardan API anahtarınızı girin.');
             }
-            
+
             // If Claude is selected, route through MCP Router
             if (activeProvider === 'claude') {
                 console.log('🧠 Routing to Claude via MCP Router');
                 await this.sendMessageViaMCPRouter(message, chatMode);
-                
+
                 if (sendBtn) {
                     sendBtn.disabled = false;
                     sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
@@ -3373,7 +3492,7 @@ class KodCanavari {
                 this.messageMutex.release();
                 return;
             }
-            
+
             // ===== EXISTING OPENAI FLOW CONTINUES BELOW =====
 
             // Agent mode ile unified system kullan (context-aware)
@@ -3383,7 +3502,7 @@ class KodCanavari {
                 if (false && this.lumaSuprimeAgent) {
                     try {
                         console.log('🌌 Supreme Agent processing:', message);
-                        
+
                         // 🔄 Build context with phase information for agent coordination
                         const supremeContext = {
                             message,
@@ -3400,21 +3519,21 @@ class KodCanavari {
                                 workspaceRoot: this.workspaceRoot
                             }
                         };
-                        
+
                         // Execute via Supreme Agent (handles all reasoning, validation, assignment)
                         const supremeResult = await this.lumaSuprimeAgent.execute(message, supremeContext);
-                        
+
                         console.log('🌌 Supreme Result:', supremeResult);
-                        
+
                         // ✅ EARLY RETURN: Handle greeting responses (no execution needed)
                         if (supremeResult.type === 'greeting' || supremeResult.skipExecution) {
                             console.log('💬 Greeting response - skipping unified agent task');
-                            
+
                             this.addContextualChatMessage('ai', supremeResult.message, {
                                 mode: 'greeting',
                                 supremeResult
                             });
-                            
+
                             if (sendBtn) {
                                 sendBtn.disabled = false;
                                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
@@ -3422,7 +3541,7 @@ class KodCanavari {
                             this.messageMutex.release(); // Early return: Release mutex!
                             return;
                         }
-                        
+
                         // Handle Supreme Agent response
                         if (supremeResult.type === 'blocked') {
                             // Decision was blocked by validation
@@ -3430,7 +3549,7 @@ class KodCanavari {
                                 mode: 'suprime-blocked',
                                 supremeResult
                             });
-                            
+
                             if (sendBtn) {
                                 sendBtn.disabled = false;
                                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
@@ -3438,14 +3557,14 @@ class KodCanavari {
                             this.messageMutex.release(); // Early return #3: Release mutex!
                             return;
                         }
-                        
+
                         if (supremeResult.type === 'error') {
                             // Supreme Agent encountered an error
                             this.addContextualChatMessage('ai', supremeResult.message, {
                                 mode: 'suprime-error',
                                 supremeResult
                             });
-                            
+
                             if (sendBtn) {
                                 sendBtn.disabled = false;
                                 sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
@@ -3453,14 +3572,14 @@ class KodCanavari {
                             this.messageMutex.release(); // Early return #4: Release mutex!
                             return;
                         }
-                        
+
                         // Success - show Supreme Agent decision and result
-                        
+
                         // FIX: Convert intent object to string if needed
-                        const intentDisplay = typeof supremeResult.intent === 'object' 
+                        const intentDisplay = typeof supremeResult.intent === 'object'
                             ? (supremeResult.intent.intentType || supremeResult.intent.type || JSON.stringify(supremeResult.intent))
                             : supremeResult.intent;
-                        
+
                         const summaryMessage = `
 🌌 **Supreme Agent Decision**
 
@@ -3472,16 +3591,16 @@ class KodCanavari {
 
 **Result:** ${supremeResult.result?.message || supremeResult.message}
                         `.trim();
-                        
+
                         this.addContextualChatMessage('ai', summaryMessage, {
                             mode: 'suprime-success',
                             supremeResult
                         });
-                        
+
                         // Always execute unified agent task after Supreme Agent decision
                         // Supreme Agent only decides, doesn't execute
                         console.log('🎯 Executing task via Unified Agent System...');
-                        
+
                         // 🎼 HIERARCHY SYSTEM: Wrap Luma's decision with orchestrator metadata
                         const lumaDecision = {
                             role: supremeResult.agent.toLowerCase().replace('agent', ''), // "ExecutorAgent" → "executor"
@@ -3491,27 +3610,27 @@ class KodCanavari {
                             // 🔄 PHASE CONTEXT: Attach phase information to route
                             phaseContext: supremeContext.phaseContext
                         };
-                        
+
                         // Wrap with hierarchy (Level 0 = Orchestrator = FINAL)
                         const lumaRoute = wrapDecision('LumaSupremeAgent', lumaDecision);
-                        
+
                         console.log('🎼 Luma Supreme decision wrapped with hierarchy:');
                         console.log('   Level:', lumaRoute._hierarchy.level, '(ORCHESTRATOR)');
                         console.log('   Is Final:', lumaRoute._hierarchy.isFinal, '🔒');
                         console.log('   Agent:', lumaRoute._hierarchy.agent);
                         console.log('   Phase Context:', lumaRoute.phaseContext);
-                        
+
                         await this.executeUnifiedAgentTask(contextAwarePrompt, lumaRoute);
-                        
+
                     } catch (supremeError) {
                         console.error('❌ Supreme Agent error:', supremeError);
-                        
+
                         // Fallback to Luma Bridge
                         console.log('⚠️ Falling back to Luma Bridge...');
-                        
+
                         if (this.lumaBridge) {
                             const lumaDecision = await this.lumaBridge.processMessage(message);
-                            
+
                             if (lumaDecision.type === 'warning' && !lumaDecision.approved) {
                                 const confirmed = await this.showLumaConfirmation(lumaDecision);
                                 if (!confirmed) {
@@ -3524,7 +3643,7 @@ class KodCanavari {
                                 }
                             }
                         }
-                        
+
                         // Execute unified agent task
                         await this.executeUnifiedAgentTask(contextAwarePrompt);
                     }
@@ -3532,7 +3651,7 @@ class KodCanavari {
                     // FALLBACK: Original Luma Bridge logic
                     try {
                         const lumaDecision = await this.lumaBridge.processMessage(message);
-                        
+
                         // Luma karar verdi - kullanıcıya bildir
                         if (lumaDecision.type === 'warning') {
                             // Riskli komut - onay iste
@@ -3540,7 +3659,7 @@ class KodCanavari {
                                 mode: 'luma-warning',
                                 lumaDecision
                             });
-                            
+
                             // Kullanıcı onayı bekle
                             const confirmed = await this.showLumaConfirmation(lumaDecision);
                             if (!confirmed) {
@@ -3558,7 +3677,7 @@ class KodCanavari {
                                 mode: 'luma-suggestion',
                                 lumaDecision
                             });
-                            
+
                             // Auto-fix varsa uygula
                             if (lumaDecision.metadata?.autoFixable && lumaDecision.fix) {
                                 this.addContextualChatMessage('ai', `🔧 Düzeltme uygulanıyor: ${lumaDecision.fix}`, {
@@ -3578,11 +3697,11 @@ class KodCanavari {
                                 lumaDecision
                             });
                         }
-                        
+
                     } catch (lumaError) {
                         console.error('❌ Luma reasoning error:', lumaError);
                     }
-                    
+
                     // Unified Agent System - GitHub Copilot tarzı with conversation memory
                     await this.executeUnifiedAgentTask(contextAwarePrompt);
                 } else {
@@ -3596,7 +3715,7 @@ class KodCanavari {
                 // 🧠 CRITICAL FIX: Pass as STRING to trigger chatHistory inclusion in callLLM
                 // When callLLM receives a string, it automatically adds last 10 messages from this.chatHistory
                 // This enables conversation memory in ASK mode
-                
+
                 // Use unified LLM interface (routes to OpenAI or Claude)
                 const response = await this.queueOpenAIRequest(async () => {
                     // Pass enhancedPrompt as STRING, not array - this triggers history inclusion
@@ -3841,18 +3960,18 @@ Daha sonra "Kaydedilen Projeler" bölümünden erişebilirsin.`;
 
         // Find or create streaming message
         let streamingMsg = chatMessages.querySelector('.chat-message.streaming');
-        
+
         if (!streamingMsg) {
             // Create new streaming message
             streamingMsg = document.createElement('div');
             streamingMsg.className = 'chat-message ai streaming';
-            
+
             const now = new Date();
             const timeStr = now.toLocaleTimeString('tr-TR', {
                 hour: '2-digit',
                 minute: '2-digit'
             });
-            
+
             streamingMsg.innerHTML = `
                 <div class="message-content">
                     <i class="fas fa-dragon streaming-icon"></i>
@@ -3860,16 +3979,16 @@ Daha sonra "Kaydedilen Projeler" bölümünden erişebilirsin.`;
                 </div>
                 <div class="message-time">${timeStr}</div>
             `;
-            
+
             chatMessages.appendChild(streamingMsg);
         }
-        
+
         // Append chunk to message text
         const textDiv = streamingMsg.querySelector('.message-text');
         if (textDiv) {
             textDiv.textContent += chunk;
         }
-        
+
         // Scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -3884,15 +4003,15 @@ Daha sonra "Kaydedilen Projeler" bölümünden erişebilirsin.`;
         const streamingMsg = chatMessages.querySelector('.chat-message.streaming');
         if (streamingMsg) {
             streamingMsg.classList.remove('streaming');
-            
+
             // Store in chat history
             const textDiv = streamingMsg.querySelector('.message-text');
             if (textDiv) {
                 const content = textDiv.textContent;
-                this.chatHistory.push({ 
-                    type: 'ai', 
-                    content: content, 
-                    timestamp: new Date() 
+                this.chatHistory.push({
+                    type: 'ai',
+                    content: content,
+                    timestamp: new Date()
                 });
             }
         }
@@ -3907,14 +4026,37 @@ Daha sonra "Kaydedilen Projeler" bölümünden erişebilirsin.`;
 
         const notification = document.createElement('div');
         notification.className = 'chat-message tool-usage';
-        
+
         const now = new Date();
         const timeStr = now.toLocaleTimeString('tr-TR', {
             hour: '2-digit',
             minute: '2-digit'
         });
 
-        const toolList = tools.map(t => `<li><code>${t.name}</code></li>`).join('');
+        const toolList = tools.map(t => {
+            let toolInfo = `<code>${t.name || t}</code>`;
+
+            // Add tool input details if available
+            if (t.input) {
+                const inputSummary = typeof t.input === 'object'
+                    ? Object.entries(t.input)
+                        .slice(0, 3) // Show first 3 params
+                        .map(([key, val]) => {
+                            const valStr = typeof val === 'string' && val.length > 50
+                                ? val.substring(0, 50) + '...'
+                                : String(val);
+                            return `${key}: ${valStr}`;
+                        })
+                        .join(', ')
+                    : String(t.input).substring(0, 100);
+
+                if (inputSummary) {
+                    toolInfo += `<br><small style="color: #888; margin-left: 20px;">${inputSummary}</small>`;
+                }
+            }
+
+            return `<li>${toolInfo}</li>`;
+        }).join('');
 
         notification.innerHTML = `
             <div class="message-content">
@@ -4803,7 +4945,7 @@ Not:
     async loadApiKeys() {
         try {
             const result = await window.electronAPI.ipcRenderer.invoke('load-api-keys');
-            
+
             if (result.success) {
                 // OpenAI key
                 if (result.openaiKey) {
@@ -4813,7 +4955,7 @@ Not:
                         topApiKeyInput.value = this.maskApiKey(result.openaiKey);
                     }
                 }
-                
+
                 // Claude key
                 if (result.claudeKey) {
                     this.settings.claudeApiKey = result.claudeKey;
@@ -4822,7 +4964,7 @@ Not:
                         topClaudeKeyInput.value = this.maskApiKey(result.claudeKey);
                     }
                 }
-                
+
                 console.log('✅ API keys loaded from store');
             }
         } catch (error) {
@@ -4878,13 +5020,13 @@ Not:
                 // Update settings
                 this.settings.claudeApiKey = apiKey;
                 this.saveSettings();
-                
+
                 // Mask the key in input
                 claudeKeyInput.value = this.maskApiKey(apiKey);
-                
+
                 // Initialize MCP Router
                 await this.initializeMCPRouter();
-                
+
                 this.updateStatus('Claude API anahtarı kaydedildi ve test edildi');
                 this.addChatMessage('system', '✅ Claude API anahtarı başarıyla ayarlandı ve test edildi!');
                 this.showNotification('✅ Claude API key saved & tested!', 'success');
@@ -4906,42 +5048,42 @@ Not:
             // Import AI Selector UI
             const AISelectorUI = require('./ai-selector-ui.js');
             this.aiSelector = new AISelectorUI();
-            
+
             // Find chat header controls
             const chatHeader = document.querySelector('.chat-header-controls');
             if (!chatHeader) {
                 console.warn('⚠️ Chat header not found, AI Selector skipped');
                 return;
             }
-            
+
             // Append to chat header
             this.aiSelector.appendTo(chatHeader);
-            
+
             // Provider change callback
             this.aiSelector.onProviderChange = (provider) => {
                 console.log(`🔄 AI Provider switched to: ${provider}`);
                 this.currentAIProvider = provider;
-                
+
                 // Update chat header indicator
                 this.updateChatProviderIndicator(provider);
-                
+
                 // Store preference
                 this.settings.activeAIProvider = provider;
                 this.saveSettings();
             };
-            
+
             // Streaming callback (for Claude)
             this.aiSelector.onStreamingChunk = (chunk) => {
                 this.appendStreamingChunk(chunk);
             };
-            
+
             console.log('✅ AI Selector initialized');
-            
+
             // Auto-initialize MCP Router if Claude key exists
             if (this.settings.claudeApiKey) {
                 await this.initializeMCPRouter();
             }
-            
+
         } catch (error) {
             console.error('❌ AI Selector init error:', error);
         }
@@ -4953,11 +5095,11 @@ Not:
     updateChatProviderIndicator(provider) {
         const header = document.querySelector('.ai-chat-panel h3');
         if (!header) return;
-        
+
         const icon = provider === 'claude' ? '🧠' : '🤖';
         const name = provider === 'claude' ? 'Claude' : 'OpenAI';
         const badge = `<span class="provider-badge ${provider}">${icon} ${name}</span>`;
-        
+
         header.innerHTML = `<i class="fas fa-comments"></i> AI Chat ${badge}`;
     }
 
@@ -4967,7 +5109,7 @@ Not:
     async initializeMCPRouter() {
         try {
             console.log('🚀 Initializing MCP Router...');
-            
+
             const result = await window.electronAPI.ipcRenderer.invoke('mcp-router:initialize', {
                 workspacePath: this.projectFolder || process.cwd(),
                 anthropicApiKey: this.settings.claudeApiKey
@@ -4975,12 +5117,12 @@ Not:
 
             if (result.success) {
                 console.log('✅ MCP Router initialized:', result.services);
-                
+
                 // Update AI Selector status if exists
                 if (this.aiSelector) {
                     await this.aiSelector.refreshStatus();
                 }
-                
+
                 return true;
             } else {
                 console.error('❌ MCP Router init failed:', result.error);
@@ -5024,7 +5166,7 @@ Not:
             const selectedCode = this.monaco?.getModel()?.getValueInRange(
                 this.monaco.getSelection()
             );
-            
+
             const context = {
                 selectedCode: selectedCode,
                 language: this.currentLanguage,
@@ -5032,10 +5174,10 @@ Not:
                 chatMode: chatMode,
                 workspacePath: this.projectFolder || process.cwd()
             };
-            
-            // Add user message to chat
-            this.addChatMessage('user', message);
-            
+
+            // NOTE: User message already added in sendChatMessage()
+            // Don't add it again here to prevent duplicates
+
             // Show loading indicator
             const loadingId = Date.now();
             const loadingMsg = document.createElement('div');
@@ -5048,42 +5190,35 @@ Not:
                 </div>
             `;
             document.getElementById('chatMessages').appendChild(loadingMsg);
-            
+
             // Send to MCP Router
             const result = await window.electronAPI.ipcRenderer.invoke(
-                'mcp-router:send-message', 
-                message, 
+                'mcp-router:send-message',
+                message,
                 context
             );
-            
+
             // Remove loading indicator
             const loadingElement = document.getElementById(`loading-${loadingId}`);
             if (loadingElement) {
                 loadingElement.remove();
             }
-            
+
             if (result.success) {
-                // Response already streamed via IPC events (for Claude streaming)
-                // For OpenAI (non-streaming), add response if not already added
-                if (result.response && !result.streamed) {
-                    // Only add if no streaming message was finalized
-                    const chatMessages = document.getElementById('chatMessages');
-                    const streamingMsg = chatMessages?.querySelector('.chat-message.streaming');
-                    if (!streamingMsg) {
-                        this.addChatMessage('ai', result.response);
-                    }
-                }
-                
+                // ✅ For Claude streaming: Message already added via IPC events
+                // ✅ For OpenAI: Add response only if not streamed
+                // DO NOT add message here for Claude - it's handled by streaming events
+
                 // Show tool usage if any
                 if (result.toolsUsed && result.toolsUsed.length > 0) {
                     this.showToolUsageNotification(result.toolsUsed);
                 }
-                
+
                 console.log('✅ MCP Router response received');
             } else {
                 this.addChatMessage('system', `❌ Hata: ${result.error}`);
             }
-            
+
         } catch (error) {
             console.error('❌ MCP Router error:', error);
             this.addChatMessage('system', `❌ Beklenmeyen hata: ${error.message}`);
@@ -5113,7 +5248,7 @@ Not:
 
             // Select default OpenAI model
             chatModelSelect.value = this.settings.currentModel || 'gpt-4o-mini';
-            
+
         } else if (provider === 'claude' || provider === 'anthropic') {
             // Show Claude groups, hide OpenAI groups
             openaiGroups.forEach(id => {
@@ -6246,13 +6381,13 @@ Not:
         if (!this.settings.apiKey) {
             throw new Error('OpenAI API anahtarı ayarlanmamış');
         }
-        
+
         // 📚 PR-3: PATTERN INJECTION - Add learned patterns to system prompt
         let enhancedSystemPrompt = systemPrompt || '';
         if (this.learningStore && options.injectPatterns !== false) {
             const stats = this.learningStore.getStats();
             const topPatterns = stats.topPatterns;
-            
+
             if (topPatterns.length > 0) {
                 const learningContext = `\n\n📚 LEARNED PATTERNS (from past failures):\n` +
                     topPatterns.map(p => {
@@ -6260,7 +6395,7 @@ Not:
                         return `- ${p.id}: ${p.rootCause} → Fix: ${lastFix.fix} (seen ${p.count}x)`;
                     }).join('\n') +
                     `\n\nUse these patterns to avoid repeating mistakes.\n`;
-                
+
                 enhancedSystemPrompt += learningContext;
                 console.log(`📚 Injected ${topPatterns.length} learned patterns into AI context`);
             }
@@ -6343,8 +6478,8 @@ Not:
                 if (topPatterns && topPatterns.length > 0) {
                     learningContext = '\n\n📚 ÖĞRENİLEN PATTERN\'LER (Geçmiş hatalardan öğrendiklerim):\n';
                     topPatterns.forEach((pattern, idx) => {
-                        const lastFix = pattern.fixes && pattern.fixes.length > 0 
-                            ? pattern.fixes[pattern.fixes.length - 1].fix 
+                        const lastFix = pattern.fixes && pattern.fixes.length > 0
+                            ? pattern.fixes[pattern.fixes.length - 1].fix
                             : 'N/A';
                         learningContext += `${idx + 1}. ${pattern.id} (${pattern.count}x başarılı)\n`;
                         learningContext += `   Kök Sebep: ${pattern.rootCause || 'N/A'}\n`;
@@ -6417,7 +6552,7 @@ Not:
             console.log('📜 chatHistory exists?', !!this.chatHistory);
             console.log('📜 chatHistory is array?', Array.isArray(this.chatHistory));
             console.log('📜 chatHistory length:', this.chatHistory?.length);
-            
+
             if (!this.chatHistory) {
                 console.warn('⚠️ chatHistory is undefined, initializing...');
                 this.chatHistory = [];
@@ -6438,7 +6573,7 @@ Not:
         // 🐛 DEBUG: Validate messages before deduplication
         console.log('📋 Messages before dedup:', messagesList);
         console.log('📋 Messages is array?', Array.isArray(messagesList));
-        
+
         if (!Array.isArray(messagesList)) {
             console.error('❌ CRITICAL: messagesList is not an array!', messagesList);
             throw new Error(`messages.map is not a function - messagesList type: ${typeof messagesList}`);
@@ -8256,7 +8391,7 @@ Teknoloji stackine uygun dosyalar oluştur. Başlangıç kodu da ekle.`;
             'frontend', 'backend', 'react', 'vue', 'angular', 'node',
             'python', 'javascript', 'html', 'css', 'bug', 'fix', 'error',
             // 🔧 FIX #7: Added project type keywords to track user intent
-            'hesap makinesi', 'calculator', 'blog', 'platform', 'todo', 'chat', 
+            'hesap makinesi', 'calculator', 'blog', 'platform', 'todo', 'chat',
             'dashboard', 'portfolio', 'e-commerce', 'shop', 'game', 'oyun'
         ];
 
@@ -8410,7 +8545,7 @@ Please consider the conversation context when responding. Reference previous dis
             if (this.eventBus) {
                 this.eventBus.emit({
                     type: 'TASK_START',
-                    task: { 
+                    task: {
                         id: Date.now(),
                         title: 'User Request Analysis',
                         description: userRequest,
@@ -8426,14 +8561,14 @@ Please consider the conversation context when responding. Reference previous dis
                 console.log('🎼 Existing decision detected from:', preAssignedRoute._hierarchy.agent);
                 console.log('   Level:', preAssignedRoute._hierarchy.level);
                 console.log('   Is Final:', preAssignedRoute._hierarchy.isFinal);
-                
+
                 // Router'ın override etmeye çalışması durumu
                 const overrideValidation = validateOverride(
-                    preAssignedRoute, 
-                    'RouterAgent', 
+                    preAssignedRoute,
+                    'RouterAgent',
                     { role: 'unknown', mode: 'unknown' }
                 );
-                
+
                 if (overrideValidation.allowed) {
                     console.log('✅ Router can override previous decision:', overrideValidation.reason);
                     route = await this.routeUserIntent(userRequest);
@@ -8441,7 +8576,7 @@ Please consider the conversation context when responding. Reference previous dis
                     console.log('🚫 Router CANNOT override:', overrideValidation.reason);
                     console.log('✅ Using existing decision (hierarchy preserved)');
                     route = preAssignedRoute;
-                    
+
                     // Show Luma's decision to user
                     const roleNames = {
                         executor: "⚙️ Executor (Komut Çalıştırıcı)",
@@ -8451,14 +8586,14 @@ Please consider the conversation context when responding. Reference previous dis
                         coordinator: "⚙️ Coordinator (Koordinatör)",
                         artist: "🎨 Artist (Görsel İçerik)"
                     };
-                    
+
                     this.addChatMessage('ai', `🌌 Luma Supreme kararı: ${roleNames[route.role] || route.role}\n💡 ${route.reasoning}`);
                 }
             } else if (preAssignedRoute && preAssignedRoute.lumaDecisionFinal) {
                 // Legacy support: Old lumaDecisionFinal flag
                 console.log('⚠️ Legacy flag detected: lumaDecisionFinal (upgrading to hierarchy system)');
                 route = wrapDecision('LumaSupremeAgent', preAssignedRoute);
-                
+
                 const roleNames = {
                     executor: "⚙️ Executor (Komut Çalıştırıcı)",
                     generator: "🔧 Generator (Kod Üretici)",
@@ -8467,7 +8602,7 @@ Please consider the conversation context when responding. Reference previous dis
                     coordinator: "⚙️ Coordinator (Koordinatör)",
                     artist: "🎨 Artist (Görsel İçerik)"
                 };
-                
+
                 this.addChatMessage('ai', `🌌 Luma Supreme kararı: ${roleNames[route.role] || route.role}\n💡 ${route.reasoning}`);
             } else {
                 // Step 1: Router Agent - Intent Analysis & Auto Role Selection (ONLY if no existing decision)
@@ -8522,12 +8657,12 @@ Please consider the conversation context when responding. Reference previous dis
 
             // 🔐 PHASE 6: ELYSION CHAMBER - Policy Check & Approval Gate
             let approvalToken = null;
-            
+
             if (this.policyEngine && this.approvalSystem && analysis.plannedActions && analysis.plannedActions.length > 0) {
                 // Extract first command/action for policy validation
                 const firstAction = analysis.plannedActions[0];
                 const commandToCheck = firstAction.command || firstAction.fileName || firstAction.description || 'unknown';
-                
+
                 // Policy check (use active workspace root)
                 const cwd = this.getWorkspaceRoot({ mode: "active" }) || process.cwd();
                 const policyResult = this.policyEngine.validate({
@@ -8562,12 +8697,12 @@ Please consider the conversation context when responding. Reference previous dis
                     const proposalValidation = this.policyEngine.validateProposal(analysis.orders, {
                         teachWhileDoing: this.settings.teachWhileDoing || false
                     });
-                    
+
                     if (!proposalValidation.valid) {
                         console.error('🔐 Proposal validation failed:', proposalValidation.violations);
-                        this.addChatMessage('ai', 
+                        this.addChatMessage('ai',
                             `🔴 **USTA MODU GEREKSİNİMLERİ KARŞILANMADI!**\n\n` +
-                            proposalValidation.violations.map(v => 
+                            proposalValidation.violations.map(v =>
                                 `❌ ${v.message}\n   Steps: ${v.steps?.join(', ') || 'N/A'}`
                             ).join('\n\n')
                         );
@@ -8605,10 +8740,10 @@ Please consider the conversation context when responding. Reference previous dis
                         developerMode: this.developerMode,
                         policyEngine: this.policyEngine
                     });
-                    
+
                     if (!approval.approved) {
                         this.addChatMessage('ai', `❌ İşlem reddedildi.\n\n💬 Sebep: ${approval.reason || 'Kullanıcı onaylamadı'}`);
-                        
+
                         // Emit denial event
                         if (this.eventBus) {
                             this.eventBus.emit({
@@ -8653,7 +8788,7 @@ Please consider the conversation context when responding. Reference previous dis
             const executionStartTime = Date.now();
             let executionSuccess = false;
             let executionError = null;
-            
+
             try {
                 await this.executeWithLiveUpdates(analysis, route, approvalToken);
                 executionSuccess = true;
@@ -8665,7 +8800,7 @@ Please consider the conversation context when responding. Reference previous dis
                 // 🎯 META-REFLECTION ENGINE: Track RouterAgent + AnalyzerAgent performance
                 if (this.contextMemory) {
                     const executionDuration = Date.now() - executionStartTime;
-                    
+
                     // Track RouterAgent (intent routing)
                     this.contextMemory.trackAgentPerformance({
                         agentName: 'RouterAgent',
@@ -8679,7 +8814,7 @@ Please consider the conversation context when responding. Reference previous dis
                             reasoning: route?.reasoning
                         }
                     });
-                    
+
                     // Track AnalyzerAgent (plan generation)
                     if (analysis) {
                         this.contextMemory.trackAgentPerformance({
@@ -8695,7 +8830,7 @@ Please consider the conversation context when responding. Reference previous dis
                             }
                         });
                     }
-                    
+
                     console.log('📊 RouterAgent & AnalyzerAgent performance tracked');
                 }
             }
@@ -8917,7 +9052,7 @@ AKILLI ÖRNEKLER:
         };
 
         const roleContext = route ? roleContexts[route.role] : "Sen KayraDeniz Kod Canavarı'sın! Çok yetenekli bir yazılım geliştirici asistanısın. Samimi ve yardımsever bir dille konuşuyorsun.";
-        
+
         // 🔄 PHASE CONTEXT: Extract from route if passed by hierarchy system
         const phaseInfo = route?._hierarchy?.phaseContext || route?.phaseContext || {};
 
@@ -8945,7 +9080,7 @@ AKILLI ÖRNEKLER:
                 includePhaseSnapshot: true,
                 includeMissionSummary: true
             });
-            
+
             const formattedContext = this.contextMemory.formatContextForPrompt(dynamicContext);
             if (formattedContext) {
                 dynamicContextText = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -8961,12 +9096,12 @@ ${formattedContext}
         let conversationContextText = '';
         if (recentContext) {
             // 🔧 FIX #7: Extract project name from topics to prevent context pollution
-            const projectKeywords = conversationSummary.topics.filter(t => 
-                ['hesap makinesi', 'calculator', 'blog', 'platform', 'todo', 'chat', 
-                 'dashboard', 'portfolio', 'e-commerce', 'shop', 'game', 'oyun'].includes(t)
+            const projectKeywords = conversationSummary.topics.filter(t =>
+                ['hesap makinesi', 'calculator', 'blog', 'platform', 'todo', 'chat',
+                    'dashboard', 'portfolio', 'e-commerce', 'shop', 'game', 'oyun'].includes(t)
             );
             const currentProject = projectKeywords.length > 0 ? projectKeywords[0] : 'Belirsiz';
-            
+
             conversationContextText = `\n\n📚 KONUŞMA GEÇMİŞİ:
 ${recentContext}
 
@@ -8997,8 +9132,8 @@ ${recentContext}
 📍 CURRENT PHASE: ${phaseInfo.currentPhase}/${phaseInfo.totalPhases || '?'}
 ${phaseInfo.lastMission ? `📋 Last Mission: ${phaseInfo.lastMission}` : ''}
 ${phaseInfo.projectContinuation ? '🔄 PROJECT CONTINUATION DETECTED - DO NOT RESET TO PHASE 1!' : ''}
-${phaseInfo.completedFiles && phaseInfo.completedFiles.length > 0 ? 
-`✅ Completed Files (${phaseInfo.completedFiles.length}): ${phaseInfo.completedFiles.join(', ')}` : ''}
+${phaseInfo.completedFiles && phaseInfo.completedFiles.length > 0 ?
+                    `✅ Completed Files (${phaseInfo.completedFiles.length}): ${phaseInfo.completedFiles.join(', ')}` : ''}
 
 ⚠️ CRITICAL: User is continuing an EXISTING project!
 - DO NOT start from Phase 1 again
@@ -9856,7 +9991,7 @@ Now provide the CORRECTED response (pure JSON only):`;
     sanitizeJsonResponse(jsonText) {
         console.log('🧹 Sanitizing JSON response...');
         console.log('📊 Original length:', jsonText.length);
-        
+
         // DEBUG: Inspect first 10 characters (hex codes to detect invisible chars)
         const first10 = jsonText.substring(0, 10);
         const hexCodes = Array.from(first10).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
@@ -9867,7 +10002,7 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         // STEP 1: Remove markdown code fences (```json ... ``` or ```...```)
         sanitized = sanitized.trim();  // Remove leading/trailing whitespace
-        
+
         // Check for markdown code fence at start
         if (sanitized.startsWith('```')) {
             console.log('🔍 Detected markdown code fence, removing...');
@@ -9881,7 +10016,7 @@ Now provide the CORRECTED response (pure JSON only):`;
         // 🔧 AGGRESSIVE FIX: Escape ALL backslashes first, then unescape valid escape sequences
         // Step 1: Replace all \ with \\
         sanitized = sanitized.replace(/\\/g, '\\\\');
-        
+
         // Step 2: Fix double-escaped valid sequences (\\n → \n, \\t → \t, etc.)
         sanitized = sanitized.replace(/\\\\n/g, '\\n');
         sanitized = sanitized.replace(/\\\\t/g, '\\t');
@@ -9889,15 +10024,15 @@ Now provide the CORRECTED response (pure JSON only):`;
         sanitized = sanitized.replace(/\\\\"/g, '\\"');
         sanitized = sanitized.replace(/\\\\\'/g, "\\'");
         sanitized = sanitized.replace(/\\\\\\\\/g, '\\\\'); // Fix quadruple backslash
-        
+
         console.log('🔧 All backslashes properly escaped');
-        
+
         // Step 3: Fix single quotes in JSON values (JSON only allows double quotes)
         // Replace 'value' with "value" but ONLY for property values, not inside strings
         // This regex finds: ": 'value'" and replaces with: ": \"value\""
         sanitized = sanitized.replace(/:\s*'([^']*)'/g, ': "$1"');
         console.log('🔧 Single quotes replaced with double quotes');
-        
+
         // Count brackets and braces FIRST (NOTE: This counts ALL occurrences, including in strings)
         const openBrackets = (sanitized.match(/\[/g) || []).length;
         const closeBrackets = (sanitized.match(/\]/g) || []).length;
@@ -9906,10 +10041,10 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         console.log('📊 Brackets (raw count) - Open:[', openBrackets, 'Close:]', closeBrackets);
         console.log('📊 Braces (raw count) - Open:{', openBraces, 'Close:}', closeBraces);
-        
+
         // Check if JSON is complete (matching braces/brackets)
         const isComplete = (openBrackets === closeBrackets) && (openBraces === closeBraces);
-        
+
         if (isComplete) {
             // Try to parse - if it works, return as-is
             try {
@@ -9943,7 +10078,7 @@ Now provide the CORRECTED response (pure JSON only):`;
         // 1. Remove trailing comma before closing brace/bracket
         sanitized = sanitized.replace(/,\s*}/g, '}');
         sanitized = sanitized.replace(/,\s*]/g, ']');
-        
+
         // 2. Fix missing quotes around property names (only outside strings)
         // This is a VERY aggressive fix - only for emergency
         try {
@@ -9952,28 +10087,28 @@ Now provide the CORRECTED response (pure JSON only):`;
             return sanitized;
         } catch (e) {
             console.log('⚠️ Still invalid, attempting property name fix:', e.message);
-            
+
             // Try to extract error position
             const posMatch = e.message.match(/position (\d+)/);
             if (posMatch) {
                 const errorPos = parseInt(posMatch[1], 10);
                 console.log(`🔍 Error at position ${errorPos}`);
-                
+
                 // Show context around error
                 const contextStart = Math.max(0, errorPos - 50);
                 const contextEnd = Math.min(sanitized.length, errorPos + 50);
                 const errorContext = sanitized.substring(contextStart, contextEnd);
                 console.log('📄 Error context:', errorContext);
-                
+
                 // Try to truncate at last valid object BEFORE error position
                 console.log('✂️ Truncating at last valid structure before error...');
-                
+
                 // Find last closing brace before error
                 let lastClosingBrace = sanitized.lastIndexOf('}', errorPos - 1);
                 if (lastClosingBrace > 0) {
                     console.log(`🔍 Found last closing brace at position ${lastClosingBrace}`);
                     sanitized = sanitized.substring(0, lastClosingBrace + 1);
-                    
+
                     // Recalculate mismatches
                     missingCloseBrackets = (sanitized.match(/\[/g) || []).length - (sanitized.match(/\]/g) || []).length;
                     missingCloseBraces = (sanitized.match(/\{/g) || []).length - (sanitized.match(/\}/g) || []).length;
@@ -10248,7 +10383,7 @@ Now provide the CORRECTED response (pure JSON only):`;
         const progressMessage = this.addChatMessage('ai', '🚀 İşlem başladı...');
 
         const plannedActions = analysis.plannedActions || [];
-        
+
         // 🔐 PHASE 6: Emit execution start event
         if (this.eventBus) {
             this.eventBus.emit({
@@ -10321,33 +10456,38 @@ Now provide the CORRECTED response (pure JSON only):`;
                 // 🔐 PHASE 6: Try CriticAgent for automatic fix
                 if (this.criticAgent) {
                     console.log('🔬 CriticAgent analyzing failure...');
-                    
+
                     try {
-                        const analysisResult = await this.criticAgent.analyze({
-                            step: action,
-                            observations: [],
-                            stderr: error.message,
-                            exitCode: -1
+                        // ✅ SEQUENTIAL REFLEXION: Queue analysis to prevent race conditions
+                        const analysisResult = await this.reflexionQueue.enqueue(async () => {
+                            return await this.criticAgent.analyze({
+                                step: action,
+                                observations: [],
+                                stderr: error.message,
+                                exitCode: -1
+                            });
                         });
 
                         if (analysisResult && analysisResult.fixPlan) {
                             this.addChatMessage('ai', `🔬 **Critic Agent Analizi:**\n\n📋 Root Cause: ${analysisResult.rootCause}\n\n🔧 Fix Plan (${analysisResult.fixPlan.length} step${analysisResult.fixPlan.length > 1 ? 's' : ''})`);
-                            
-                            // Execute fix plan
-                            const fixResult = await this.criticAgent.executeFix(analysisResult.fixPlan);
-                            
+
+                            // Execute fix plan (also queued for safety)
+                            const fixResult = await this.reflexionQueue.enqueue(async () => {
+                                return await this.criticAgent.executeFix(analysisResult.fixPlan);
+                            });
+
                             // 📚 PR-3: Save to learning store
                             if (this.criticAgent.saveLearning) {
                                 this.criticAgent.saveLearning(analysisResult, fixResult);
                             }
-                            
+
                             if (fixResult.success) {
                                 this.addChatMessage('ai', '✅ Otomatik düzeltme başarılı! Devam ediyorum...');
-                                
+
                                 // Retry the failed action
                                 await this.executeAction(action);
                                 this.updateProgressMessage(progressMessage, `✅ Step ${i + 1}/${plannedActions.length}: ${action.description} - Düzeltildi & Tamamlandı`);
-                                
+
                                 // Emit success after fix
                                 if (this.eventBus) {
                                     this.eventBus.emit({
@@ -10376,21 +10516,21 @@ Now provide the CORRECTED response (pure JSON only):`;
         // 🔐 PHASE 6: Run probes after execution
         if (this.probeMatrix && analysis.plannedActions) {
             const probes = this.buildProbesForActions(analysis.plannedActions);
-            
+
             if (probes.length > 0) {
                 this.addChatMessage('ai', `🔍 Doğrulama probes çalıştırılıyor (${probes.length} test)...`);
-                
+
                 try {
                     const probeResults = await this.probeMatrix.runProbes(probes);
-                    
+
                     // Show results in UI
                     if (window.elysionUI) {
                         window.elysionUI.showProbeResults(probeResults);
                     }
-                    
+
                     const passedCount = probeResults.results.filter(r => r.passed).length;
                     this.addChatMessage('ai', `✅ Probe Results: ${passedCount}/${probeResults.total} passed`);
-                    
+
                     // Emit probe results
                     if (this.eventBus) {
                         this.eventBus.emit({
@@ -10407,7 +10547,7 @@ Now provide the CORRECTED response (pure JSON only):`;
 
         // Final success message
         this.updateProgressMessage(progressMessage, '🎉 Tüm işlemler tamamlandı!');
-        
+
         // 🔐 PHASE 6: Emit completion event
         if (this.eventBus) {
             this.eventBus.emit({
@@ -10416,7 +10556,7 @@ Now provide the CORRECTED response (pure JSON only):`;
                 success: true
             });
         }
-        
+
         this.refreshExplorer(); // Refresh file explorer
     }
 
@@ -10430,15 +10570,15 @@ Now provide the CORRECTED response (pure JSON only):`;
                 aborted: true
             };
         }
-        
+
         // ✅ NEW: Proper mutex-based atomic execution (replaces old flag system)
         await this.nightOrdersMutex.acquire();
-        
+
         try {
             console.log('🧭 NIGHT ORDERS PROTOCOL ACTIVATED!');
             console.log('📋 Mission:', orders.mission);
             console.log('🎯 Acceptance Criteria:', orders.acceptance);
-            
+
             // 🧠 SESSION CONTEXT: Set mission at the start
             if (this.sessionContext) {
                 this.sessionContext.setMission(
@@ -10448,266 +10588,266 @@ Now provide the CORRECTED response (pure JSON only):`;
                 );
                 console.log('📍 Session Context: Mission set');
             }
-        
-        // 🔍 PR-3: ZOD SCHEMA VALIDATION + CONTINUE PARSEARGS
-        try {
-            const { validateNightOrders: zodValidate } = require('./schemas');
-            const { validateNightOrders: parseArgsValidate } = require('./utils/parseArgs');
-            
-            // Level 1: Zod schema validation (structure)
-            const zodValidation = zodValidate(orders);
-            if (!zodValidation.valid) {
-                console.error('❌ Invalid Night Orders schema:', zodValidation.errors);
-                const errorMsg = zodValidation.errors.map(e => `${e.path}: ${e.message}`).join(', ');
-                throw new Error(`Schema validation failed: ${errorMsg}`);
-            }
-            console.log('✅ Night Orders schema validated (Zod)');
-            
-            // Level 2: Tool argument validation (semantics)
+
+            // 🔍 PR-3: ZOD SCHEMA VALIDATION + CONTINUE PARSEARGS
             try {
-                parseArgsValidate(orders);
-                console.log('✅ Night Orders arguments validated (parseArgs)');
-            } catch (parseError) {
-                console.error('❌ Invalid Night Orders arguments:', parseError.message);
-                throw new Error(`Argument validation failed: ${parseError.message}`);
-            }
-            
-        } catch (error) {
-            if (error.message.includes('validation failed')) {
-                throw error;
-            }
-            // If schemas.js not found or Zod not installed, warn but continue
-            console.warn('⚠️ Schema validation skipped:', error.message);
-        }
+                const { validateNightOrders: zodValidate } = require('./schemas');
+                const { validateNightOrders: parseArgsValidate } = require('./utils/parseArgs');
 
-        // 🎯 PHASE TRACKING: Track new phase if mission changed
-        if (orders.mission !== this.phaseContext.lastMission) {
-            this.phaseContext.currentPhase++;
-            this.phaseContext.totalPhases++;
-            this.phaseContext.phaseHistory.push({
-                phase: this.phaseContext.currentPhase,
-                mission: orders.mission,
-                timestamp: Date.now(),
-                files: [],
-                success: false
-            });
-            this.phaseContext.lastMission = orders.mission;
-            this.phaseContext.phaseStartTime = Date.now();
-            
-            // PR-3: Set current mission for learning store
-            this.currentMission = orders.mission;
-            
-            console.log(`🎯 PHASE ${this.phaseContext.currentPhase} STARTED: ${orders.mission}`);
-            
-            // Mark as Phase 2, 3, etc. in orders for loop prevention
-            if (this.phaseContext.currentPhase > 1) {
-                orders.isPhase2 = true;
-                orders.phaseNumber = this.phaseContext.currentPhase;
-            }
-        }
+                // Level 1: Zod schema validation (structure)
+                const zodValidation = zodValidate(orders);
+                if (!zodValidation.valid) {
+                    console.error('❌ Invalid Night Orders schema:', zodValidation.errors);
+                    const errorMsg = zodValidation.errors.map(e => `${e.path}: ${e.message}`).join(', ');
+                    throw new Error(`Schema validation failed: ${errorMsg}`);
+                }
+                console.log('✅ Night Orders schema validated (Zod)');
 
-        // 🔐 PHASE 6: Validate approval token if provided
-        if (this.approvalSystem && approvalToken) {
-            const isValid = this.approvalSystem.validateToken(approvalToken);
-            if (!isValid) {
-                console.error('🔴 SECURITY: Invalid approval token for Night Orders!');
-                this.addChatMessage('ai', '❌ **GÜVENLİK HATASI:** Geçersiz onay token\'ı!\n\nMission iptal edildi.');
-                return;
-            }
-            console.log('✅ Approval token validated for Night Orders');
-            
-            // Use token immediately (single-use)
-            this.approvalSystem.useToken(approvalToken);
-            console.log('🔐 Approval token consumed');
-        }
-
-        // 🎯 START LIVE VISUALIZATION
-        this.startLiveVisualization();
-        this.updateCurrentOperation('Mission Başlatıldı', orders.mission, 'fa-rocket');
-        this.addTimelineStep(orders.mission, 'active');
-
-        const progressMessage = this.addChatMessage('ai', `🧭 Mission: ${orders.mission}`);
-        const verificationResults = {
-            lint: 'pending',
-            build: 'pending',
-            run: 'pending',
-            probe: 'pending',
-            detector: 'pending'
-        };
-
-        // ✅ EXECUTION METRICS
-        const executionMetrics = {
-            startTime: Date.now(),
-            steps: [],
-            errors: [] // 🧠 Collect errors for reflexion
-        };
-
-        for (let i = 0; i < orders.steps.length; i++) {
-            const step = orders.steps[i];
-            this.updateProgressMessage(progressMessage, `⏳ Step ${step.id} (${i + 1}/${orders.steps.length}): ${step.tool}`);
-
-            // 🎯 LIVE VISUALIZATION: Update current step
-            const stepIcon = step.tool === 'write_file' || step.tool === 'fs.write' ? 'fa-pencil-alt' :
-                step.tool === 'read_file' || step.tool === 'fs.read' ? 'fa-file-alt' :
-                    step.tool === 'run_cmd' ? 'fa-terminal' : 'fa-cog';
-
-            const stepTarget = step.args.path || step.args.cmd || step.args.url || 'Processing...';
-            const stepOperation = step.tool === 'write_file' ? '✍️ Writing' :
-                step.tool === 'read_file' ? '📖 Reading' :
-                    step.tool === 'run_cmd' ? '⚡ Running' : '⚙️ Working';
-
-            this.updateCurrentOperation(`${stepOperation} (${i + 1}/${orders.steps.length})`, stepTarget, stepIcon);
-            this.addTimelineStep(`Step ${step.id}: ${step.tool}`, 'active');
-
-            // ✅ STEP RETRY MECHANISM
-            let retryCount = 0;
-            const maxRetries = 2;
-            let lastError = null;
-            const stepStartTime = Date.now();
-
-            while (retryCount <= maxRetries) {
+                // Level 2: Tool argument validation (semantics)
                 try {
-                    // Execute tool
-                    await this.executeOrderStep(step);
+                    parseArgsValidate(orders);
+                    console.log('✅ Night Orders arguments validated (parseArgs)');
+                } catch (parseError) {
+                    console.error('❌ Invalid Night Orders arguments:', parseError.message);
+                    throw new Error(`Argument validation failed: ${parseError.message}`);
+                }
 
-                    // ✅ METRICS: Record successful execution
-                    const executionTime = Date.now() - stepStartTime;
-                    executionMetrics.steps.push({
-                        id: step.id,
-                        tool: step.tool,
-                        status: 'success',
-                        executionTime,
-                        retries: retryCount
-                    });
-                    console.log(`⏱️ Step ${step.id} completed in ${executionTime}ms (retries: ${retryCount})`);
+            } catch (error) {
+                if (error.message.includes('validation failed')) {
+                    throw error;
+                }
+                // If schemas.js not found or Zod not installed, warn but continue
+                console.warn('⚠️ Schema validation skipped:', error.message);
+            }
 
-                    // 🎓 USTA MODU: Always emit AFTER narration
-                    if (this.eventBus) {
-                        this.eventBus.emit({
-                            type: 'NARRATION_AFTER',
-                            data: {
-                                stepId: step.id,
-                                summary: `Step completed in ${executionTime}ms`,
-                                diff: null
-                            },
-                            timestamp: Date.now()
-                        });
-                    }
+            // 🎯 PHASE TRACKING: Track new phase if mission changed
+            if (orders.mission !== this.phaseContext.lastMission) {
+                this.phaseContext.currentPhase++;
+                this.phaseContext.totalPhases++;
+                this.phaseContext.phaseHistory.push({
+                    phase: this.phaseContext.currentPhase,
+                    mission: orders.mission,
+                    timestamp: Date.now(),
+                    files: [],
+                    success: false
+                });
+                this.phaseContext.lastMission = orders.mission;
+                this.phaseContext.phaseStartTime = Date.now();
 
-                    // �🎯 LIVE VISUALIZATION: Mark step completed
-                    this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'completed');
-                    this.liveVisualization.metrics.successCount++;
+                // PR-3: Set current mission for learning store
+                this.currentMission = orders.mission;
 
-                    break; // Success, exit retry loop
+                console.log(`🎯 PHASE ${this.phaseContext.currentPhase} STARTED: ${orders.mission}`);
 
-                } catch (error) {
-                    lastError = error;
-                    retryCount++;
-                    
-                    // 🧠 REFLEXION: Collect error for analysis
-                    executionMetrics.errors.push({
-                        step: step.id,
-                        tool: step.tool,
-                        error: error.message,
-                        stack: error.stack
-                    });
+                // Mark as Phase 2, 3, etc. in orders for loop prevention
+                if (this.phaseContext.currentPhase > 1) {
+                    orders.isPhase2 = true;
+                    orders.phaseNumber = this.phaseContext.currentPhase;
+                }
+            }
 
-                    if (retryCount <= maxRetries) {
-                        console.warn(`⚠️ Step ${step.id} failed (attempt ${retryCount}/${maxRetries + 1}), retrying...`);
-                        this.updateProgressMessage(progressMessage, `🔄 Step ${step.id}: Retry ${retryCount}/${maxRetries + 1}...`);
+            // 🔐 PHASE 6: Validate approval token if provided
+            if (this.approvalSystem && approvalToken) {
+                const isValid = this.approvalSystem.validateToken(approvalToken);
+                if (!isValid) {
+                    console.error('🔴 SECURITY: Invalid approval token for Night Orders!');
+                    this.addChatMessage('ai', '❌ **GÜVENLİK HATASI:** Geçersiz onay token\'ı!\n\nMission iptal edildi.');
+                    return;
+                }
+                console.log('✅ Approval token validated for Night Orders');
 
-                        // 🎯 LIVE VISUALIZATION: Show retry
-                        this.updateCurrentOperation(`🔄 Retrying (${retryCount}/${maxRetries + 1})`, stepTarget, 'fa-redo');
+                // Use token immediately (single-use)
+                this.approvalSystem.useToken(approvalToken);
+                console.log('🔐 Approval token consumed');
+            }
 
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
-                    } else {
-                        // Max retries exceeded
-                        console.error(`❌ Step ${step.id} failed after ${maxRetries + 1} attempts:`, error.message);
+            // 🎯 START LIVE VISUALIZATION
+            this.startLiveVisualization();
+            this.updateCurrentOperation('Mission Başlatıldı', orders.mission, 'fa-rocket');
+            this.addTimelineStep(orders.mission, 'active');
 
-                        // 🎯 LIVE VISUALIZATION: Mark step failed
-                        this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'error');
-                        this.liveVisualization.metrics.errorCount++;
-                        this.updateProgressMessage(progressMessage, `❌ Step ${step.id}: ${error.message}`);
+            const progressMessage = this.addChatMessage('ai', `🧭 Mission: ${orders.mission}`);
+            const verificationResults = {
+                lint: 'pending',
+                build: 'pending',
+                run: 'pending',
+                probe: 'pending',
+                detector: 'pending'
+            };
 
-                        // ✅ METRICS: Record failed execution
+            // ✅ EXECUTION METRICS
+            const executionMetrics = {
+                startTime: Date.now(),
+                steps: [],
+                errors: [] // 🧠 Collect errors for reflexion
+            };
+
+            for (let i = 0; i < orders.steps.length; i++) {
+                const step = orders.steps[i];
+                this.updateProgressMessage(progressMessage, `⏳ Step ${step.id} (${i + 1}/${orders.steps.length}): ${step.tool}`);
+
+                // 🎯 LIVE VISUALIZATION: Update current step
+                const stepIcon = step.tool === 'write_file' || step.tool === 'fs.write' ? 'fa-pencil-alt' :
+                    step.tool === 'read_file' || step.tool === 'fs.read' ? 'fa-file-alt' :
+                        step.tool === 'run_cmd' ? 'fa-terminal' : 'fa-cog';
+
+                const stepTarget = step.args.path || step.args.cmd || step.args.url || 'Processing...';
+                const stepOperation = step.tool === 'write_file' ? '✍️ Writing' :
+                    step.tool === 'read_file' ? '📖 Reading' :
+                        step.tool === 'run_cmd' ? '⚡ Running' : '⚙️ Working';
+
+                this.updateCurrentOperation(`${stepOperation} (${i + 1}/${orders.steps.length})`, stepTarget, stepIcon);
+                this.addTimelineStep(`Step ${step.id}: ${step.tool}`, 'active');
+
+                // ✅ STEP RETRY MECHANISM
+                let retryCount = 0;
+                const maxRetries = 2;
+                let lastError = null;
+                const stepStartTime = Date.now();
+
+                while (retryCount <= maxRetries) {
+                    try {
+                        // Execute tool
+                        await this.executeOrderStep(step);
+
+                        // ✅ METRICS: Record successful execution
                         const executionTime = Date.now() - stepStartTime;
                         executionMetrics.steps.push({
                             id: step.id,
                             tool: step.tool,
-                            status: 'failed',
+                            status: 'success',
                             executionTime,
-                            retries: retryCount - 1,
-                            error: error.message
+                            retries: retryCount
                         });
-                    }
-                }
-            }
+                        console.log(`⏱️ Step ${step.id} completed in ${executionTime}ms (retries: ${retryCount})`);
 
-            // Run verifications if step succeeded
-            if (retryCount <= maxRetries) {
-                const probeResults = [];
-                
-                if (step.verify && Array.isArray(step.verify)) {
-                    for (const checkType of step.verify) {
-                        const result = await this.runVerificationCheck(checkType, step);
+                        // 🎓 USTA MODU: Always emit AFTER narration
+                        if (this.eventBus) {
+                            this.eventBus.emit({
+                                type: 'NARRATION_AFTER',
+                                data: {
+                                    stepId: step.id,
+                                    summary: `Step completed in ${executionTime}ms`,
+                                    diff: null
+                                },
+                                timestamp: Date.now()
+                            });
+                        }
 
-                        // ✅ ENHANCEMENT: Handle 'skip' status
-                        if (result === 'skip') {
-                            verificationResults[checkType] = 'skip';
-                            probeResults.push({ type: checkType, status: 'skip', target: 'N/A' });
-                            this.updateProgressMessage(
-                                progressMessage,
-                                `⏭️ Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: SKIPPED`
-                            );
+                        // �🎯 LIVE VISUALIZATION: Mark step completed
+                        this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'completed');
+                        this.liveVisualization.metrics.successCount++;
+
+                        break; // Success, exit retry loop
+
+                    } catch (error) {
+                        lastError = error;
+                        retryCount++;
+
+                        // 🧠 REFLEXION: Collect error for analysis
+                        executionMetrics.errors.push({
+                            step: step.id,
+                            tool: step.tool,
+                            error: error.message,
+                            stack: error.stack
+                        });
+
+                        if (retryCount <= maxRetries) {
+                            console.warn(`⚠️ Step ${step.id} failed (attempt ${retryCount}/${maxRetries + 1}), retrying...`);
+                            this.updateProgressMessage(progressMessage, `🔄 Step ${step.id}: Retry ${retryCount}/${maxRetries + 1}...`);
+
+                            // 🎯 LIVE VISUALIZATION: Show retry
+                            this.updateCurrentOperation(`🔄 Retrying (${retryCount}/${maxRetries + 1})`, stepTarget, 'fa-redo');
+
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
                         } else {
-                            verificationResults[checkType] = result ? 'pass' : 'fail';
-                            probeResults.push({ type: checkType, status: result ? 'pass' : 'fail', target: step.args?.path || 'N/A' });
-                            this.updateProgressMessage(
-                                progressMessage,
-                                `${result ? '✅' : '❌'} Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: ${result ? 'PASS' : 'FAIL'}`
-                            );
+                            // Max retries exceeded
+                            console.error(`❌ Step ${step.id} failed after ${maxRetries + 1} attempts:`, error.message);
 
-                            if (!result) {
-                                console.error(`❌ Verification failed: ${checkType}`);
-                            }
-                            // Continue to next step even if verification fails (report at end)
+                            // 🎯 LIVE VISUALIZATION: Mark step failed
+                            this.updateTimelineStatus(this.liveVisualization.timeline.length - 1, 'error');
+                            this.liveVisualization.metrics.errorCount++;
+                            this.updateProgressMessage(progressMessage, `❌ Step ${step.id}: ${error.message}`);
+
+                            // ✅ METRICS: Record failed execution
+                            const executionTime = Date.now() - stepStartTime;
+                            executionMetrics.steps.push({
+                                id: step.id,
+                                tool: step.tool,
+                                status: 'failed',
+                                executionTime,
+                                retries: retryCount - 1,
+                                error: error.message
+                            });
                         }
                     }
-                    
-                    // 🎓 USTA MODU: Always emit VERIFY narration
-                    if (this.eventBus && probeResults.length > 0) {
-                        this.eventBus.emit({
-                            type: 'NARRATION_VERIFY',
-                            data: {
-                                stepId: step.id,
-                                probes: probeResults
-                            },
-                            timestamp: Date.now()
-                        });
+                }
+
+                // Run verifications if step succeeded
+                if (retryCount <= maxRetries) {
+                    const probeResults = [];
+
+                    if (step.verify && Array.isArray(step.verify)) {
+                        for (const checkType of step.verify) {
+                            const result = await this.runVerificationCheck(checkType, step);
+
+                            // ✅ ENHANCEMENT: Handle 'skip' status
+                            if (result === 'skip') {
+                                verificationResults[checkType] = 'skip';
+                                probeResults.push({ type: checkType, status: 'skip', target: 'N/A' });
+                                this.updateProgressMessage(
+                                    progressMessage,
+                                    `⏭️ Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: SKIPPED`
+                                );
+                            } else {
+                                verificationResults[checkType] = result ? 'pass' : 'fail';
+                                probeResults.push({ type: checkType, status: result ? 'pass' : 'fail', target: step.args?.path || 'N/A' });
+                                this.updateProgressMessage(
+                                    progressMessage,
+                                    `${result ? '✅' : '❌'} Step ${step.id}: ${step.tool} - ${checkType.toUpperCase()}: ${result ? 'PASS' : 'FAIL'}`
+                                );
+
+                                if (!result) {
+                                    console.error(`❌ Verification failed: ${checkType}`);
+                                }
+                                // Continue to next step even if verification fails (report at end)
+                            }
+                        }
+
+                        // 🎓 USTA MODU: Always emit VERIFY narration
+                        if (this.eventBus && probeResults.length > 0) {
+                            this.eventBus.emit({
+                                type: 'NARRATION_VERIFY',
+                                data: {
+                                    stepId: step.id,
+                                    probes: probeResults
+                                },
+                                timestamp: Date.now()
+                            });
+                        }
                     }
                 }
+
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
 
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
+            // 🎯 LIVE VISUALIZATION: Stop and finalize
+            this.stopLiveVisualization();
+            this.updateCurrentOperation('✅ Mission Tamamlandı', orders.mission, 'fa-check-circle');
+            this.addTimelineStep('Mission Completed', 'completed');
 
-        // 🎯 LIVE VISUALIZATION: Stop and finalize
-        this.stopLiveVisualization();
-        this.updateCurrentOperation('✅ Mission Tamamlandı', orders.mission, 'fa-check-circle');
-        this.addTimelineStep('Mission Completed', 'completed');
+            // ✅ METRICS: Calculate total execution time
+            const totalExecutionTime = Date.now() - executionMetrics.startTime;
+            const successCount = executionMetrics.steps.filter(s => s.status === 'success').length;
+            const failCount = executionMetrics.steps.filter(s => s.status === 'failed').length;
 
-        // ✅ METRICS: Calculate total execution time
-        const totalExecutionTime = Date.now() - executionMetrics.startTime;
-        const successCount = executionMetrics.steps.filter(s => s.status === 'success').length;
-        const failCount = executionMetrics.steps.filter(s => s.status === 'failed').length;
+            console.log(`⏱️ EXECUTION METRICS:`);
+            console.log(`   Total Time: ${(totalExecutionTime / 1000).toFixed(2)}s`);
+            console.log(`   Success: ${successCount}, Failed: ${failCount}`);
+            console.log(`   Steps:`, executionMetrics.steps);
 
-        console.log(`⏱️ EXECUTION METRICS:`);
-        console.log(`   Total Time: ${(totalExecutionTime / 1000).toFixed(2)}s`);
-        console.log(`   Success: ${successCount}, Failed: ${failCount}`);
-        console.log(`   Steps:`, executionMetrics.steps);
-
-        // Add metrics to chat
-        this.addChatMessage('ai', `
+            // Add metrics to chat
+            this.addChatMessage('ai', `
 ⏱️ **EXECUTION METRICS**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Total Time: ${(totalExecutionTime / 1000).toFixed(2)}s
@@ -10715,137 +10855,137 @@ Success: ${successCount} | Failed: ${failCount}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         `);
 
-        // Generate verification matrix report
-        const matrixReport = this.generateVerificationMatrix(verificationResults, orders.acceptance);
-        this.addChatMessage('ai', matrixReport);
+            // Generate verification matrix report
+            const matrixReport = this.generateVerificationMatrix(verificationResults, orders.acceptance);
+            this.addChatMessage('ai', matrixReport);
 
-        // 🧠 REFLEXION: Run BEFORE phase transition (critical!)
-        const executionErrors = executionMetrics.errors.map(e => e.error);
-        const { mistakes, fixes } = await this.analyzeMistakeAndSuggestFix(orders, verificationResults, executionErrors);
-        
-        // 🔧 AUTO-FIX: Apply fixes if enabled
-        if (mistakes.length > 0) {
-            console.log(`🧠 REFLEXION: Found ${mistakes.length} mistakes, ${fixes.length} suggested fixes`);
-            
-            // Show mistakes to user
-            let reflexionMessage = '🧠 **SELF-ANALYSIS: MISTAKES DETECTED**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-            mistakes.forEach((m, idx) => {
-                reflexionMessage += `**${idx + 1}. ${m.type}** (${m.severity})\n`;
-                reflexionMessage += `   📁 ${m.file || m.path || m.module || 'N/A'}\n`;
-                reflexionMessage += `   💬 ${m.reason}\n\n`;
-            });
-            
-            reflexionMessage += '🔧 **SUGGESTED FIXES:**\n';
-            fixes.forEach((f, idx) => {
-                reflexionMessage += `${idx + 1}. ${f.action}: ${f.path || f.cmd || 'N/A'}\n`;
-                reflexionMessage += `   └─ ${f.reason}\n`;
-            });
-            
-            this.addChatMessage('ai', reflexionMessage);
-            
-            // Auto-fix enabled by default
-            let appliedFixes = 0;  // ✅ Track actually applied fixes
-            
-            if (fixes.length > 0) {
-                this.addChatMessage('system', '🔧 Applying auto-fixes...');
-                
-                for (const fix of fixes) {
-                    try {
-                        if (fix.action === 'CREATE_FILE' && fix.content) {
-                            await this.createFileWithAgent(fix.path, fix.content);
-                            this.addChatMessage('system', `✅ Created: ${fix.path}`);
-                            appliedFixes++;  // ✅ Count successful fix
-                        } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
-                            const result = await this.runCommandWithAgent(fix.cmd);
-                            this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
-                            appliedFixes++;  // ✅ Count successful fix
-                        } else if (fix.action === 'UPDATE_FILE' && fix.changes) {
-                            // Update package.json with workspaces
-                            const pkgPath = fix.path;
-                            const pkgContent = await this.readFileWithAgent(pkgPath);
-                            const pkg = JSON.parse(pkgContent.content || pkgContent);
-                            Object.assign(pkg, fix.changes);
-                            await this.createFileWithAgent(pkgPath, JSON.stringify(pkg, null, 2));
-                            this.addChatMessage('system', `✅ Updated: ${fix.path}`);
-                            appliedFixes++;  // ✅ Count successful fix
-                        } else if (fix.action === 'LOG_WARNING') {
-                            // ✅ NEW: Just log warnings, don't count as fix
-                            console.warn(`⚠️ ${fix.message}: ${fix.reason}`);
-                        } else {
-                            // Unknown action
-                            console.warn(`⚠️ Unknown fix action: ${fix.action}`);
+            // 🧠 REFLEXION: Run BEFORE phase transition (critical!)
+            const executionErrors = executionMetrics.errors.map(e => e.error);
+            const { mistakes, fixes } = await this.analyzeMistakeAndSuggestFix(orders, verificationResults, executionErrors);
+
+            // 🔧 AUTO-FIX: Apply fixes if enabled
+            if (mistakes.length > 0) {
+                console.log(`🧠 REFLEXION: Found ${mistakes.length} mistakes, ${fixes.length} suggested fixes`);
+
+                // Show mistakes to user
+                let reflexionMessage = '🧠 **SELF-ANALYSIS: MISTAKES DETECTED**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+                mistakes.forEach((m, idx) => {
+                    reflexionMessage += `**${idx + 1}. ${m.type}** (${m.severity})\n`;
+                    reflexionMessage += `   📁 ${m.file || m.path || m.module || 'N/A'}\n`;
+                    reflexionMessage += `   💬 ${m.reason}\n\n`;
+                });
+
+                reflexionMessage += '🔧 **SUGGESTED FIXES:**\n';
+                fixes.forEach((f, idx) => {
+                    reflexionMessage += `${idx + 1}. ${f.action}: ${f.path || f.cmd || 'N/A'}\n`;
+                    reflexionMessage += `   └─ ${f.reason}\n`;
+                });
+
+                this.addChatMessage('ai', reflexionMessage);
+
+                // Auto-fix enabled by default
+                let appliedFixes = 0;  // ✅ Track actually applied fixes
+
+                if (fixes.length > 0) {
+                    this.addChatMessage('system', '🔧 Applying auto-fixes...');
+
+                    for (const fix of fixes) {
+                        try {
+                            if (fix.action === 'CREATE_FILE' && fix.content) {
+                                await this.createFileWithAgent(fix.path, fix.content);
+                                this.addChatMessage('system', `✅ Created: ${fix.path}`);
+                                appliedFixes++;  // ✅ Count successful fix
+                            } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
+                                const result = await this.runCommandWithAgent(fix.cmd);
+                                this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
+                                appliedFixes++;  // ✅ Count successful fix
+                            } else if (fix.action === 'UPDATE_FILE' && fix.changes) {
+                                // Update package.json with workspaces
+                                const pkgPath = fix.path;
+                                const pkgContent = await this.readFileWithAgent(pkgPath);
+                                const pkg = JSON.parse(pkgContent.content || pkgContent);
+                                Object.assign(pkg, fix.changes);
+                                await this.createFileWithAgent(pkgPath, JSON.stringify(pkg, null, 2));
+                                this.addChatMessage('system', `✅ Updated: ${fix.path}`);
+                                appliedFixes++;  // ✅ Count successful fix
+                            } else if (fix.action === 'LOG_WARNING') {
+                                // ✅ NEW: Just log warnings, don't count as fix
+                                console.warn(`⚠️ ${fix.message}: ${fix.reason}`);
+                            } else {
+                                // Unknown action
+                                console.warn(`⚠️ Unknown fix action: ${fix.action}`);
+                            }
+                        } catch (e) {
+                            this.addChatMessage('system', `⚠️ Auto-fix failed: ${e.message}`);
                         }
-                    } catch (e) {
-                        this.addChatMessage('system', `⚠️ Auto-fix failed: ${e.message}`);
+                    }
+
+                    // ✅ FIX: Only show success if fixes were actually applied!
+                    if (appliedFixes > 0) {
+                        this.addChatMessage('ai', `✅ Applied ${appliedFixes} auto-fix${appliedFixes > 1 ? 'es' : ''}! Continuing...`);
+                    } else {
+                        this.addChatMessage('system', '⚠️ No fixes were applied (all suggestions require manual action)');
                     }
                 }
-                
-                // ✅ FIX: Only show success if fixes were actually applied!
-                if (appliedFixes > 0) {
-                    this.addChatMessage('ai', `✅ Applied ${appliedFixes} auto-fix${appliedFixes > 1 ? 'es' : ''}! Continuing...`);
-                } else {
-                    this.addChatMessage('system', '⚠️ No fixes were applied (all suggestions require manual action)');
-                }
             }
-        }
 
-        // 🎯 CHECK FOR PHASE TRANSITION
-        if (orders.currentPhase && orders.totalPhases) {
-            await this.handlePhaseTransition(orders.currentPhase, orders.totalPhases, successCount, failCount);
-        } else {
-            // 🧠 ChatGPT FIX: Capture phase snapshot BEFORE feedback
-            if (this.contextMemory && this.phaseContext) {
-                this.contextMemory.capturePhaseSnapshot({
-                    currentPhase: this.phaseContext.currentPhase,
-                    mission: orders.mission,
-                    completedFiles: this.phaseContext.completedFiles,
-                    status: successCount > failCount ? 'success' : 'partial',
-                    orders: orders,
-                    verificationResults: verificationResults,
-                    analysisReport: null // Will be filled after sendFeedbackToLLM
+            // 🎯 CHECK FOR PHASE TRANSITION
+            if (orders.currentPhase && orders.totalPhases) {
+                await this.handlePhaseTransition(orders.currentPhase, orders.totalPhases, successCount, failCount);
+            } else {
+                // 🧠 ChatGPT FIX: Capture phase snapshot BEFORE feedback
+                if (this.contextMemory && this.phaseContext) {
+                    this.contextMemory.capturePhaseSnapshot({
+                        currentPhase: this.phaseContext.currentPhase,
+                        mission: orders.mission,
+                        completedFiles: this.phaseContext.completedFiles,
+                        status: successCount > failCount ? 'success' : 'partial',
+                        orders: orders,
+                        verificationResults: verificationResults,
+                        analysisReport: null // Will be filled after sendFeedbackToLLM
+                    });
+                    console.log('📸 Phase snapshot captured for context memory');
+                }
+
+                // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
+                await this.sendFeedbackToLLM(orders, verificationResults, executionErrors);
+            }
+
+            // 🎯 META-REFLECTION ENGINE: Track execution performance
+            if (this.contextMemory && executionMetrics) {
+                const executionSuccess = successCount > failCount;
+                const executionDuration = Date.now() - executionMetrics.startTime;
+
+                this.contextMemory.trackAgentPerformance({
+                    agentName: 'ExecutorAgent',
+                    taskType: orders.mission ? orders.mission.split(' ')[0] : 'unknown',
+                    success: executionSuccess,
+                    duration: executionDuration,
+                    errorType: executionSuccess ? null : (executionErrors[0] || 'unknown_error'),
+                    metadata: {
+                        mission: orders.mission,
+                        totalSteps: orders.steps.length,
+                        successCount: successCount,
+                        failCount: failCount,
+                        verificationResults: verificationResults
+                    }
                 });
-                console.log('📸 Phase snapshot captured for context memory');
+                console.log('📊 ExecutorAgent performance tracked in Meta-Reflection Engine');
             }
-            
-            // 🔄 AGENT FEEDBACK LOOP: Send results back to LLM for analysis
-            await this.sendFeedbackToLLM(orders, verificationResults, executionErrors);
-        }
 
-        // 🎯 META-REFLECTION ENGINE: Track execution performance
-        if (this.contextMemory && executionMetrics) {
-            const executionSuccess = successCount > failCount;
-            const executionDuration = Date.now() - executionMetrics.startTime;
-            
-            this.contextMemory.trackAgentPerformance({
-                agentName: 'ExecutorAgent',
-                taskType: orders.mission ? orders.mission.split(' ')[0] : 'unknown',
-                success: executionSuccess,
-                duration: executionDuration,
-                errorType: executionSuccess ? null : (executionErrors[0] || 'unknown_error'),
-                metadata: {
-                    mission: orders.mission,
-                    totalSteps: orders.steps.length,
-                    successCount: successCount,
-                    failCount: failCount,
-                    verificationResults: verificationResults
-                }
-            });
-            console.log('📊 ExecutorAgent performance tracked in Meta-Reflection Engine');
-        }
+            this.refreshExplorer();
 
-        this.refreshExplorer();
-        
         } finally {
             // ✅ NEW: Release mutex (proper atomic execution)
             this.nightOrdersMutex.release();
             console.log('🔓 Night Orders execution mutex released');
-            
+
             // 🔄 CRITICAL: Process queued missions (legacy queue support)
             // NOTE: AsyncMutex handles internal queue, but this maintains backward compatibility
             if (this.nightOrdersQueue && this.nightOrdersQueue.length > 0) {
                 const nextMission = this.nightOrdersQueue.shift();
                 console.log(`🔄 Executing queued mission: ${nextMission.orders.mission}`);
-                
+
                 // Execute next queued mission asynchronously (don't await to prevent recursion)
                 setTimeout(() => {
                     this.executeNightOrders(nextMission.orders, nextMission.approvalToken);
@@ -10942,20 +11082,20 @@ Success: ${successCount} | Failed: ${failCount}
         try {
             const packageJson = await this.readFileWithAgent('package.json');
             const pkg = JSON.parse(packageJson.content || packageJson);
-            
+
             // ✅ FIX: Get target project's CWD (where files were created)
             const targetCwd = this.workingDirectory || this.cwd || this.getWorkspaceRoot({ mode: "active" });
-            
+
             // ✅ FIX: Check if this is a REAL monorepo (has workspaces in package.json)
             // ❌ OLD: Check folder existence (false positives!)
             // ✅ NEW: Check package.json workspaces field
             const isMonorepo = !!(pkg.workspaces && Array.isArray(pkg.workspaces) && pkg.workspaces.length > 0);
-            
+
             console.log(`🔍 Monorepo check: ${isMonorepo} (workspaces: ${pkg.workspaces ? JSON.stringify(pkg.workspaces) : 'none'})`);
-            
+
             // 3.1: Missing workspaces config (DISABLED - too aggressive)
             // This check causes false positives, removed
-            
+
             // 3.2: Root src/ folder in monorepo
             // ✅ FIX: Pass targetCwd to checkFileExists
             if (isMonorepo && await this.checkFileExists('src', targetCwd)) {
@@ -10973,7 +11113,7 @@ Success: ${successCount} | Failed: ${failCount}
                     reason: 'Monorepo best practice: each workspace has its own src/'
                 });
             }
-            
+
             // 3.3: Root build script pointing to non-existent src/
             if (isMonorepo && pkg.scripts?.build?.includes('webpack') && !pkg.scripts.build.includes('workspaces')) {
                 mistakes.push({
@@ -11008,7 +11148,7 @@ Success: ${successCount} | Failed: ${failCount}
 
         // ✅ FIX: Use targetCwd from previous section
         const targetCwd = this.workingDirectory || this.cwd || this.getWorkspaceRoot({ mode: "active" });
-        
+
         for (const file of criticalFiles) {
             const exists = await this.checkFileExists(file.path, targetCwd);  // ✅ Pass targetCwd
             if (!exists && orders.steps.some(s => s.args?.path?.includes(file.project.toLowerCase()))) {
@@ -11036,10 +11176,10 @@ Success: ${successCount} | Failed: ${failCount}
         try {
             // 🧠 REFLEXION: Analyze mistakes first
             const { mistakes, fixes } = await this.analyzeMistakeAndSuggestFix(orders, verificationResults, executionErrors);
-            
+
             if (mistakes.length > 0) {
                 console.log(`🧠 REFLEXION: Found ${mistakes.length} mistakes, ${fixes.length} suggested fixes`);
-                
+
                 // Show mistakes to user
                 let reflexionMessage = '🧠 **SELF-ANALYSIS: MISTAKES DETECTED**\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
                 mistakes.forEach((m, idx) => {
@@ -11047,40 +11187,42 @@ Success: ${successCount} | Failed: ${failCount}
                     reflexionMessage += `   📁 File: ${m.file || m.path || m.module || 'N/A'}\n`;
                     reflexionMessage += `   💬 Reason: ${m.reason}\n\n`;
                 });
-                
+
                 reflexionMessage += '🔧 **SUGGESTED FIXES:**\n';
                 fixes.forEach((f, idx) => {
                     reflexionMessage += `${idx + 1}. ${f.action}: ${f.path || f.cmd || 'N/A'}\n`;
                     reflexionMessage += `   └─ ${f.reason}\n`;
                 });
-                
+
                 this.addChatMessage('ai', reflexionMessage);
-                
-                // 🎯 AUTO-FIX: Apply fixes automatically
+
+                // 🎯 AUTO-FIX: Apply fixes automatically (queued for sequential execution)
                 const autoFixEnabled = true; // TODO: Make this configurable
                 let appliedFixes = 0;  // ✅ Track actually applied fixes
-                
+
                 if (autoFixEnabled && fixes.length > 0) {
                     this.addChatMessage('system', '🔧 Applying auto-fixes...');
-                    
-                    for (const fix of fixes) {
-                        try {
-                            if (fix.action === 'CREATE_FILE' && fix.content) {
-                                await this.createFileWithAgent(fix.path, fix.content);
-                                this.addChatMessage('system', `✅ Created: ${fix.path}`);
-                                appliedFixes++;  // ✅ Count successful fix
-                            } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
-                                const result = await this.runCommandWithAgent(fix.cmd);
-                                this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
-                                appliedFixes++;  // ✅ Count successful fix
-                            } else if (fix.action === 'UPDATE_FILE' && fix.path && fix.changes) {
-                                // Read current file
-                                const currentContent = await this.readFileWithAgent(fix.path);
-                                const current = JSON.parse(currentContent.content || currentContent);
-                                
+
+                    // ✅ SEQUENTIAL AUTO-FIX: Queue all fixes to prevent race conditions
+                    await this.reflexionQueue.enqueue(async () => {
+                        for (const fix of fixes) {
+                            try {
+                                if (fix.action === 'CREATE_FILE' && fix.content) {
+                                    await this.createFileWithAgent(fix.path, fix.content);
+                                    this.addChatMessage('system', `✅ Created: ${fix.path}`);
+                                    appliedFixes++;  // ✅ Count successful fix
+                                } else if (fix.action === 'RUN_COMMAND' && fix.cmd) {
+                                    const result = await this.runCommandWithAgent(fix.cmd);
+                                    this.addChatMessage('system', `✅ Executed: ${fix.cmd}`);
+                                    appliedFixes++;  // ✅ Count successful fix
+                                } else if (fix.action === 'UPDATE_FILE' && fix.path && fix.changes) {
+                                    // Read current file
+                                    const currentContent = await this.readFileWithAgent(fix.path);
+                                    const current = JSON.parse(currentContent.content || currentContent);
+
                                 // Merge changes
                                 const updated = { ...current, ...fix.changes };
-                                
+
                                 // Write updated file
                                 await this.createFileWithAgent(fix.path, JSON.stringify(updated, null, 2));
                                 this.addChatMessage('system', `✅ Updated: ${fix.path}`);
@@ -11100,7 +11242,8 @@ Success: ${successCount} | Failed: ${failCount}
                             this.addChatMessage('system', `⚠️ Auto-fix failed for ${fix.path || fix.cmd}: ${e.message}`);
                         }
                     }
-                    
+                    }); // ✅ Close reflexionQueue.enqueue()
+
                     // ✅ FIX: Only show success if fixes were actually applied!
                     if (appliedFixes > 0) {
                         this.addChatMessage('ai', `✅ Applied ${appliedFixes} auto-fix${appliedFixes > 1 ? 'es' : ''}! Continuing...`);
@@ -11232,25 +11375,25 @@ ${response}
 
             // 🔧 PHASE 2 AUTO-TRIGGER: Parse analysis report and auto-fix
             // ⚠️ LOOP PREVENTION: Check if this is already a Phase 2 execution
-            const isPhase2 = orders.mission?.includes('PHASE 2') || 
-                             orders.mission?.includes('EKSİKLİKLERİ GİDERME') ||
-                             orders.isPhase2 === true;
+            const isPhase2 = orders.mission?.includes('PHASE 2') ||
+                orders.mission?.includes('EKSİKLİKLERİ GİDERME') ||
+                orders.isPhase2 === true;
 
             const needsPhase2 = !isPhase2 && (
-                                placeholderFiles.length > 0 || 
-                                emptyFiles.length > 0 || 
-                                verificationResults.build === 'fail' ||
-                                verificationResults.lint === 'fail' ||
-                                response.includes('❌') || 
-                                response.includes('⚠️') ||
-                                response.includes('Eksik') ||
-                                response.includes('eksik') ||
-                                response.includes('tamamlanmamış'));
+                placeholderFiles.length > 0 ||
+                emptyFiles.length > 0 ||
+                verificationResults.build === 'fail' ||
+                verificationResults.lint === 'fail' ||
+                response.includes('❌') ||
+                response.includes('⚠️') ||
+                response.includes('Eksik') ||
+                response.includes('eksik') ||
+                response.includes('tamamlanmamış'));
 
             if (needsPhase2) {
                 console.log('� PHASE 2 AUTO-TRIGGER: Analysis report shows issues, starting auto-fix...');
                 this.addChatMessage('system', '� **PHASE 2 BAŞLATILIYOR**: Analiz raporundaki eksiklikler otomatik olarak gideriliyor...');
-                
+
                 // Auto-fix missing package.json first (if needed)
                 if (verificationResults.build === 'fail' && buildFailReason.includes('No package.json')) {
                     try {
@@ -11269,7 +11412,7 @@ ${response}
                         console.error('❌ Failed to create package.json:', e);
                     }
                 }
-                
+
                 // Build SPECIFIC completion prompt from analysis report
                 const phase2Prompt = `
 🎯 **PHASE 2: EKSİKLİKLERİ GİDERME GÖREVI**
@@ -11303,14 +11446,14 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
                 setTimeout(async () => {
                     try {
                         console.log('🚀 [PHASE 2] Triggering auto-execution...');
-                        
+
                         // Mark as phase 2 in session context
                         this.phaseContext.currentPhase = 2;
                         this.phaseContext.lastMission = orders.mission;
-                        
+
                         // PRIMARY: Direct execution (most reliable)
                         await this.executeUnifiedAgentTask(phase2Prompt);
-                        
+
                     } catch (error) {
                         console.error('❌ [PHASE 2] Auto-execution failed:', error);
                         this.addChatMessage('system', `❌ PHASE 2 başlatılamadı: ${error.message}`);
@@ -11364,7 +11507,7 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
                 /BİR_.*_KOMUTU/i,         // BİR_BUILD_KOMUTU
                 /TODO|PLACEHOLDER/i       // Common placeholders
             ];
-            
+
             // 🔥 ENHANCED: Comment-based placeholders (AddTodo.tsx gibi)
             const commentPlaceholders = [
                 /\/\/.*buraya.*gelecek/i,      // "// buraya gelecek"
@@ -11376,13 +11519,13 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
                 /\/\/\s*FIXME/i,                // "// FIXME"
                 /\/\/\s*PLACEHOLDER/i           // "// PLACEHOLDER"
             ];
-            
+
             for (const pattern of placeholderPatterns) {
                 if (pattern.test(step.args.content)) {
                     throw new Error(`${step.tool} content contains PLACEHOLDER pattern: ${pattern.source} - FULL CONTENT REQUIRED!`);
                 }
             }
-            
+
             for (const pattern of commentPlaceholders) {
                 if (pattern.test(step.args.content)) {
                     throw new Error(
@@ -11394,7 +11537,7 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
                     );
                 }
             }
-            
+
             // 🔥 ENHANCED: Minimum content length raised (10 → 50 chars)
             if (step.args.content.trim().length < 50) {
                 throw new Error(
@@ -11403,7 +11546,7 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
                     `Likely placeholder or incomplete implementation.`
                 );
             }
-            
+
             // 📋 README QUALITY ENFORCER
             const isReadme = step.args.path.toLowerCase().includes('readme');
             if (isReadme) {
@@ -11426,7 +11569,7 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
             }
         }
     }
-    
+
     // 📋 README Quality Checker
     checkReadmeQuality(content, filePath) {
         if (!filePath.toLowerCase().includes('readme')) {
@@ -11434,49 +11577,49 @@ Yukarıdaki analiz raporunda tespit edilen TÜM eksiklikleri ve hataları şimdi
         }
 
         const issues = [];
-        
+
         // 1. Length check (min 500 chars)
         if (content.length < 500) {
             issues.push(`README çok kısa! (${content.length} chars). Minimum: 500 chars`);
         }
-        
+
         // 2. Required sections (Turkish)
         const requiredSections = [
             { name: 'Kurulum', alternatives: ['Installation', 'Setup'] },
             { name: 'Kullanım', alternatives: ['Usage', 'Nasıl Kullanılır'] },
             { name: 'Özellikler', alternatives: ['Features', 'Fonksiyonlar'] }
         ];
-        
+
         for (const section of requiredSections) {
-            const hasSection = [section.name, ...section.alternatives].some(s => 
+            const hasSection = [section.name, ...section.alternatives].some(s =>
                 content.includes(s) || content.includes(s.toLowerCase())
             );
             if (!hasSection) {
                 issues.push(`Eksik bölüm: "${section.name}" (veya ${section.alternatives.join(', ')})`);
             }
         }
-        
+
         // 3. Code examples (must have)
         const hasCodeBlock = content.includes('```') || content.includes('`');
         if (!hasCodeBlock) {
             issues.push('Kod örneği yok! README\'de mutlaka kod örnekleri (```kod```) olmalı');
         }
-        
+
         // 4. Terminal commands
-        const hasCommands = content.includes('npm ') || 
-                           content.includes('yarn ') || 
-                           content.includes('git ') ||
-                           content.includes('node ');
+        const hasCommands = content.includes('npm ') ||
+            content.includes('yarn ') ||
+            content.includes('git ') ||
+            content.includes('node ');
         if (!hasCommands) {
             issues.push('Terminal komutları eksik! (npm install, npm start, npm test vs.)');
         }
-        
+
         // 5. Project description (at least 3 lines)
         const lines = content.split('\n').filter(l => l.trim().length > 20);
         if (lines.length < 10) {
             issues.push(`README çok basit! Sadece ${lines.length} anlamlı satır var. Min: 10 satır bekleniyor`);
         }
-        
+
         return {
             passed: issues.length === 0,
             issues: issues
@@ -11853,7 +11996,7 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
      */
     async runFinalVerification() {
         this.addChatMessage('system', '📦 npm install çalıştırılıyor...');
-        
+
         try {
             // Step 1: npm install
             this.addChatMessage('system', '📦 npm install çalıştırılıyor...');
@@ -11863,19 +12006,19 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
             } else {
                 this.addChatMessage('system', '⚠️ npm install hatası');
             }
-            
+
             // Step 2: Build test
             this.addChatMessage('system', '🔨 Build testi yapılıyor...');
             const buildResult = await this.runTerminalCommand('npm run build', this.currentFolder);
-            
+
             // 🔧 CRITICAL FIX: Only show success if build actually passed
             const buildSuccess = buildResult && buildResult.exitCode === 0;
-            
+
             if (buildSuccess) {
                 this.addChatMessage('system', '✅ Build başarılı!');
             } else {
                 this.addChatMessage('system', '⚠️ Build hatası - manuel kontrol gerekebilir');
-                
+
                 // 🚨 Don't claim success if build failed!
                 this.addChatMessage('ai', `
 ⚠️ **PROJE TAMAMLANDI AMA BUILD HATASI VAR!**
@@ -11894,12 +12037,12 @@ Bu komutu çalıştırmak istediğinizden emin misiniz?`);
                 `);
                 return; // Exit early - don't claim success
             }
-            
+
             // Step 3: Start dev server (background) - only if build passed
             this.addChatMessage('system', '🚀 Dev server başlatılıyor...');
             // Don't await - run in background
             this.runTerminalCommand('npm run dev', this.currentFolder, true);
-            
+
             this.addChatMessage('ai', `
 ✅ **HER ŞEY HAZIR!**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -11927,7 +12070,7 @@ Happy coding! 🚀
      */
     async handlePhaseTransition(currentPhase, totalPhases, successCount, failCount) {
         const isLastPhase = currentPhase >= totalPhases;
-        
+
         if (isLastPhase) {
             // 🎉 PROJECT COMPLETED
             this.addChatMessage('ai', `
@@ -11938,7 +12081,7 @@ Happy coding! 🚀
 
 🔍 Şimdi final kontrolleri yapıyorum...
             `);
-            
+
             // Run final verification
             await this.runFinalVerification();
         } else {
@@ -11946,24 +12089,24 @@ Happy coding! 🚀
             const nextPhase = currentPhase + 1;
             const plan = this.currentProjectAnalysis?.projectPlan;
             const nextPhaseInfo = plan?.phases?.find(p => p.id === nextPhase);
-            
+
             let message = `
 ✅ **PHASE ${currentPhase} TAMAMLANDI!**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Sonuç: ${successCount} başarılı, ${failCount} hatalı
 ⏭️ Sırada: **PHASE ${nextPhase} - ${nextPhaseInfo?.name || 'Devam'}**
 `;
-            
+
             if (nextPhaseInfo) {
                 message += `\n📝 **Phase ${nextPhase} İçeriği:**\n`;
                 message += `  • ${nextPhaseInfo.description}\n`;
                 message += `  • Dosyalar: ${nextPhaseInfo.files.join(', ')}\n`;
                 message += `  • Süre: ${nextPhaseInfo.duration}\n\n`;
             }
-            
+
             message += `\n**Devam edeyim mi?** 🚀\n`;
             message += `"evet" deyin, Phase ${nextPhase}'yi başlatayım!`;
-            
+
             this.addChatMessage('ai', message);
         }
     }
@@ -11979,9 +12122,9 @@ Happy coding! 🚀
         planMessage += `  • Toplam Dosya: ${plan.totalFiles}\n`;
         planMessage += `  • Tahmini Süre: ${plan.estimatedTime}\n`;
         planMessage += `  • Phase Sayısı: ${plan.phases.length}\n\n`;
-        
+
         planMessage += `🔄 **Execution Planı:**\n\n`;
-        
+
         plan.phases.forEach((phase, idx) => {
             planMessage += `**PHASE ${phase.id}: ${phase.name}** (${phase.duration})\n`;
             planMessage += `  └─ ${phase.description}\n`;
@@ -12009,7 +12152,7 @@ Happy coding! 🚀
             case 'fs.write':
                 const filename = step.args.path.split('/').pop();
                 const fileType = filename.includes('.') ? filename.split('.').pop() : 'file';
-                
+
                 // 🚫 FILE DEDUPLICATION: Check if already created
                 const normalizedPath = step.args.path.replace(/\\/g, '/').toLowerCase();
                 if (this.phaseContext.completedFiles.has(normalizedPath)) {
@@ -12019,9 +12162,9 @@ Happy coding! 🚀
                     details.push('Dosya daha önce oluşturulmuş');
                     break; // Skip duplicate creation
                 }
-                
+
                 message = `📝 ${filename} oluşturuluyor...`;
-                
+
                 // Detect file purpose from content
                 if (step.args.content) {
                     if (step.args.content.includes('workspaces')) {
@@ -12065,7 +12208,7 @@ Happy coding! 🚀
             case 'fs.read':
                 message = `📖 ${step.args.path} dosyası okunuyor...`;
                 break;
-            
+
             case 'fs.multiEdit':
                 const editCount = step.args.edits ? step.args.edits.length : 0;
                 message = `✏️ ${step.args.filepath} dosyasında ${editCount} değişiklik yapılıyor...`;
@@ -12088,7 +12231,7 @@ Happy coding! 🚀
         }
 
         // Show message in chat
-        const fullMessage = details.length > 0 
+        const fullMessage = details.length > 0
             ? `${message}\n  ${details.map(d => `└─ ${d}`).join('\n  ')}`
             : message;
 
@@ -12103,30 +12246,30 @@ Happy coding! 🚀
     generateExplainFromStep(step) {
         const tool = step.tool;
         const args = step.args || {};
-        
+
         switch (tool) {
             case 'write_file':
             case 'fs.write':
                 return `📝 Dosya oluşturuyorum: ${args.path}\n\nBu dosya projenin önemli bir parçası. İçeriği şunları içerecek:\n- ${args.content ? args.content.split('\n').slice(0, 3).join('\n- ') + '...' : 'Kod içeriği'}`;
-            
+
             case 'fs.multiEdit':
                 const editCount = args.edits ? args.edits.length : 0;
                 const replaceAllCount = args.edits ? args.edits.filter(e => e.replace_all).length : 0;
                 return `✏️ Dosyayı düzenliyorum: ${args.filepath}\n\n${editCount} atomik değişiklik yapılacak${replaceAllCount > 0 ? ` (${replaceAllCount} global değişiklik dahil)` : ''}.\n\nTüm değişiklikler birlikte uygulanacak - ya hepsi başarılı olur, ya hiçbiri.`;
-            
+
             case 'run_cmd':
             case 'terminal.exec':
                 return `⚙️ Komut çalıştırıyorum: ${args.cmd}\n\nBu komut şunları yapacak:\n- Proje bağımlılıklarını yükle\n- Ayarları yapılandır\n- Sonuçları doğrula`;
-            
+
             case 'read_file':
             case 'fs.read':
                 return `📖 Dosya okuyorum: ${args.path}\n\nBu dosyayı kontrol etmek için okuyorum, içeriğini analiz edeceğim.`;
-            
+
             default:
                 return `🔧 ${tool} işlemi yapılıyor...\n\nGörev adım adım ilerliyor.`;
         }
     }
-    
+
     // 🎯 Get phase number where file was created
     getCurrentPhaseForFile(normalizedPath) {
         for (const phase of this.phaseContext.phaseHistory) {
@@ -12143,7 +12286,7 @@ Happy coding! 🚀
         // 🎓 USTA MODU: Always emit BEFORE narration
         if (this.eventBus) {
             const explainText = step.explain || this.generateExplainFromStep(step);
-            
+
             this.eventBus.emit({
                 type: 'NARRATION_BEFORE',
                 data: {
@@ -12160,17 +12303,17 @@ Happy coding! 🚀
         // 🔧 TOOL BRIDGE: Try to execute via ToolBridge first (handles aliases)
         if (window.toolBridge) {
             const supportedTools = window.toolBridge.getSupportedTools();
-            
+
             // Check if tool exists in ToolBridge
             if (supportedTools.includes(step.tool)) {
                 console.log(`🔧 [ToolBridge] Executing via ToolBridge: ${step.tool}`);
                 const bridgeResult = await window.toolBridge.executeTool(step.tool, step.args);
-                
+
                 // If ToolBridge execution failed with "Unknown tool", fall through to legacy handler
                 if (!bridgeResult.error || !bridgeResult.error.includes('Unknown tool')) {
                     return bridgeResult;
                 }
-                
+
                 console.warn(`⚠️ [ToolBridge] Failed, falling back to legacy handler:`, bridgeResult.error);
             }
         }
@@ -12197,24 +12340,32 @@ Happy coding! 🚀
                 if (!step.args.path || !step.args.content) {
                     throw new Error(`${step.tool} requires path and content`);
                 }
-                
-                const result = await this.createFileWithAgent(step.args.path, step.args.content);
-                
-                // 🎯 TRACK FILE CREATION: Add to phase context
+
+                // 🔒 THREAD-SAFE FILE CREATION with PhaseContext lock
                 const normalizedFilePath = step.args.path.replace(/\\/g, '/').toLowerCase();
-                this.phaseContext.completedFiles.add(normalizedFilePath);
-                
-                // Add to current phase history
-                if (this.phaseContext.phaseHistory.length > 0) {
-                    const currentPhaseData = this.phaseContext.phaseHistory[this.phaseContext.phaseHistory.length - 1];
-                    if (!currentPhaseData.files.includes(normalizedFilePath)) {
-                        currentPhaseData.files.push(normalizedFilePath);
+
+                return await this.phaseContext.withFileLock(normalizedFilePath, async () => {
+                    // Check if file already created in this phase
+                    if (this.phaseContext.hasFile(normalizedFilePath)) {
+                        console.log(`⏭️ Skipping duplicate file: ${normalizedFilePath}`);
+                        return {
+                            success: true,
+                            skipped: true,
+                            reason: 'File already created in current phase'
+                        };
                     }
-                }
-                
-                console.log(`✅ File tracked: ${normalizedFilePath} (Phase ${this.phaseContext.currentPhase})`);
-                
-                return result;
+
+                    // Create file
+                    const result = await this.createFileWithAgent(step.args.path, step.args.content);
+
+                    // Mark as completed on success
+                    if (result?.success !== false) {
+                        this.phaseContext.markFileCompleted(normalizedFilePath);
+                        console.log(`✅ File tracked: ${normalizedFilePath} (Phase ${this.phaseContext.currentPhase})`);
+                    }
+
+                    return result;
+                });
 
             case 'read_file':
             case 'fs.read':
@@ -12222,7 +12373,7 @@ Happy coding! 🚀
                     throw new Error(`${step.tool} requires path`);
                 }
                 return await this.readFileWithAgent(step.args.path);
-            
+
             case 'fs.multiEdit':
                 if (!step.args.filepath || !step.args.edits) {
                     throw new Error('fs.multiEdit requires filepath and edits array');
@@ -12234,32 +12385,32 @@ Happy coding! 🚀
                 if (!step.args.cmd || step.args.cmd.trim() === '') {
                     throw new Error(`${step.tool} requires non-empty cmd string`);
                 }
-                
+
                 // 🔧 FIX #2: CWD Execution - Workspace Commands
                 // PROBLEM: Shell chaining (cd server && npm install) fails with exitCode:-1 on Windows
                 // SOLUTION: Convert to workspace commands (npm --workspace server install)
-                
+
                 let cmd = step.args.cmd;
                 let cwd = step.args.cwd || this.workspaceRoot;
-                
+
                 // ⚠️ CRITICAL: Transform shell chaining commands into workspace commands
                 const shellChainingPattern = /^cd\s+([^\s&]+)\s*&&\s*(.+)$/;
                 const match = cmd.match(shellChainingPattern);
-                
+
                 if (match) {
                     const targetDir = match[1];  // e.g., "server" or "./client"
                     const actualCmd = match[2];  // e.g., "npm install" or "npm run build"
-                    
+
                     console.log(`🔄 Converting shell chaining: cd ${targetDir} && ${actualCmd}`);
-                    
+
                     // Check if this is an npm command that can use --workspace
                     const npmPattern = /^npm\s+(install|run|build|test|start|dev)(.*)$/;
                     const npmMatch = actualCmd.match(npmPattern);
-                    
+
                     if (npmMatch) {
                         const npmAction = npmMatch[1];  // install, run, build, etc.
                         const npmArgs = npmMatch[2].trim();  // additional args
-                        
+
                         // Transform to workspace command
                         cmd = `npm --workspace ${targetDir} ${npmAction}${npmArgs ? ' ' + npmArgs : ''}`;
                         console.log(`✅ Transformed to workspace command: ${cmd}`);
@@ -12271,7 +12422,7 @@ Happy coding! 🚀
                         console.log(`✅ Using absolute CWD: ${cwd} for command: ${cmd}`);
                     }
                 }
-                
+
                 // Resolve relative CWD to absolute path
                 if (cwd && !cwd.match(/^[a-zA-Z]:\\/) && !cwd.startsWith('/')) {
                     const path = require('path');
@@ -12279,7 +12430,7 @@ Happy coding! 🚀
                     cwd = path.resolve(this.workspaceRoot, cwd);
                     console.log(`🔧 Resolved relative CWD: ${oldCwd} → ${cwd}`);
                 }
-                
+
                 return await this.runCommandWithAgent(cmd, cwd);
 
             case 'http.get':
@@ -12311,7 +12462,7 @@ Happy coding! 🚀
                     try {
                         const pkgContent = await this.readFileWithAgent('package.json');
                         const pkg = JSON.parse(pkgContent.content || pkgContent);
-                        
+
                         if (!pkg.scripts || !pkg.scripts.build) {
                             console.log('⏭️ BUILD skipped: No build script defined in package.json');
                             return 'skip';
@@ -12333,12 +12484,12 @@ Happy coding! 🚀
 
                     // 🔍 CRITICAL: Build passes ONLY if exitCode === 0
                     const exitCode = buildResult.exitCode !== undefined ? buildResult.exitCode : -1;
-                    const hasErrors = (buildResult.stdout || '').includes('error') || 
-                                     (buildResult.stderr || '').includes('error') ||
-                                     (buildResult.stdout || '').includes('failed');
-                    
+                    const hasErrors = (buildResult.stdout || '').includes('error') ||
+                        (buildResult.stderr || '').includes('error') ||
+                        (buildResult.stdout || '').includes('failed');
+
                     const success = exitCode === 0 && !hasErrors;
-                    
+
                     console.log(`🔍 [BUG FIX #1] BUILD verification (REAL EXECUTION):`, {
                         exitCode: exitCode,
                         hasErrors: hasErrors,
@@ -12347,13 +12498,13 @@ Happy coding! 🚀
                         stdout: buildResult.stdout ? buildResult.stdout.substring(0, 200) : 'N/A',
                         stderr: buildResult.stderr ? buildResult.stderr.substring(0, 200) : 'N/A'
                     });
-                    
+
                     if (!success) {
                         console.warn(`❌ BUILD FAILED (REAL EXECUTION): exitCode=${exitCode}, hasErrors=${hasErrors}`);
                     } else {
                         console.log('✅ [BUG FIX #1] BUILD SUCCESS (REAL TERMINAL COMMAND EXECUTED!)');
                     }
-                    
+
                     return success;
                 } catch (error) {
                     console.warn('❌ BUILD failed:', error.message);
@@ -12382,22 +12533,22 @@ Happy coding! 🚀
 
                     // 🔍 CRITICAL: Run passes ONLY if exitCode === 0
                     const exitCode = runResult.exitCode !== undefined ? runResult.exitCode : -1;
-                    const hasErrors = (runResult.stdout || '').includes('error') || 
-                                     (runResult.stderr || '').includes('error');
-                    
+                    const hasErrors = (runResult.stdout || '').includes('error') ||
+                        (runResult.stderr || '').includes('error');
+
                     const success = exitCode === 0 && !hasErrors;
-                    
+
                     console.log(`🔍 RUN verification:`, {
                         exitCode: exitCode,
                         hasErrors: hasErrors,
                         success: success,
                         runResultSuccess: runResult.success
                     });
-                    
+
                     if (!success) {
                         console.warn(`❌ RUN FAILED: exitCode=${exitCode}, hasErrors=${hasErrors}`);
                     }
-                    
+
                     return success;
                 } catch (error) {
                     console.warn('❌ RUN failed:', error.message);
@@ -12473,8 +12624,8 @@ ${matrix}
             let fullPath;
             if (targetCwd) {
                 // Use explicit target CWD (for Reflexion checking target project)
-                fullPath = this.path.isAbsolute(filePath) 
-                    ? filePath 
+                fullPath = this.path.isAbsolute(filePath)
+                    ? filePath
                     : this.path.resolve(targetCwd, filePath);
             } else {
                 // Use current workspace root (normal operation)
@@ -12666,8 +12817,8 @@ ${matrix}
 
         // Choose icon based on message type
         const icon = type === 'system' ? 'fa-cog' :
-                     type === 'user' ? 'fa-user' :
-                     type === 'ai' ? 'fa-dragon' : 'fa-robot';
+            type === 'user' ? 'fa-user' :
+                type === 'ai' ? 'fa-dragon' : 'fa-robot';
 
         // Process content for code blocks and formatting
         const processedContent = this.processMessageContent(content);
@@ -12736,19 +12887,19 @@ ${matrix}
     }
 
     // 🔐 PHASE 6: ELYSION CHAMBER - Helper Methods
-    
+
     assessRisks(plannedActions) {
         // Analyze planned actions for risks
         const risks = [];
-        
+
         if (!plannedActions || plannedActions.length === 0) {
             return [{ level: 'LOW', message: 'No operations planned' }];
         }
 
         // Check for file deletions
-        const deletions = plannedActions.filter(a => 
-            a.action === 'delete_file' || 
-            a.command?.includes('rm ') || 
+        const deletions = plannedActions.filter(a =>
+            a.action === 'delete_file' ||
+            a.command?.includes('rm ') ||
             a.command?.includes('del ')
         );
         if (deletions.length > 0) {
@@ -12760,7 +12911,7 @@ ${matrix}
         }
 
         // Check for system commands
-        const systemCmds = plannedActions.filter(a => 
+        const systemCmds = plannedActions.filter(a =>
             a.command?.includes('npm install') ||
             a.command?.includes('pip install') ||
             a.command?.includes('git push') ||
@@ -12775,8 +12926,8 @@ ${matrix}
         }
 
         // Check for file overwrites
-        const writes = plannedActions.filter(a => 
-            a.action === 'write_file' || 
+        const writes = plannedActions.filter(a =>
+            a.action === 'write_file' ||
             a.tool === 'write_file'
         );
         if (writes.length > 5) {
@@ -12808,11 +12959,11 @@ ${matrix}
         }
 
         // Probe for file creations
-        const fileWrites = plannedActions.filter(a => 
-            a.action === 'write_file' || 
+        const fileWrites = plannedActions.filter(a =>
+            a.action === 'write_file' ||
             a.tool === 'write_file'
         );
-        
+
         fileWrites.forEach(fw => {
             const filePath = fw.fileName || fw.args?.path;
             if (filePath) {
@@ -12825,10 +12976,10 @@ ${matrix}
         });
 
         // Probe for commands execution
-        const commands = plannedActions.filter(a => 
+        const commands = plannedActions.filter(a =>
             a.command || a.tool === 'run_cmd'
         );
-        
+
         if (commands.length > 0) {
             probes.push({
                 type: 'PROCESS_SUCCESS',
@@ -14672,9 +14823,9 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
                 } else {
                     // Replace first occurrence only
                     const index = currentContent.indexOf(old_string);
-                    currentContent = currentContent.substring(0, index) + 
-                                     new_string + 
-                                     currentContent.substring(index + old_string.length);
+                    currentContent = currentContent.substring(0, index) +
+                        new_string +
+                        currentContent.substring(index + old_string.length);
                     console.log(`  ✅ Edit ${i + 1}/${edits.length}: Replaced first occurrence`);
                     appliedEdits.push({ index: i, occurrences: 1, type: 'replace_first' });
                 }
@@ -14682,7 +14833,7 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
 
             // Step 3: Write updated content atomically
             const writeResult = await this.createFileWithAgent(filepath, currentContent);
-            
+
             if (!writeResult.success) {
                 throw new Error(`Failed to write file: ${writeResult.error || 'Unknown error'}`);
             }
@@ -14700,7 +14851,7 @@ Projeyi geliştiren: ${project.author || 'KayraDeniz Kod Canavarı'}
         } catch (error) {
             // Rollback: Restore original content if any edit fails
             console.error(`❌ Multi-Edit failed, rolling back: ${error.message}`);
-            
+
             // Attempt to restore original content
             try {
                 await this.createFileWithAgent(filepath, originalContent);
@@ -17427,10 +17578,10 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
 
         try {
             const result = await this.multiEditSystem.executeMultiEdit(filepath, edits, options);
-            
+
             // Show success notification
             this.addChatMessage('system', `✅ Successfully applied ${edits.length} edits to ${filepath}`);
-            
+
             // Show diff if available
             if (result.diff && result.diff.length > 0) {
                 const diffPreview = result.diff.slice(0, 10).join('\n');
@@ -17551,7 +17702,7 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
             return false;
         }
     }
-    
+
     /**
      * 🌌 LUMA: Show confirmation dialog for risky commands
      * @param {Object} lumaDecision - Luma decision object
@@ -17563,7 +17714,7 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
             console.log('🔓 Developer Mode: Auto-approving risky command');
             return true;
         }
-        
+
         return new Promise((resolve) => {
             const modal = document.createElement('div');
             modal.className = 'luma-confirmation-modal';
@@ -17605,23 +17756,23 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
                     </div>
                 </div>
             `;
-            
+
             document.body.appendChild(modal);
-            
+
             // Add event listeners
             const proceedBtn = modal.querySelector('[data-action="proceed"]');
             const cancelBtn = modal.querySelector('[data-action="cancel"]');
-            
+
             proceedBtn?.addEventListener('click', () => {
                 modal.remove();
                 resolve(true);
             });
-            
+
             cancelBtn?.addEventListener('click', () => {
                 modal.remove();
                 resolve(false);
             });
-            
+
             // Close on outside click
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
@@ -17638,11 +17789,11 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
      */
     async getAgentProjectContext() {
         try {
-            const map = await this.viewRepoMapSystem.viewRepoMap({ 
+            const map = await this.viewRepoMapSystem.viewRepoMap({
                 maxDepth: 3,
                 includeStats: true,
                 includeFileTree: true,
-                useCache: true 
+                useCache: true
             });
 
             if (!map.success) {
@@ -17660,10 +17811,10 @@ Artık geliştirmeye başlayabilirsin! 🚀`;
 
 ## File Types:
 ${Object.entries(map.stats.filesByExtension || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([ext, count]) => `- ${ext}: ${count}`)
-    .join('\n')}
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .map(([ext, count]) => `- ${ext}: ${count}`)
+                    .join('\n')}
 
 ## Directory Structure (Top Level):
 ${map.fileTree ? map.fileTree.slice(0, 30).join('\n') : 'Not available'}
@@ -17780,27 +17931,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
+
     // 🔓 DEVELOPER MODE TOGGLE (Console Command + UI Button)
-    window.toggleDeveloperMode = function() {
+    window.toggleDeveloperMode = function () {
         if (window.kodCanavari) {
             window.kodCanavari.developerMode = !window.kodCanavari.developerMode;
             localStorage.setItem('developerMode', window.kodCanavari.developerMode);
-            
+
             const status = window.kodCanavari.developerMode ? 'ENABLED ✅' : 'DISABLED ❌';
             console.log(`🔓 Developer Mode: ${status}`);
-            
+
             if (window.kodCanavari.developerMode) {
                 console.log('⚠️ All operations will be auto-approved!');
             } else {
                 console.log('✅ Manual approval required for operations.');
             }
-            
+
             // 🎨 UPDATE UI BUTTON
             const btn = document.getElementById('developerModeBtn');
             const statusSpan = btn?.querySelector('.dev-mode-status');
             const icon = btn?.querySelector('i');
-            
+
             if (btn && statusSpan && icon) {
                 if (window.kodCanavari.developerMode) {
                     btn.classList.add('dev-mode-active');
@@ -17814,31 +17965,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     btn.title = 'Developer Mode DISABLED';
                 }
             }
-            
+
             return window.kodCanavari.developerMode;
         }
     };
-    
+
     // 🎓 TEACH MODE TOGGLE (Console Command)
-    window.toggleTeachMode = function() {
+    window.toggleTeachMode = function () {
         if (window.kodCanavari) {
             window.kodCanavari.settings.teachWhileDoing = !window.kodCanavari.settings.teachWhileDoing;
             localStorage.setItem('teachWhileDoing', window.kodCanavari.settings.teachWhileDoing);
-            
+
             const status = window.kodCanavari.settings.teachWhileDoing ? 'ENABLED ✅' : 'DISABLED ❌';
             console.log(`🎓 Teach-While-Doing Mode: ${status}`);
-            
+
             if (window.kodCanavari.settings.teachWhileDoing) {
                 console.log('📚 All steps will include detailed explanations (goal, rationale, tradeoffs)');
                 console.log('💡 Policy will enforce explain fields in every step');
             } else {
                 console.log('⚡ Fast mode: Minimal explanations');
             }
-            
+
             return window.kodCanavari.settings.teachWhileDoing;
         }
     };
-    
+
     console.log('💡 TIP: Use toggleDeveloperMode() in console to enable/disable auto-approval');
     console.log('💡 TIP: Use toggleTeachMode() in console to enable/disable detailed explanations');
 });

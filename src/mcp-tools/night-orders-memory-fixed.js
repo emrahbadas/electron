@@ -256,14 +256,14 @@ class NightOrdersMemory {
                     `Timestamp: ${new Date().toISOString()}`,
                     `Stack: ${error.stack?.substring(0, 200) || 'N/A'}`
                 ]
-            }] });
+            }]);
             
             // Link error to step
             await this.memory.createRelations([{
                 from: stepEntityName,
                 to: errorEntityName,
                 relationType: 'encountered_error'
-            }] });
+            }]);
             
             // Add error observation to step
             await this.memory.addObservations({ observations: [{
@@ -306,7 +306,7 @@ class NightOrdersMemory {
                         `First seen: ${new Date().toISOString()}`,
                         `Created by: ${stepId}`
                     ]
-                }] });
+                }]);
             }
             
             // Add operation observation
@@ -325,7 +325,7 @@ class NightOrdersMemory {
                 from: stepEntityName,
                 to: fileEntityName,
                 relationType: operation === 'create' ? 'created_file' : 'modified_file'
-            }] });
+            }]);
             
             console.log(`🧠 [NightOrdersMemory] File operation tracked: ${operation} ${filePath}`);
             

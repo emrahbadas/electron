@@ -130,9 +130,11 @@ function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      enableRemoteModule: false
     },
     title: 'KayraDeniz Badaş Kod Canavarı',
     titleBarStyle: 'default',
@@ -408,6 +410,16 @@ ipcMain.handle('read-file', async (event, filePath) => {
   }
 });
 
+// Alias for preload.js compatibility
+ipcMain.handle('fs:readFile', async (event, filePath) => {
+  try {
+    const content = await fsPromises.readFile(filePath, 'utf8');
+    return content; // Return content directly for preload compatibility
+  } catch (error) {
+    throw error; // Preload will catch and handle
+  }
+});
+
 ipcMain.handle('write-file', async (event, filePath, content) => {
   try {
     // Ensure directory exists before writing file
@@ -418,6 +430,18 @@ ipcMain.handle('write-file', async (event, filePath, content) => {
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+// Alias for preload.js compatibility
+ipcMain.handle('fs:writeFile', async (event, filePath, content) => {
+  try {
+    const dirPath = path.dirname(filePath);
+    await fsPromises.mkdir(dirPath, { recursive: true });
+    await fsPromises.writeFile(filePath, content, 'utf8');
+    return { success: true };
+  } catch (error) {
+    throw error;
   }
 });
 
@@ -459,6 +483,30 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
     return { success: true, files: result };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+// Alias for preload.js compatibility
+ipcMain.handle('fs:readDir', async (event, dirPath) => {
+  try {
+    const files = await fsPromises.readdir(dirPath, { withFileTypes: true });
+    return files.map(f => ({
+      name: f.name,
+      isDirectory: f.isDirectory(),
+      isFile: f.isFile()
+    }));
+  } catch (error) {
+    throw error;
+  }
+});
+
+// Check if file/folder exists (for preload.js)
+ipcMain.handle('fs:exists', async (event, filepath) => {
+  try {
+    await fsPromises.access(filepath);
+    return true;
+  } catch {
+    return false;
   }
 });
 

@@ -525,16 +525,97 @@ class ClaudeMCPService extends EventEmitter {
                     
                     this.emit('toolUsed', {
                         name: toolUse.name,
-                        id: toolUse.id
+                        id: toolUse.id,
+                        input: toolUse.input
                     });
                     
-                    console.log(`[Claude MCP] 🔧 Tool used: ${toolUse.name}`);
+                    console.log(`[Claude MCP] 🔧 Tool requested: ${toolUse.name}`, toolUse.input);
                 }
 
                 // Token usage
                 if (event.type === 'message_delta' && event.usage) {
                     this.stats.tokensUsed += event.usage.output_tokens || 0;
                 }
+            }
+
+            // ===== CRITICAL: EXECUTE TOOLS IF ANY =====
+            // Claude MCP Protocol: Execute tools and send results back
+            if (toolsUsed.length > 0) {
+                console.log(`[Claude MCP] ⚙️  Executing ${toolsUsed.length} tools...`);
+                
+                // ✅ Emit separator before tool execution
+                this.emit('streamingChunk', '\n\n🔧 **Tool Execution:**\n');
+                
+                const toolResults = [];
+                for (const toolUse of toolsUsed) {
+                    console.log(`[Claude MCP] 🔧 Executing tool: ${toolUse.name}`);
+                    
+                    // ✅ Show tool execution in UI
+                    this.emit('streamingChunk', `\n- ${toolUse.name}... `);
+                    
+                    try {
+                        const result = await this.executeTool(toolUse.name, toolUse.input);
+                        toolResults.push({
+                            type: 'tool_result',
+                            tool_use_id: toolUse.id,
+                            content: result.success 
+                                ? JSON.stringify(result.data || result.result || result) 
+                                : `Error: ${result.error}`
+                        });
+                        
+                        console.log(`[Claude MCP] ✅ Tool executed: ${toolUse.name}`);
+                        // ✅ Show success in UI
+                        this.emit('streamingChunk', `✅`);
+                    } catch (error) {
+                        console.error(`[Claude MCP] ❌ Tool execution failed: ${toolUse.name}`, error);
+                        toolResults.push({
+                            type: 'tool_result',
+                            tool_use_id: toolUse.id,
+                            content: `Error executing tool: ${error.message}`,
+                            is_error: true
+                        });
+                        // ✅ Show error in UI
+                        this.emit('streamingChunk', `❌ (${error.message})`);
+                    }
+                }
+
+                // Send tool results back to Claude for final response
+                console.log(`[Claude MCP] 📤 Sending tool results back to Claude...`);
+                
+                // Add tool results to conversation
+                this.conversationHistory.push({
+                    role: 'user',
+                    content: toolResults
+                });
+
+                // ✅ Emit separator and heading before final analysis
+                this.emit('streamingChunk', '\n\n📊 **Analysis Result:**\n\n');
+
+                // Get Claude's final response with tool results
+                const finalStream = await this.anthropic.messages.create({
+                    model: this.currentModel,
+                    max_tokens: this.maxTokens,
+                    temperature: this.temperature,
+                    messages: this.conversationHistory,
+                    stream: true,
+                });
+
+                // Process final response (stream continues in same message)
+                let finalText = '';
+                for await (const event of finalStream) {
+                    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                        const chunk = event.delta.text;
+                        finalText += chunk;
+                        this.emit('streamingChunk', chunk);
+                    }
+                    
+                    // Track token usage
+                    if (event.type === 'message_delta' && event.usage) {
+                        this.stats.tokensUsed += event.usage.output_tokens || 0;
+                    }
+                }
+
+                finalResponse += '\n\n' + finalText;
             }
 
             // Conversation history'ye assistant response ekle
@@ -596,67 +677,146 @@ class ClaudeMCPService extends EventEmitter {
         try {
             this.stats.toolsExecuted++;
             
-            // ===== STRATEGY 1: MAP TO KODCANAVARI TOOLS =====
+            // ===== STRATEGY 1: MAP TO KODCANAVARI MINI MCP TOOLS (HTTP) =====
+            const miniMCPUrl = 'http://localhost:7777';
+            
             if (toolName === 'read_file') {
-                // KodCanavarı'nın resources.read kullan
-                const { ipcRenderer } = require('electron');
-                const result = await ipcRenderer.invoke('mcp-tool:resources.read', {
-                    uri: `file://${params.file_path || params.path}`
+                // Mini MCP fs.read tool
+                const fetch = require('node-fetch');
+                const response = await fetch(`${miniMCPUrl}/mcp/fs/read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: params.file_path || params.path,
+                        workingDirectory: this.workspacePath
+                    })
                 });
-                return { success: true, content: result.contents[0].text };
+                
+                if (!response.ok) {
+                    const error = await response.text();
+                    return { success: false, error };
+                }
+                
+                const result = await response.json();
+                return { success: true, content: result.content };
             }
             
             if (toolName === 'list_directory' || toolName === 'get_file_tree') {
-                // KodCanavarı'nın directoryTree kullan
-                const { ipcRenderer } = require('electron');
-                const result = await ipcRenderer.invoke('mcp-tool:files.directoryTree', {
-                    path: params.directory_path || params.path || '.',
-                    maxDepth: params.max_depth || 3
+                // Mini MCP shell.run with 'dir' or 'ls'
+                const fetch = require('node-fetch');
+                const isWindows = require('os').platform() === 'win32';
+                const command = isWindows 
+                    ? `dir "${params.directory_path || params.path || '.'}" /s /b` 
+                    : `find "${params.directory_path || params.path || '.'}" -type f`;
+                
+                const response = await fetch(`${miniMCPUrl}/mcp/shell/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        command,
+                        workingDirectory: this.workspacePath
+                    })
                 });
-                return { success: true, tree: result.tree };
+                
+                if (!response.ok) {
+                    const error = await response.text();
+                    return { success: false, error };
+                }
+                
+                const result = await response.json();
+                return { success: true, tree: result.stdout || result.output };
             }
             
             if (toolName === 'str_replace_editor') {
-                // KodCanavarı'nın files.edit kullan
-                const { ipcRenderer } = require('electron');
+                // Mini MCP fs.read and fs.write for editing
+                const fetch = require('node-fetch');
                 
-                // str_replace_editor'ün 5 command'ını map'le
                 switch (params.command) {
                     case 'view':
-                        const readResult = await ipcRenderer.invoke('mcp-tool:resources.read', {
-                            uri: `file://${params.path}`
+                        // Read file via Mini MCP
+                        const viewResponse = await fetch(`${miniMCPUrl}/mcp/fs/read`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                path: params.path,
+                                workingDirectory: this.workspacePath
+                            })
                         });
-                        return { success: true, content: readResult.contents[0].text };
+                        
+                        if (!viewResponse.ok) {
+                            const error = await viewResponse.text();
+                            return { success: false, error };
+                        }
+                        
+                        const viewResult = await viewResponse.json();
+                        return { success: true, content: viewResult.content };
                     
                     case 'create':
-                        // write_file implementation kullan (aşağıda)
-                        return await this._writeFile(params.path, params.file_text);
-                    
                     case 'str_replace':
-                        // KodCanavarı'nın edit tool'u
-                        const editResult = await ipcRenderer.invoke('mcp-tool:files.edit', {
-                            path: params.path,
-                            edits: [{
-                                type: 'replace',
-                                oldText: params.old_str,
-                                newText: params.new_str
-                            }]
-                        });
-                        return { success: true, result: editResult };
-                    
                     case 'insert':
-                        const insertResult = await ipcRenderer.invoke('mcp-tool:files.edit', {
-                            path: params.path,
-                            edits: [{
-                                type: 'insert',
-                                line: params.insert_line,
-                                text: params.insert_text
-                            }]
+                        // Write/edit file via Mini MCP
+                        let content = params.file_text; // for create
+                        
+                        if (params.command === 'str_replace') {
+                            // Read current content, replace, write back
+                            const readResponse = await fetch(`${miniMCPUrl}/mcp/fs/read`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    path: params.path,
+                                    workingDirectory: this.workspacePath
+                                })
+                            });
+                            
+                            if (!readResponse.ok) {
+                                const error = await readResponse.text();
+                                return { success: false, error };
+                            }
+                            
+                            const readData = await readResponse.json();
+                            content = readData.content.replace(params.old_str, params.new_str);
+                        } else if (params.command === 'insert') {
+                            // Read, insert at line, write back
+                            const readResponse = await fetch(`${miniMCPUrl}/mcp/fs/read`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    path: params.path,
+                                    workingDirectory: this.workspacePath
+                                })
+                            });
+                            
+                            if (!readResponse.ok) {
+                                const error = await readResponse.text();
+                                return { success: false, error };
+                            }
+                            
+                            const readData = await readResponse.json();
+                            const lines = readData.content.split('\n');
+                            lines.splice(params.insert_line, 0, params.new_str);
+                            content = lines.join('\n');
+                        }
+                        
+                        // Write file via Mini MCP
+                        const writeResponse = await fetch(`${miniMCPUrl}/mcp/fs/write`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                path: params.path,
+                                content: content,
+                                workingDirectory: this.workspacePath
+                            })
                         });
-                        return { success: true, result: insertResult };
+                        
+                        if (!writeResponse.ok) {
+                            const error = await writeResponse.text();
+                            return { success: false, error };
+                        }
+                        
+                        const writeResult = await writeResponse.json();
+                        return { success: true, result: writeResult };
                     
                     case 'undo_edit':
-                        // TODO: Undo mantığı eklenecek
                         return { success: false, error: 'Undo not yet implemented' };
                     
                     default:
@@ -664,9 +824,26 @@ class ClaudeMCPService extends EventEmitter {
                 }
             }
             
-            // ===== STRATEGY 2: NEW IMPLEMENTATION =====
+            // ===== STRATEGY 2: NEW IMPLEMENTATION (VIA MINI MCP HTTP) =====
             if (toolName === 'write_file') {
-                return await this._writeFile(params.file_path || params.path, params.content);
+                const fetch = require('node-fetch');
+                const writeResponse = await fetch(`${miniMCPUrl}/mcp/fs/write`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: params.file_path || params.path,
+                        content: params.content,
+                        workingDirectory: this.workspacePath
+                    })
+                });
+                
+                if (!writeResponse.ok) {
+                    const error = await writeResponse.text();
+                    return { success: false, error };
+                }
+                
+                const writeResult = await writeResponse.json();
+                return { success: true, result: writeResult };
             }
             
             if (toolName === 'create_directory') {
@@ -682,7 +859,28 @@ class ClaudeMCPService extends EventEmitter {
             }
             
             if (toolName === 'run_terminal_command') {
-                return await this._runTerminalCommand(params.command, params.working_directory);
+                const fetch = require('node-fetch');
+                const shellResponse = await fetch(`${miniMCPUrl}/mcp/shell/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        command: params.command,
+                        workingDirectory: params.working_directory || this.workspacePath
+                    })
+                });
+                
+                if (!shellResponse.ok) {
+                    const error = await shellResponse.text();
+                    return { success: false, error };
+                }
+                
+                const shellResult = await shellResponse.json();
+                return { 
+                    success: true, 
+                    output: shellResult.stdout || shellResult.output,
+                    error: shellResult.stderr,
+                    exitCode: shellResult.exitCode
+                };
             }
             
             if (toolName === 'run_tests') {

@@ -83,7 +83,71 @@ class EventBus {
         // Notify listeners
         this.notifyListeners(enrichedEvent);
         
+        // 🎓 USTA MODU: Handle NARRATION events (Plan-compliant)
+        if (event.type === 'NARRATION') {
+            this.handleNarration(enrichedEvent);
+        }
+        if (event.type === 'NARRATION_BEFORE' || event.type === 'NARRATION_AFTER' || event.type === 'NARRATION_VERIFY') {
+            this.handleNarrationLegacy(enrichedEvent);
+        }
+        
         return enrichedEvent.id;
+    }
+    
+    /**
+     * Handle NARRATION events (unified schema)
+     * @param {Object} event - Event with phase field
+     */
+    handleNarration(event) {
+        const { phase, stepId, message, diff, probes } = event;
+        
+        // Route to Narrator Agent if available
+        if (window.kodCanavari?.narratorAgent?.addNarration) {
+            window.kodCanavari.narratorAgent.addNarration({
+                phase,
+                stepId,
+                timestamp: Date.now(),
+                content: phase === 'before' ? message :
+                         phase === 'after' ? { diff, summary: message } :
+                         phase === 'verify' ? { probes } : null
+            });
+        }
+        
+        console.log(`📖 [Narration/${phase}] Step ${stepId}:`, 
+            phase === 'before' ? message?.goal || message : message);
+    }
+    
+    /**
+     * Handle legacy NARRATION_* events (bridge to unified schema)
+     * @param {Object} event - Legacy event
+     */
+    handleNarrationLegacy(event) {
+        const type = event.type;
+        const data = event.data || event;
+        
+        const legacyMap = {
+            NARRATION_BEFORE: { 
+                phase: 'before', 
+                stepId: data.stepId, 
+                message: data.explain || data.message 
+            },
+            NARRATION_AFTER: { 
+                phase: 'after', 
+                stepId: data.stepId, 
+                message: data.summary, 
+                diff: data.diff 
+            },
+            NARRATION_VERIFY: { 
+                phase: 'verify', 
+                stepId: data.stepId, 
+                probes: data.probes || data.checks 
+            }
+        };
+        
+        const mapped = legacyMap[type];
+        if (mapped) {
+            this.handleNarration({ ...event, ...mapped, type: 'NARRATION' });
+        }
     }
     
     /**
